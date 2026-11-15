@@ -1,0 +1,1660 @@
+# BIZFLOW AFRICA
+## COMPLETE MASTER DEVELOPMENT PROMPT
+
+### 1. PROJECT OVERVIEW
+
+Act as a senior software architect, full-stack developer, database engineer, UI/UX designer, cybersecurity engineer, and SaaS product developer.
+
+Build **BizFlow Africa**, a complete, professional, scalable, multi-tenant business management platform.
+
+BizFlow Africa will help businesses manage their operations using one centralized system.
+
+The platform will initially target Rwanda and later expand into other African countries.
+
+**Brand name:** BizFlow Africa
+
+**Tagline:** One Platform. Multiple Businesses. Complete Business Management.
+
+**Main goal:** Build a real commercial SaaS application that businesses can register for, subscribe to, and use to manage their daily activities.
+
+This must be a fully functional application, not a static dashboard, school project, or frontend-only prototype.
+
+---
+
+# 2. TECHNOLOGY STACK
+
+Use the following technologies.
+
+### Frontend
+- React.js
+- Vite
+- JavaScript
+- JSX (`.jsx`)
+- Tailwind CSS
+- React Router DOM
+- Axios
+- React Context API where appropriate
+- Recharts for charts
+- Lucide React for icons
+- Socket.IO Client
+
+### Backend
+- Node.js
+- Express.js
+- JavaScript (`.js`)
+- MySQL
+- mysql2
+- JWT
+- bcryptjs
+- dotenv
+- express-validator
+- Multer
+- Socket.IO
+- Nodemailer
+- Helmet
+- express-rate-limit
+
+### Development tools
+- Git and GitHub
+- Postman
+- Visual Studio Code
+- MySQL Workbench or another MySQL management tool
+
+Use functional React components and simple, maintainable JavaScript logic. Avoid unnecessary OOP and classes.
+
+---
+
+# 3. MULTI-TENANT SAAS SYSTEM
+
+BizFlow Africa must allow many independent businesses to use the same application.
+
+Examples:
+
+- Electronics stores.
+- Supermarkets.
+- Pharmacies.
+- Wholesale businesses.
+- Construction-material suppliers.
+- Retail shops.
+- Service companies.
+
+Each business must have its own private workspace.
+
+Business A must never access Business B's:
+- Products.
+- Sales.
+- Inventory.
+- Customers.
+- Employees.
+- Suppliers.
+- Financial records.
+- Orders.
+- Reports.
+- Messages.
+- Documents.
+
+Use a shared MySQL database with tenant-aware records.
+
+Every business-owned record must be associated with a `business_id`.
+
+Use `branch_id` where branch-level access is necessary.
+
+Every protected backend request must verify:
+1. The user is authenticated.
+2. The user belongs to the requested business.
+3. The user has the necessary permissions.
+4. The requested records belong to the correct business.
+5. The user has access to the relevant branch.
+
+A user may belong to multiple businesses with different roles in each business.
+
+Implement secure business switching.
+
+Never rely only on frontend checks for tenant isolation.
+
+---
+
+# 4. USER TYPES AND PERMISSIONS
+
+Implement the following roles.
+
+### Platform Super Admin
+Manages the BizFlow Africa platform itself.
+
+Responsibilities:
+- Manage registered businesses.
+- Manage platform administrators.
+- Manage subscription plans.
+- View platform statistics.
+- Suspend or reactivate businesses.
+- Manage support requests.
+- Monitor system activity.
+- Configure platform-wide settings.
+
+Platform administrators must not automatically receive unrestricted access to private tenant financial information. Exceptional support access must be authorized and audited.
+
+### Business Owner
+- Manage business profile.
+- Manage employees.
+- Assign roles and permissions.
+- Manage branches.
+- Manage products.
+- Manage inventory.
+- Manage sales.
+- Manage customers.
+- Manage suppliers.
+- View financial reports.
+- Manage subscriptions.
+- Configure business settings.
+
+### Business Admin
+Manages business operations according to assigned permissions.
+
+### Manager
+Manages assigned branches, employees, sales, inventory, and orders.
+
+### Accountant
+Manages authorized financial records, payments, expenses, and reports.
+
+### Cashier
+Processes sales and payments and generates receipts.
+
+### Salesperson
+Manages customers, sales, and assigned orders.
+
+### Inventory Manager
+Manages products, stock levels, stock movements, and transfers.
+
+### Customer
+Can optionally register to:
+- View orders.
+- Track deliveries.
+- View receipts.
+- Manage personal information.
+- Submit reviews.
+- Contact businesses.
+
+Implement configurable role-based access control.
+
+Permissions should include:
+- View.
+- Create.
+- Update.
+- Delete or archive.
+- Approve.
+- Export.
+- Manage.
+- View financial information.
+
+Enforce permissions on the backend.
+
+---
+
+# 5. USER REGISTRATION AND BUSINESS ONBOARDING
+
+### Account registration
+
+Collect:
+- Full name.
+- Email address.
+- Phone number.
+- Password.
+- Confirm password.
+
+Requirements:
+- Validate email.
+- Validate phone number.
+- Enforce password requirements.
+- Hash passwords using bcryptjs.
+- Verify email using OTP or a secure verification link.
+- Prevent duplicate accounts.
+- Provide login and logout.
+- Provide password recovery.
+- Protect user sessions.
+
+### Business registration
+
+Collect:
+- Business name.
+- Business category.
+- Business logo.
+- Business description.
+- Email.
+- Phone number.
+- Country.
+- Province or region.
+- District or city.
+- Physical address.
+- Currency.
+- Tax settings.
+- Operating hours.
+
+### Onboarding
+
+After business registration, allow the owner to:
+- Create branches.
+- Add products or services.
+- Configure payment methods.
+- Invite employees.
+- Select language.
+- Configure business settings.
+
+Create a unique business workspace.
+
+---
+
+# 6. BUSINESS DASHBOARD
+
+Create a professional dashboard displaying actual information from the database.
+
+Display:
+- Sales today.
+- Sales this month.
+- Sales this year.
+- Total expenses.
+- Gross profit.
+- Net operating profit.
+- Total products.
+- Low-stock products.
+- Out-of-stock products.
+- Pending orders.
+- Total customers.
+- Outstanding customer balances.
+- Supplier balances.
+- Recent activities.
+- Notifications.
+
+### Charts
+
+Include:
+- Daily sales.
+- Weekly sales.
+- Monthly sales.
+- Yearly sales.
+- Revenue versus expenses.
+- Best-selling products.
+- Sales by category.
+- Sales by branch.
+- Sales by employee.
+
+Allow filtering by date range and branch.
+
+Show information according to the current user's permissions.
+
+Do not use hardcoded statistics or fake transactions in production.
+
+---
+
+# 7. PRODUCT MANAGEMENT
+
+Allow authorized users to:
+- Add products.
+- Edit products.
+- View product details.
+- Archive products.
+- Activate or deactivate products.
+- Search products.
+- Filter products.
+- Manage categories.
+- Import products.
+- Export products.
+
+Product fields:
+- Product name.
+- SKU.
+- Barcode.
+- Product image.
+- Category.
+- Description.
+- Purchase price.
+- Selling price.
+- Quantity.
+- Minimum stock.
+- Supplier.
+- Product status.
+- Creation date.
+
+### Image upload
+
+Users must upload product images directly from their computers.
+
+Do not require external image URLs.
+
+Use secure file upload with:
+- File type validation.
+- File size limits.
+- Safe filenames.
+- Private storage where appropriate.
+
+---
+
+# 8. INVENTORY MANAGEMENT
+
+Features:
+- View stock.
+- Add stock.
+- Reduce stock.
+- Receive stock.
+- Transfer stock.
+- Record damaged products.
+- Record returned products.
+- Adjust stock.
+- View stock movement history.
+- Identify low-stock products.
+- Identify out-of-stock products.
+- Generate stock reports.
+
+Every stock movement must record:
+- Product.
+- Business.
+- Branch.
+- Movement type.
+- Quantity.
+- Previous quantity.
+- New quantity.
+- Reason.
+- Responsible user.
+- Date and time.
+- Related transaction.
+
+Never update stock without creating a corresponding stock movement.
+
+Prevent overselling and handle simultaneous sales safely.
+
+---
+
+# 9. POINT OF SALE (POS)
+
+Create a fast, user-friendly POS system.
+
+Cashiers must be able to:
+
+1. Search products.
+2. Scan or enter barcodes.
+3. Add products to a cart.
+4. Change quantities.
+5. Remove products.
+6. Select a customer.
+7. Apply authorized discounts.
+8. Calculate subtotal.
+9. Calculate tax.
+10. Calculate total.
+11. Select payment method.
+12. Confirm sale.
+13. Generate receipt.
+
+Support:
+- Cash.
+- MTN Mobile Money.
+- Airtel Money.
+- Bank transfer.
+- Card.
+- Other configured payment methods.
+
+### Payment management
+
+Support:
+- Full payments.
+- Partial payments.
+- Unpaid sales where permitted.
+- Multiple payments per sale.
+- Outstanding balances.
+
+Keep sale status separate from payment status.
+
+### Receipt generation
+
+Allow:
+- Receipt printing.
+- PDF downloads.
+- Receipt history.
+- Receipt reprinting.
+
+Receipt information:
+- Business name and logo.
+- Address and phone.
+- Receipt number.
+- Date.
+- Products.
+- Quantities.
+- Prices.
+- Discounts.
+- Taxes.
+- Total.
+- Amount paid.
+- Remaining balance.
+- Payment method.
+
+### Important POS rules
+
+- Use database transactions.
+- Prevent duplicate sale submissions.
+- Update inventory safely.
+- Record payment information.
+- Record the responsible employee.
+- Maintain audit logs.
+- Roll back failed operations correctly.
+
+---
+
+# 10. SALES MANAGEMENT
+
+Features:
+- View sales.
+- Search sales.
+- Filter sales.
+- View sale details.
+- View payment history.
+- View receipts.
+- Track unpaid balances.
+- Process authorized refunds.
+- Cancel sales with authorization.
+- Export sales reports.
+
+Each sale must have a unique reference number.
+
+Never permanently delete completed financial transactions. Use reversals, refunds, and adjustments.
+
+---
+
+# 11. ORDER MANAGEMENT
+
+Support customer orders separately from immediate POS sales.
+
+Order statuses:
+- Pending.
+- Confirmed.
+- Processing.
+- Ready for collection.
+- Out for delivery.
+- Completed.
+- Cancelled.
+
+Allow employees to:
+- View orders.
+- Confirm orders.
+- Reject orders where permitted.
+- Update statuses.
+- Assign deliveries.
+- Record payment status.
+- View order history.
+- Contact customers.
+
+Customers should be able to track their orders when customer accounts are enabled.
+
+---
+
+# 12. CUSTOMER MANAGEMENT (CRM)
+
+Store:
+- Customer name.
+- Phone.
+- Email.
+- Address.
+- Customer type.
+- Registration date.
+- Customer status.
+- Notes.
+- Purchase history.
+- Outstanding balance.
+
+Features:
+- Register customers.
+- Edit customers.
+- Search customers.
+- View customer profiles.
+- View purchase history.
+- Track unpaid balances.
+- Record complaints.
+- Record feedback.
+- Manage loyalty programs.
+
+Protect customer information.
+
+---
+
+# 13. SUPPLIER MANAGEMENT
+
+Store:
+- Supplier name.
+- Contact person.
+- Phone.
+- Email.
+- Address.
+- Business information.
+- Notes.
+- Outstanding balance.
+
+Features:
+- Add suppliers.
+- Edit suppliers.
+- View supplier history.
+- Record purchases.
+- Track supplier balances.
+- View invoices.
+- Record supplier payments.
+- Generate supplier reports.
+
+---
+
+# 14. PURCHASE MANAGEMENT
+
+Allow authorized users to:
+- Create purchase orders.
+- Select suppliers.
+- Add products.
+- Enter quantities.
+- Enter purchase prices.
+- Record expected delivery dates.
+- Confirm received goods.
+- Record partial deliveries.
+- Record invoices.
+- Record payments.
+
+Update inventory only when goods are actually received.
+
+Create stock movement records for received goods.
+
+---
+
+# 15. FINANCIAL MANAGEMENT
+
+### Income
+- Record income.
+- Categorize income.
+- Record income sources.
+- View income history.
+- Filter income.
+- Export reports.
+
+### Expenses
+- Record expenses.
+- Select categories.
+- Add descriptions.
+- Upload supporting documents.
+- Select payment methods.
+- Assign branches.
+- Request approvals.
+
+### Financial reports
+
+Calculate:
+- Revenue.
+- Cost of goods sold.
+- Gross profit.
+- Operating expenses.
+- Net operating profit.
+- Total income.
+- Total expenses.
+- Customer balances.
+- Supplier balances.
+- Cash flow.
+
+Clearly distinguish revenue, profit, cash received, outstanding receivables, and cash flow.
+
+Use appropriate MySQL `DECIMAL` fields or reliable integer-based money representation. Avoid inaccurate JavaScript floating-point calculations.
+
+Never permanently delete financial transactions.
+
+---
+
+# 16. EMPLOYEE MANAGEMENT
+
+Features:
+- Invite employees.
+- Create employee accounts.
+- Assign roles.
+- Assign permissions.
+- Assign branches.
+- Activate employees.
+- Deactivate employees.
+- View employee profiles.
+- View activities.
+- Monitor sales performance.
+
+Future features:
+- Attendance.
+- Leave management.
+- Work schedules.
+- Payroll.
+
+Employees must only access information authorized by their roles and branch assignments.
+
+---
+
+# 17. BRANCH MANAGEMENT
+
+Support multiple branches.
+
+Examples:
+- Kigali.
+- Huye.
+- Musanze.
+
+Features:
+- Create branches.
+- Edit branches.
+- Assign managers.
+- Assign employees.
+- Manage branch inventory.
+- View branch sales.
+- Transfer stock.
+- Compare performance.
+
+Each branch should have separate operational records linked to its parent business.
+
+Transfers must record both outgoing and incoming stock movements.
+
+---
+
+# 18. REPORTS AND ANALYTICS
+
+Create reports for:
+
+### Sales
+- Daily sales.
+- Weekly sales.
+- Monthly sales.
+- Yearly sales.
+- Sales by employee.
+- Sales by branch.
+- Sales by product.
+
+### Inventory
+- Current stock.
+- Low stock.
+- Out of stock.
+- Stock movements.
+- Damaged products.
+- Inventory valuation.
+
+### Finance
+- Income.
+- Expenses.
+- Profit and loss.
+- Cash flow.
+- Outstanding balances.
+
+### Customers
+- New customers.
+- Returning customers.
+- Top customers.
+- Purchase history.
+
+### Suppliers
+- Purchases.
+- Outstanding balances.
+- Payment history.
+
+Allow filtering by:
+- Date.
+- Branch.
+- Employee.
+- Product.
+- Category.
+- Customer.
+- Supplier.
+
+Support PDF and Excel exports.
+
+---
+
+# 19. AI BUSINESS ASSISTANT
+
+Create an AI assistant that can answer questions using authorized business data.
+
+Example questions:
+- How much did I sell today?
+- Which products sell the most?
+- Which products need restocking?
+- Which branch performs best?
+- What are my biggest expenses?
+- How much do customers owe?
+- How did sales change this month?
+- Which products are not selling?
+- How can I improve business performance?
+
+Provide:
+- Business summaries.
+- Sales analysis.
+- Inventory recommendations.
+- Expense analysis.
+- Customer insights.
+- Performance comparisons.
+- Business trends.
+- Restocking recommendations.
+
+### AI security
+
+The AI assistant must:
+- Access only authorized business data.
+- Respect tenant isolation.
+- Respect branch permissions.
+- Distinguish actual results from predictions.
+- Identify estimated information.
+- Never invent missing figures.
+- Never expose another business's information.
+
+Integrate an AI provider through the backend. Store API keys securely.
+
+The main platform must continue working if the AI provider becomes unavailable.
+
+---
+
+# 20. NOTIFICATIONS
+
+Support:
+- In-app notifications.
+- Email notifications.
+- SMS notifications where configured.
+- Push notifications where supported.
+
+Events:
+- New order.
+- Order confirmed.
+- Order completed.
+- Payment received.
+- Low inventory.
+- Out-of-stock products.
+- Employee invitation.
+- Expense approval.
+- Supplier payment reminder.
+- Subscription expiry.
+- Important security activity.
+
+Allow users to configure notification preferences.
+
+Send notifications only to the correct authorized recipients.
+
+---
+
+# 21. INTERNAL COMMUNICATION
+
+Create internal communication features for employees.
+
+Features:
+- Internal announcements.
+- Direct messages where enabled.
+- Branch messages.
+- Task comments.
+- File attachments.
+- Read/unread status.
+
+Messages must be sent by real authenticated users.
+
+Do not use fake demonstration conversations in production.
+
+Enforce business membership and communication permissions.
+
+---
+
+# 22. TASK MANAGEMENT
+
+Allow managers to create and assign tasks.
+
+Task fields:
+- Title.
+- Description.
+- Assigned employee.
+- Branch.
+- Priority.
+- Deadline.
+- Status.
+- Attachments.
+- Comments.
+- Creation date.
+
+Statuses:
+- Pending.
+- In progress.
+- Completed.
+- Cancelled.
+
+Notify employees when tasks are assigned or updated.
+
+---
+
+# 23. BUSINESS SETTINGS
+
+### Business profile
+- Business name.
+- Logo.
+- Description.
+- Contact details.
+- Address.
+- Country.
+- Category.
+
+### Regional settings
+- Currency.
+- Language.
+- Timezone.
+- Date format.
+- Number format.
+
+### Operational settings
+- Branches.
+- Operating hours.
+- Receipt configuration.
+- Tax settings.
+- Discounts.
+- Payment methods.
+- Inventory settings.
+
+### Security settings
+- Change password.
+- Active sessions.
+- Login history.
+- Two-factor authentication.
+- Account recovery.
+- Security notifications.
+
+---
+
+# 24. RWANDA-FIRST LOCALIZATION
+
+Configure the platform for Rwanda by default.
+
+- Country: Rwanda.
+- Currency: Rwandan Franc.
+- Currency code: RWF.
+- Phone prefix: +250.
+- Timezone: Africa/Kigali.
+- Default language: English.
+- Additional languages: Kinyarwanda and French.
+
+Support configurable:
+- Tax settings.
+- Payment methods.
+- Date formats.
+- Currency display.
+- Local business information.
+
+Payment methods should include:
+- Cash.
+- MTN Mobile Money.
+- Airtel Money.
+- Bank transfer.
+- Card.
+
+Integrate payment providers through authorized APIs.
+
+Verify electronic payments on the backend. Do not mark a payment successful based only on a frontend response.
+
+Do not hardcode tax rates. Make them configurable and ensure they can be updated according to official applicable requirements.
+
+Optimize the application for ordinary devices and internet connections in Rwanda.
+
+Consider offline-friendly POS as a later feature with secure synchronization and conflict handling.
+
+---
+
+# 25. FUTURE AFRICAN EXPANSION
+
+Prepare the platform for additional African countries.
+
+Support configurable:
+- Countries.
+- Currencies.
+- Timezones.
+- Languages.
+- Tax rules.
+- Payment providers.
+- Country-specific business requirements.
+
+Use one extensible codebase instead of building a separate application for each country.
+
+---
+
+# 26. SUBSCRIPTION MANAGEMENT
+
+BizFlow Africa must operate as a subscription-based SaaS platform.
+
+Plans:
+- Free.
+- Starter.
+- Business.
+- Enterprise.
+
+Configurable limits:
+- Employees.
+- Branches.
+- Products.
+- Storage.
+- AI requests.
+- Advanced reports.
+- Integrations.
+
+Features:
+- Start subscription.
+- Start trial.
+- Upgrade.
+- Downgrade.
+- Renew.
+- Cancel.
+- View status.
+- View payment history.
+- Receive renewal reminders.
+- Receive expiry notifications.
+
+Allow the Platform Super Admin to manage subscription plans.
+
+Do not unexpectedly delete business data when subscriptions expire. Define clear access restrictions, grace periods, and data-retention rules.
+
+---
+
+# 27. DATABASE DESIGN
+
+Create a normalized MySQL database.
+
+Suggested tables:
+
+### Authentication
+- users
+- user_sessions
+- email_verifications
+- password_resets
+- login_attempts
+
+### Businesses and permissions
+- businesses
+- business_settings
+- business_members
+- roles
+- permissions
+- role_permissions
+- member_permissions
+- branches
+- invitations
+
+### Products and inventory
+- products
+- categories
+- product_images
+- inventory
+- stock_movements
+- inventory_adjustments
+- stock_transfers
+- stock_transfer_items
+
+### Sales and payments
+- sales
+- sale_items
+- payments
+- payment_attempts
+- refunds
+- refund_items
+- receipts
+
+### Customers and suppliers
+- customers
+- customer_addresses
+- customer_notes
+- suppliers
+- supplier_contacts
+
+### Purchases and orders
+- purchase_orders
+- purchase_items
+- goods_receipts
+- orders
+- order_items
+- order_status_history
+- deliveries
+
+### Finance
+- income
+- expenses
+- expense_categories
+- expense_approvals
+- financial_adjustments
+- financial_accounts
+
+### Employees and operations
+- employees
+- employee_activity
+- tasks
+- task_comments
+- task_attachments
+- announcements
+- messages
+
+### Notifications and reporting
+- notifications
+- notification_preferences
+- activity_logs
+- report_exports
+
+### SaaS administration
+- subscription_plans
+- subscriptions
+- subscription_payments
+- platform_admins
+- support_tickets
+
+Add other tables when necessary.
+
+Database requirements:
+- Primary keys.
+- Foreign keys.
+- Appropriate indexes.
+- Unique constraints.
+- Correct data types.
+- Timestamps.
+- Tenant isolation.
+- Branch isolation.
+- Transaction support.
+- Secure password storage.
+- Appropriate financial precision.
+- Audit history.
+
+Prepare:
+- `schema.sql`
+- `relationships.sql`
+- `seed.sql` for development data only.
+- Database migrations.
+
+---
+
+# 28. BACKEND ARCHITECTURE
+
+Organize the Express backend into separate modules.
+
+Include:
+- config
+- middleware
+- controllers
+- routes
+- services
+- validators
+- utils
+- uploads
+
+Example API routes:
+
+```text
+/api/auth
+/api/businesses
+/api/members
+/api/roles
+/api/permissions
+/api/branches
+/api/products
+/api/categories
+/api/inventory
+/api/stock-movements
+/api/sales
+/api/payments
+/api/refunds
+/api/orders
+/api/customers
+/api/suppliers
+/api/purchases
+/api/expenses
+/api/income
+/api/employees
+/api/tasks
+/api/reports
+/api/notifications
+/api/subscriptions
+/api/ai
+```
+
+Implement:
+- Authentication middleware.
+- Business membership middleware.
+- Permission middleware.
+- Branch authorization.
+- Input validation.
+- Centralized error handling.
+- Secure file uploads.
+- Rate limiting.
+- Secure headers.
+- Logging.
+- Database transactions.
+- Pagination.
+- Search and filtering.
+
+Never put sensitive business logic exclusively in the frontend.
+
+---
+
+# 29. FRONTEND DESIGN
+
+Create a modern, professional, responsive SaaS interface.
+
+Suggested design:
+- Deep navy.
+- Dark blue.
+- White.
+- Light neutral backgrounds.
+- Blue or cyan accents.
+- Clear typography.
+- Consistent spacing.
+- Professional tables.
+- Modern charts.
+- Accessible forms.
+
+Avoid unnecessary animations and overcrowded layouts.
+
+### Public pages
+1. Home.
+2. About.
+3. Features.
+4. Pricing.
+5. Contact.
+6. Login.
+7. Register.
+8. Forgot password.
+9. Terms of service.
+10. Privacy policy.
+
+### Business application layout
+
+Include:
+- Sidebar.
+- Top navigation.
+- Business switcher.
+- Branch selector.
+- Notifications.
+- User profile.
+- Search.
+- Main content area.
+
+Sidebar:
+- Dashboard.
+- Products.
+- Inventory.
+- POS.
+- Sales.
+- Orders.
+- Customers.
+- Suppliers.
+- Purchases.
+- Finance.
+- Employees.
+- Branches.
+- Tasks.
+- Reports.
+- AI Assistant.
+- Notifications.
+- Settings.
+
+Show navigation items according to user permissions.
+
+Implement:
+- Responsive sidebar.
+- Mobile navigation.
+- Searchable tables.
+- Pagination.
+- Filters.
+- Confirmation dialogs.
+- Form validation.
+- Loading states.
+- Empty states.
+- Success messages.
+- Error messages.
+- Status badges.
+- Accessible controls.
+
+All important buttons and forms must work with actual backend APIs.
+
+---
+
+# 30. FILE UPLOADS
+
+Support:
+- Business logos.
+- Product images.
+- Employee profile pictures.
+- Supplier documents.
+- Purchase invoices.
+- Expense receipts.
+- Task attachments.
+
+Requirements:
+- Upload from computer.
+- Validate file type.
+- Limit file size.
+- Generate safe filenames.
+- Protect private files.
+- Store file metadata.
+- Use secure storage permissions.
+
+Design storage so local uploads can later move to secure cloud object storage.
+
+---
+
+# 31. SECURITY
+
+Implement:
+
+### Authentication
+- Password hashing.
+- Secure authentication.
+- Token expiration.
+- Secure refresh-token handling if used.
+- Email verification.
+- Password recovery.
+- Logout.
+- Session management.
+
+### Authorization
+- Role-based access control.
+- Permission checks.
+- Tenant isolation.
+- Branch restrictions.
+- Protected routes.
+
+### API security
+- Server-side validation.
+- Parameterized SQL queries.
+- SQL injection protection.
+- XSS protection.
+- CSRF protection where applicable.
+- Rate limiting.
+- Secure HTTP headers.
+- Safe error responses.
+- File upload validation.
+
+### Financial security
+- Transaction history.
+- Approval workflows.
+- Refund permissions.
+- Audit trails.
+- Duplicate payment prevention.
+- Verified payment callbacks.
+
+### Environment variables
+
+Store all sensitive configuration in `.env`:
+
+- Database credentials.
+- JWT secrets.
+- Email credentials.
+- Payment credentials.
+- AI API keys.
+- Storage credentials.
+
+Never expose secrets in frontend code or upload them to GitHub.
+
+---
+
+# 32. AUDIT LOGGING
+
+Record important activities.
+
+Include:
+- User.
+- Business.
+- Branch where applicable.
+- Action.
+- Affected record.
+- Date and time.
+- Relevant changes.
+
+Examples:
+- Product created.
+- Product updated.
+- Stock adjusted.
+- Sale completed.
+- Refund issued.
+- Expense approved.
+- Employee invited.
+- Role changed.
+- Branch created.
+- Payment recorded.
+
+Protect audit records against unauthorized modification.
+
+---
+
+# 33. REAL-TIME FEATURES
+
+Use Socket.IO for:
+- New order notifications.
+- Payment notifications.
+- Inventory alerts.
+- Employee messages.
+- Task updates.
+- Order status changes.
+- Dashboard updates.
+
+Authenticate socket connections.
+
+Restrict every event to the correct business and authorized users.
+
+Never broadcast private business information to all connected users.
+
+---
+
+# 34. PERFORMANCE AND SCALABILITY
+
+Implement:
+- Pagination.
+- Database indexes.
+- Efficient SQL queries.
+- Optimized API responses.
+- Image compression.
+- Lazy loading.
+- Reusable components.
+- Suitable caching.
+- Background jobs for long-running operations.
+- Efficient real-time connections.
+- Database backups.
+- Error monitoring.
+
+Do not load all products, customers, or transactions at once.
+
+Design the application to support growing numbers of businesses and employees.
+
+---
+
+# 35. TESTING
+
+Test the actual functionality of every module.
+
+### Frontend
+- Forms.
+- Navigation.
+- Validation.
+- Responsive design.
+- Error handling.
+- Permission-based interfaces.
+
+### Backend
+- Authentication.
+- Authorization.
+- Tenant isolation.
+- API validation.
+- Database operations.
+- File uploads.
+
+### Database
+- Relationships.
+- Foreign keys.
+- Unique constraints.
+- Transactions.
+- Data integrity.
+- Concurrent stock updates.
+
+### Critical business scenarios
+
+Test:
+
+1. A business owner registers.
+2. The owner creates a business.
+3. The owner adds a product.
+4. The owner invites a cashier.
+5. The cashier logs in.
+6. The cashier completes a sale.
+7. Inventory is updated.
+8. A receipt is generated.
+9. A partial payment is recorded.
+10. An outstanding balance is displayed.
+11. The owner views sales reports.
+12. A manager transfers stock between branches.
+13. An accountant records an expense.
+14. A manager approves an expense.
+15. A customer places an order.
+16. An employee updates the order.
+17. Notifications reach the correct users.
+18. A user attempts to access another business's records.
+19. An unauthorized user attempts a restricted action.
+20. Two cashiers attempt to sell the last available product simultaneously.
+
+Fix errors before declaring a module complete.
+
+---
+
+# 36. DEPLOYMENT
+
+Prepare the application for production.
+
+### Frontend
+Deploy React using a suitable frontend hosting provider.
+
+### Backend
+Deploy Express using a suitable Node.js hosting environment.
+
+### Database
+Use production MySQL with:
+- Secure credentials.
+- Backups.
+- Restricted network access.
+- Indexes.
+- Monitoring.
+
+Production requirements:
+- HTTPS.
+- Environment variables.
+- Secure CORS.
+- Database backups.
+- Error monitoring.
+- Logging.
+- File storage.
+- Email configuration.
+- Payment configuration.
+- Domain configuration.
+- Migration strategy.
+
+Create:
+- `.env.example`
+- `.gitignore`
+- `README.md`
+- Installation guide.
+- Deployment guide.
+- API documentation.
+
+Never include production passwords or private credentials in source code or documentation.
+
+---
+
+# 37. PROJECT FOLDER STRUCTURE
+
+Use the following structure:
+
+```text
+bizflow-africa/
+│
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── layouts/
+│   │   ├── pages/
+│   │   ├── modules/
+│   │   │   ├── dashboard/
+│   │   │   ├── products/
+│   │   │   ├── inventory/
+│   │   │   ├── pos/
+│   │   │   ├── sales/
+│   │   │   ├── orders/
+│   │   │   ├── customers/
+│   │   │   ├── suppliers/
+│   │   │   ├── purchases/
+│   │   │   ├── finance/
+│   │   │   ├── employees/
+│   │   │   ├── branches/
+│   │   │   ├── tasks/
+│   │   │   ├── reports/
+│   │   │   └── settings/
+│   │   ├── context/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   ├── utils/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   └── package.json
+│
+├── backend/
+│   ├── config/
+│   ├── middleware/
+│   ├── controllers/
+│   ├── routes/
+│   ├── services/
+│   ├── validators/
+│   ├── utils/
+│   ├── uploads/
+│   ├── app.js
+│   ├── server.js
+│   └── package.json
+│
+├── database/
+│   ├── schema.sql
+│   ├── relationships.sql
+│   ├── seed.sql
+│   └── migrations/
+│
+├── documentation/
+│   ├── requirements/
+│   ├── architecture/
+│   ├── database/
+│   ├── api/
+│   ├── security/
+│   ├── testing/
+│   └── deployment/
+│
+├── .gitignore
+├── .env.example
+└── README.md
+```
+
+Expand the structure when necessary without making it unnecessarily complicated.
+
+---
+
+# 38. DEVELOPMENT ROADMAP
+
+Build the system in these stages.
+
+**Phase 1:** Project setup and architecture.
+
+**Phase 2:** Database design and MySQL connection.
+
+**Phase 3:** Registration, login, logout, email verification, and password recovery.
+
+**Phase 4:** Business onboarding, memberships, roles, and permissions.
+
+**Phase 5:** Public website and authenticated dashboard.
+
+**Phase 6:** Product and inventory management.
+
+**Phase 7:** POS, sales, payments, and receipts.
+
+**Phase 8:** Customers, suppliers, and purchases.
+
+**Phase 9:** Financial management and employees.
+
+**Phase 10:** Branches, orders, tasks, and internal communication.
+
+**Phase 11:** Reports, analytics, and AI assistant.
+
+**Phase 12:** Subscription management and platform administration.
+
+**Phase 13:** Security testing, performance testing, and bug fixing.
+
+**Phase 14:** Production deployment.
+
+Do not implement everything in one unstructured step. Complete and test each stage before proceeding.
+
+---
+
+# 39. STRICT RULES FOR THE AI CODING ASSISTANT
+
+Follow these rules whenever developing or modifying the project.
+
+### Code
+1. Use `.jsx` for React components.
+2. Use `.js` for backend files.
+3. Use JavaScript, not TypeScript.
+4. Avoid unnecessary classes.
+5. Use readable variable names.
+6. Write understandable code.
+7. Use reusable components.
+8. Separate frontend API services.
+9. Avoid putting the entire application in one component.
+10. Avoid unnecessary code duplication.
+
+### Before implementation
+1. Explain the purpose of the module.
+2. Show the folder structure.
+3. Identify the files to create.
+4. Explain how the frontend connects to the backend.
+5. Explain the database requirements.
+
+### When generating code
+- Give complete file paths.
+- Provide complete code when requested.
+- Do not provide unexplained fragments.
+- Do not silently remove existing functionality.
+- Preserve existing working code.
+- Explain changes to existing files.
+
+### After implementation
+1. Explain how to start the frontend.
+2. Explain how to start the backend.
+3. Explain database changes.
+4. Provide API endpoints.
+5. Explain Postman testing.
+6. Show expected results.
+7. Explain permission testing.
+8. Fix discovered errors.
+
+### Progress tracking
+
+Maintain a development checklist.
+
+A module is complete only when:
+- Frontend works.
+- Backend works.
+- Database operations work.
+- Permissions are enforced.
+- Main workflows are tested.
+- Errors are handled.
+
+Never describe a frontend-only screen as a completed functional module.
+
+---
+
+# 40. FIRST TASK: BEGIN THE PROJECT
+
+Before generating the entire application, analyze this master prompt and produce:
+
+### A. System architecture
+Explain how React, Express, MySQL, authentication, permissions, and multi-tenant isolation work together.
+
+### B. Project structure
+Show all required folders and initial files.
+
+### C. Database architecture
+Explain major tables, relationships, tenant isolation, and financial and inventory integrity.
+
+### D. User workflows
+Explain registration, business creation, employee invitations, product management, sales, payments, and reporting.
+
+### E. Development roadmap
+Show the implementation stages in their correct order.
+
+### F. Initial setup
+Provide installation commands, dependencies, environment configuration, and database setup.
+
+### G. First implementation
+Create the initial project foundation, establish the MySQL connection, and verify frontend-to-backend communication.
+
+Do not skip foundational steps.
+
+---
+
+# FINAL PRODUCT VISION
+
+BizFlow Africa must become a trusted business technology platform for African businesses.
+
+It must allow business owners to manage their operations, employees to perform authorized tasks, customers to interact with businesses, and platform administrators to manage the SaaS service.
+
+It must be secure, scalable, maintainable, responsive, and commercially usable.
+
+Start in Rwanda. Build for African businesses. Prepare for international growth.
+
+**BIZFLOW AFRICA — ONE PLATFORM. MULTIPLE BUSINESSES. COMPLETE BUSINESS MANAGEMENT.**
