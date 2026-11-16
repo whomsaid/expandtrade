@@ -9,6 +9,7 @@ import { initDatabase, queryOne } from './backend/config/db.js';
 import { ensureSuperAdmin, removeLegacySeedAccounts, seedCoreRbacAndPlans } from './backend/config/rbac.js';
 import { createBackendApp } from './backend/app.js';
 import { setSocketIo } from './backend/services/auditService.js';
+import { startPayrollScheduler } from './backend/services/payrollScheduler.js';
 
 async function startServer() {
   await initDatabase();
@@ -57,6 +58,7 @@ async function startServer() {
   });
 
   setSocketIo(io);
+  startPayrollScheduler(60_000);
 
   if (env.nodeEnv !== 'production') {
     const vite = await createViteServer({

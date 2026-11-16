@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import BrandLogo from './BrandLogo.jsx';
 import ThemeSelector from './ThemeSelector.jsx';
 
-const HOMEPAGE_SECTION_IDS = ['about', 'features', 'how-it-works', 'benefits', 'developer', 'contact'];
+const HOMEPAGE_SECTION_IDS = ['about', 'features', 'how-it-works', 'benefits', 'contact'];
 
 function resolveNavSection(sectionId) {
   if (sectionId === 'how-it-works' || sectionId === 'benefits') return 'features';
@@ -81,6 +81,7 @@ export default function PublicHeader() {
 
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith('/businesses')) return 'businesses';
+    if (location.pathname.startsWith('/jobs')) return 'jobs';
     if (location.pathname === '/features') return 'features';
     if (location.pathname === '/pricing') return 'pricing';
     if (location.pathname === '/about') return 'about';
@@ -92,11 +93,11 @@ export default function PublicHeader() {
 
   const navItems = [
     { key: 'home', label: 'Home', to: '/', sectionId: 'top' },
-    { key: 'about', label: 'About', to: '/#about', sectionId: 'about' },
+    { key: 'about', label: 'About', to: '/about' },
     { key: 'features', label: 'Features', to: '/#features', sectionId: 'features' },
     { key: 'businesses', label: 'Businesses', to: '/businesses' },
+    { key: 'jobs', label: 'Jobs', to: '/jobs' },
     { key: 'pricing', label: 'Pricing', to: '/pricing' },
-    { key: 'developer', label: 'Developer', to: '/#developer', sectionId: 'developer' },
     { key: 'contact', label: 'Contact', to: '/#contact', sectionId: 'contact' },
   ];
 

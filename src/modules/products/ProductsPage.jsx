@@ -149,7 +149,7 @@ export default function ProductsPage() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'bizflow-products.csv';
+      a.download = 'biztrade-products.csv';
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {

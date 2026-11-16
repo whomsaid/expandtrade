@@ -15,22 +15,26 @@ function getTransporter() {
       host: env.smtp.host,
       port: env.smtp.port,
       secure: env.smtp.port === 465,
+      connectionTimeout: 4000,
+      greetingTimeout: 4000,
+      socketTimeout: 5000,
       auth: { user: env.smtp.user, pass },
     });
   }
   return transporter;
 }
 
-export async function sendMail({ to, subject, text, html }) {
+export async function sendMail({ to, subject, text, html, replyTo }) {
   const mailer = getTransporter();
   if (!mailer) {
-    console.log(`[Mail Fallback] To: ${to} | Subject: ${subject} | Body: ${text}`);
+    console.log(`[Mail Fallback] To: ${to}${replyTo ? ` | Reply-To: ${replyTo}` : ''} | Subject: ${subject} | Body: ${text}`);
     return { delivered: false, devLogged: true };
   }
   try {
     await mailer.sendMail({
       from: env.smtp.from,
       to,
+      ...(replyTo ? { replyTo } : {}),
       subject,
       text,
       html,
@@ -38,7 +42,7 @@ export async function sendMail({ to, subject, text, html }) {
     return { delivered: true };
   } catch (err) {
     console.warn(`[Mail Fallback] SMTP delivery failed (${err.message}). Logging message instead.`);
-    console.log(`[Mail Fallback] To: ${to} | Subject: ${subject} | Body: ${text}`);
+    console.log(`[Mail Fallback] To: ${to}${replyTo ? ` | Reply-To: ${replyTo}` : ''} | Subject: ${subject} | Body: ${text}`);
     return { delivered: false, devLogged: true, error: err.message };
   }
 }

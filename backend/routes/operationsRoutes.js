@@ -188,16 +188,26 @@ router.get('/purchases', authenticate, requireBusiness, requirePermission('purch
        JOIN branches b ON b.id = po.branch_id
        LEFT JOIN users u ON u.id = po.created_by_user_id
        WHERE po.business_id = ?
-       ORDER BY po.id DESC`,
+       ORDER BY po.id DESC LIMIT 100`,
       [req.businessId]
     );
-    for (const po of orders) {
-      po.items = await query(
+    if (orders.length > 0) {
+      const ids = orders.map((o) => o.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const allItems = await query(
         `SELECT pi.*, p.name AS product_name, p.sku
          FROM purchase_items pi JOIN products p ON p.id = pi.product_id
-         WHERE pi.purchase_order_id = ?`,
-        [po.id]
+         WHERE pi.purchase_order_id IN (${placeholders})`,
+        ids
       );
+      const byOrder = new Map();
+      for (const it of allItems) {
+        if (!byOrder.has(it.purchase_order_id)) byOrder.set(it.purchase_order_id, []);
+        byOrder.get(it.purchase_order_id).push(it);
+      }
+      for (const po of orders) {
+        po.items = byOrder.get(po.id) || [];
+      }
     }
     res.json({ purchases: orders });
   } catch (err) {
@@ -320,11 +330,21 @@ router.get('/orders', authenticate, requireBusiness, requirePermission('orders.v
        JOIN branches b ON b.id = o.branch_id
        LEFT JOIN users u ON u.id = o.customer_user_id
        WHERE o.business_id = ?
-       ORDER BY o.id DESC`,
+       ORDER BY o.id DESC LIMIT 120`,
       [req.businessId]
     );
-    for (const o of orders) {
-      o.items = await query('SELECT * FROM order_items WHERE order_id = ?', [o.id]);
+    if (orders.length > 0) {
+      const ids = orders.map((o) => o.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const allItems = await query(`SELECT * FROM order_items WHERE order_id IN (${placeholders})`, ids);
+      const byOrder = new Map();
+      for (const it of allItems) {
+        if (!byOrder.has(it.order_id)) byOrder.set(it.order_id, []);
+        byOrder.get(it.order_id).push(it);
+      }
+      for (const o of orders) {
+        o.items = byOrder.get(o.id) || [];
+      }
     }
     res.json({ orders });
   } catch (err) {
@@ -464,31 +484,33 @@ router.get('/finance/summary', authenticate, requireBusiness, requirePermission(
     const branchClause = !req.membership.all_branches_access && req.branchId ? ' AND branch_id = ?' : '';
     const params = !req.membership.all_branches_access && req.branchId ? [req.businessId, req.branchId] : [req.businessId];
 
-    const salesRev = await queryOne(
-      `SELECT COALESCE(SUM(total_amount), 0) AS revenue,
-              COALESCE(SUM(amount_paid), 0) AS cash_from_sales,
-              COALESCE(SUM(balance_due), 0) AS receivables
-       FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded'${branchClause}`,
-      params
-    );
-    const cogsRow = await queryOne(
-      `SELECT COALESCE(SUM(si.quantity * si.unit_cost), 0) AS cogs
-       FROM sale_items si JOIN sales s ON s.id = si.sale_id
-       WHERE s.business_id = ? AND s.sale_status != 'cancelled' AND s.sale_status != 'refunded'${!req.membership.all_branches_access && req.branchId ? ' AND s.branch_id = ?' : ''}`,
-      params
-    );
-    const otherIncome = await queryOne(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM income WHERE business_id = ?${branchClause}`,
-      params
-    );
-    const approvedExpenses = await queryOne(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE business_id = ? AND approval_status = 'approved'${branchClause}`,
-      params
-    );
-    const supplierDebt = await queryOne(
-      `SELECT COALESCE(SUM(outstanding_balance), 0) AS payables FROM suppliers WHERE business_id = ?`,
-      [req.businessId]
-    );
+    const [salesRev, cogsRow, otherIncome, approvedExpenses, supplierDebt] = await Promise.all([
+      queryOne(
+        `SELECT COALESCE(SUM(total_amount), 0) AS revenue,
+                COALESCE(SUM(amount_paid), 0) AS cash_from_sales,
+                COALESCE(SUM(balance_due), 0) AS receivables
+         FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded'${branchClause}`,
+        params
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(si.quantity * si.unit_cost), 0) AS cogs
+         FROM sale_items si JOIN sales s ON s.id = si.sale_id
+         WHERE s.business_id = ? AND s.sale_status != 'cancelled' AND s.sale_status != 'refunded'${!req.membership.all_branches_access && req.branchId ? ' AND s.branch_id = ?' : ''}`,
+        params
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM income WHERE business_id = ?${branchClause}`,
+        params
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE business_id = ? AND approval_status = 'approved'${branchClause}`,
+        params
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(outstanding_balance), 0) AS payables FROM suppliers WHERE business_id = ?`,
+        [req.businessId]
+      ),
+    ]);
 
     const revenue = roundMoney(salesRev.revenue);
     const cogs = roundMoney(cogsRow.cogs);

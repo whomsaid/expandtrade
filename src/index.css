@@ -30,7 +30,7 @@
   }
 }
 
-@keyframes bizflowFadeUp {
+@keyframes biztradeFadeUp {
   from {
     opacity: 0;
     transform: translateY(12px);
@@ -41,7 +41,7 @@
   }
 }
 
-@keyframes bizflowScaleIn {
+@keyframes biztradeScaleIn {
   from {
     opacity: 0;
     transform: scale(0.97);
@@ -52,7 +52,7 @@
   }
 }
 
-@keyframes bizflowSlideDown {
+@keyframes biztradeSlideDown {
   from {
     opacity: 0;
     transform: translateY(-6px);
@@ -64,15 +64,15 @@
 }
 
 .animate-fade-up {
-  animation: bizflowFadeUp 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: biztradeFadeUp 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-scale-in {
-  animation: bizflowScaleIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: biztradeScaleIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-slide-down {
-  animation: bizflowSlideDown 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: biztradeSlideDown 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .reveal-section {

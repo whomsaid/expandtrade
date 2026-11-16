@@ -11,7 +11,7 @@ export default function BrandLogo({
   const [imgFailed, setImgFailed] = useState(false);
 
   const logoUrl = (config?.platform_logo_url || '').trim();
-  const platformName = (config?.platform_name || 'BizFlow Africa').trim();
+  const platformName = (config?.platform_name || 'BizTrade Africa').trim();
 
   useEffect(() => {
     setImgFailed(false);

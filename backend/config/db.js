@@ -793,6 +793,204 @@ CREATE TABLE IF NOT EXISTS business_videos (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
+-- 12. RECRUITMENT & JOB APPLICATION MANAGEMENT SYSTEM
+CREATE TABLE IF NOT EXISTS job_vacancies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL,
+  branch_id INTEGER NULL,
+  created_by_user_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  department TEXT NULL,
+  employment_type TEXT NOT NULL DEFAULT 'full_time',
+  work_mode TEXT NOT NULL DEFAULT 'on_site',
+  location TEXT NOT NULL,
+  salary_min REAL NULL,
+  salary_max REAL NULL,
+  currency_code TEXT NOT NULL DEFAULT 'RWF',
+  show_salary INTEGER NOT NULL DEFAULT 0,
+  summary TEXT NULL,
+  description TEXT NOT NULL,
+  responsibilities TEXT NULL,
+  requirements TEXT NULL,
+  required_education_level TEXT NULL,
+  min_experience_years INTEGER NOT NULL DEFAULT 0,
+  required_document_types_json TEXT NULL,
+  custom_questions_json TEXT NULL,
+  allow_reapplication INTEGER NOT NULL DEFAULT 0,
+  positions_count INTEGER NOT NULL DEFAULT 1,
+  application_deadline TEXT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  published_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(business_id, slug)
+);
+
+CREATE TABLE IF NOT EXISTS job_applications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reference_number TEXT UNIQUE NULL,
+  vacancy_id INTEGER NOT NULL,
+  business_id INTEGER NOT NULL,
+  applicant_user_id INTEGER NOT NULL,
+  full_name TEXT NOT NULL,
+  profile_photo_url TEXT NULL,
+  date_of_birth TEXT NULL,
+  gender TEXT NULL,
+  phone TEXT NOT NULL,
+  email TEXT NOT NULL,
+  nationality TEXT NULL,
+  country TEXT NULL,
+  province TEXT NULL,
+  district TEXT NULL,
+  sector TEXT NULL,
+  residential_address TEXT NULL,
+  has_work_experience INTEGER NULL,
+  years_of_experience INTEGER NOT NULL DEFAULT 0,
+  skills_summary TEXT NULL,
+  availability TEXT NULL,
+  preferred_employment_type TEXT NULL,
+  expected_salary REAL NULL,
+  why_want_position TEXT NULL,
+  why_select_you TEXT NULL,
+  cover_letter TEXT NULL,
+  accuracy_confirmed INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft',
+  submitted_at TEXT NULL,
+  withdrawn_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (vacancy_id) REFERENCES job_vacancies(id) ON DELETE CASCADE,
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (applicant_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS applicant_education (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  education_level TEXT NOT NULL,
+  institution_name TEXT NOT NULL,
+  field_of_study TEXT NOT NULL,
+  qualification_obtained TEXT NOT NULL,
+  start_year INTEGER NULL,
+  graduation_year INTEGER NULL,
+  country TEXT NULL,
+  education_status TEXT NOT NULL DEFAULT 'Completed',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS applicant_experiences (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  company_name TEXT NOT NULL,
+  job_title TEXT NOT NULL,
+  employment_type TEXT NULL,
+  work_location TEXT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NULL,
+  is_current INTEGER NOT NULL DEFAULT 0,
+  responsibilities TEXT NULL,
+  achievements TEXT NULL,
+  reason_for_leaving TEXT NULL,
+  reference_person TEXT NULL,
+  reference_phone TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS applicant_skills (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  skill_category TEXT NOT NULL DEFAULT 'technical',
+  skill_name TEXT NOT NULL,
+  proficiency_level TEXT NULL,
+  notes TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS application_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  business_id INTEGER NOT NULL,
+  applicant_user_id INTEGER NOT NULL,
+  document_category TEXT NOT NULL,
+  document_type TEXT NOT NULL,
+  document_name TEXT NOT NULL,
+  original_filename TEXT NOT NULL,
+  stored_path TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_size_bytes INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (applicant_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS application_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  vacancy_id INTEGER NOT NULL,
+  question_key TEXT NOT NULL,
+  question_label TEXT NOT NULL,
+  answer_text TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  FOREIGN KEY (vacancy_id) REFERENCES job_vacancies(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS application_status_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  previous_status TEXT NULL,
+  new_status TEXT NOT NULL,
+  changed_by_user_id INTEGER NOT NULL,
+  note TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  FOREIGN KEY (changed_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS job_interviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  business_id INTEGER NOT NULL,
+  vacancy_id INTEGER NOT NULL,
+  scheduled_by_user_id INTEGER NOT NULL,
+  interview_date TEXT NOT NULL,
+  interview_time TEXT NOT NULL,
+  interview_mode TEXT NOT NULL DEFAULT 'In-person',
+  location_or_link TEXT NULL,
+  interviewer_name TEXT NULL,
+  instructions TEXT NULL,
+  feedback TEXT NULL,
+  outcome TEXT NOT NULL DEFAULT 'pending',
+  status TEXT NOT NULL DEFAULT 'scheduled',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (vacancy_id) REFERENCES job_vacancies(id) ON DELETE CASCADE,
+  FOREIGN KEY (scheduled_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS recruitment_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  business_id INTEGER NOT NULL,
+  author_user_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (author_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_biz ON products(business_id, status);
 CREATE INDEX IF NOT EXISTS idx_inv_biz_branch ON inventory(business_id, branch_id);
 CREATE INDEX IF NOT EXISTS idx_sales_biz_created ON sales(business_id, created_at);
@@ -800,6 +998,172 @@ CREATE INDEX IF NOT EXISTS idx_sm_biz ON stock_movements(business_id, created_at
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_audit_biz ON activity_logs(business_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_biz_videos ON business_videos(business_id, is_published);
+CREATE INDEX IF NOT EXISTS idx_vacancies_biz_status ON job_vacancies(business_id, status);
+CREATE INDEX IF NOT EXISTS idx_apps_biz_vac_status ON job_applications(business_id, vacancy_id, status);
+CREATE INDEX IF NOT EXISTS idx_apps_user ON job_applications(applicant_user_id, vacancy_id);
+CREATE INDEX IF NOT EXISTS idx_app_docs_app ON application_documents(application_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_app_interviews_app ON job_interviews(application_id, business_id);
+CREATE INDEX IF NOT EXISTS idx_app_notes_app ON recruitment_notes(application_id, business_id);
+
+CREATE TABLE IF NOT EXISTS email_change_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  new_email TEXT NOT NULL,
+  otp_code TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  verified_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS business_payroll_accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER UNIQUE NOT NULL,
+  available_balance REAL NOT NULL DEFAULT 0,
+  reserved_balance REAL NOT NULL DEFAULT 0,
+  currency_code TEXT NOT NULL DEFAULT 'RWF',
+  default_provider TEXT NOT NULL DEFAULT 'mtn_momo',
+  business_momo_number TEXT NULL,
+  mtn_subscription_key TEXT NULL,
+  mtn_api_user TEXT NULL,
+  mtn_api_key TEXT NULL,
+  mtn_environment TEXT NOT NULL DEFAULT 'sandbox',
+  airtel_client_id TEXT NULL,
+  airtel_client_secret TEXT NULL,
+  airtel_environment TEXT NOT NULL DEFAULT 'staging',
+  updated_by_user_id INTEGER NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS business_payroll_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL,
+  entry_type TEXT NOT NULL,
+  amount REAL NOT NULL,
+  balance_after REAL NOT NULL,
+  reference TEXT NOT NULL,
+  note TEXT NULL,
+  created_by_user_id INTEGER NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS employee_payroll_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL,
+  business_member_id INTEGER UNIQUE NOT NULL,
+  user_id INTEGER NOT NULL,
+  salary_amount REAL NOT NULL,
+  currency_code TEXT NOT NULL DEFAULT 'RWF',
+  payment_frequency TEXT NOT NULL DEFAULT 'monthly',
+  custom_interval_days INTEGER NULL,
+  pay_day_of_month INTEGER NULL,
+  pay_day_of_week INTEGER NULL,
+  next_payment_date TEXT NOT NULL,
+  last_paid_date TEXT NULL,
+  last_paid_period TEXT NULL,
+  momo_provider TEXT NOT NULL DEFAULT 'mtn_momo',
+  momo_phone TEXT NOT NULL,
+  momo_phone_verified_at TEXT NULL,
+  payroll_status TEXT NOT NULL DEFAULT 'active',
+  notes TEXT NULL,
+  created_by_user_id INTEGER NOT NULL,
+  updated_by_user_id INTEGER NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (business_member_id) REFERENCES business_members(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS payroll_batches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL,
+  batch_reference TEXT UNIQUE NOT NULL,
+  payment_mode TEXT NOT NULL DEFAULT 'bulk',
+  payment_period TEXT NOT NULL,
+  total_employees INTEGER NOT NULL DEFAULT 0,
+  total_amount REAL NOT NULL DEFAULT 0,
+  currency_code TEXT NOT NULL DEFAULT 'RWF',
+  success_count INTEGER NOT NULL DEFAULT 0,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  pending_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  authorized_by_user_id INTEGER NOT NULL,
+  authorized_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (authorized_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS payroll_transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL,
+  batch_id INTEGER NULL,
+  payroll_config_id INTEGER NOT NULL,
+  business_member_id INTEGER NOT NULL,
+  employee_user_id INTEGER NOT NULL,
+  employee_name TEXT NOT NULL,
+  momo_provider TEXT NOT NULL,
+  momo_phone TEXT NOT NULL,
+  salary_amount REAL NOT NULL,
+  currency_code TEXT NOT NULL DEFAULT 'RWF',
+  payment_period TEXT NOT NULL,
+  payment_reference TEXT UNIQUE NOT NULL,
+  idempotency_key TEXT UNIQUE NOT NULL,
+  provider_transaction_id TEXT NULL,
+  provider_status TEXT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  failure_reason TEXT NULL,
+  authorized_by_user_id INTEGER NOT NULL,
+  authorized_at TEXT NOT NULL DEFAULT (datetime('now')),
+  verified_at TEXT NULL,
+  paid_at TEXT NULL,
+  expense_id INTEGER NULL,
+  retry_of_transaction_id INTEGER NULL,
+  provider_raw_response TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (batch_id) REFERENCES payroll_batches(id) ON DELETE SET NULL,
+  FOREIGN KEY (payroll_config_id) REFERENCES employee_payroll_configs(id) ON DELETE CASCADE,
+  FOREIGN KEY (business_member_id) REFERENCES business_members(id) ON DELETE CASCADE,
+  FOREIGN KEY (employee_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (authorized_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS payroll_due_alerts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL,
+  payroll_config_id INTEGER NOT NULL,
+  employee_user_id INTEGER NOT NULL,
+  due_period TEXT NOT NULL,
+  due_date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  momo_phone TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  notified_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (payroll_config_id) REFERENCES employee_payroll_configs(id) ON DELETE CASCADE,
+  FOREIGN KEY (employee_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(payroll_config_id, due_period)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_jti ON user_sessions(token_jti, user_id);
+CREATE INDEX IF NOT EXISTS idx_bm_biz_status ON business_members(business_id, status);
+CREATE INDEX IF NOT EXISTS idx_bm_user_status ON business_members(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_orders_biz_created ON orders(business_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_cust_user ON orders(customer_user_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_biz_status ON expenses(business_id, approval_status);
+CREATE INDEX IF NOT EXISTS idx_payroll_cfg_biz_due ON employee_payroll_configs(business_id, payroll_status, next_payment_date);
+CREATE INDEX IF NOT EXISTS idx_payroll_cfg_user ON employee_payroll_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_payroll_tx_biz_status ON payroll_transactions(business_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_payroll_tx_emp ON payroll_transactions(employee_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_payroll_alerts_biz ON payroll_due_alerts(business_id, status);
 `;
 
 export async function initDatabase() {
@@ -830,6 +1194,13 @@ export async function initDatabase() {
   }
   const dbPath = path.join(dataDir, 'bizflow.sqlite');
   sqliteDb = new DatabaseSync(dbPath);
+  sqliteDb.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA cache_size = -64000;
+    PRAGMA busy_timeout = 5000;
+  `);
   sqliteDb.exec(SQLITE_SCHEMA_SQL);
   const ensureColumn = (table, col, ddl) => {
     const cols = sqliteDb.prepare(`PRAGMA table_info(${table})`).all();
@@ -839,6 +1210,11 @@ export async function initDatabase() {
   };
   ensureColumn('users', 'must_change_password', 'must_change_password INTEGER NOT NULL DEFAULT 0');
   ensureColumn('users', 'theme_preference', "theme_preference TEXT NOT NULL DEFAULT 'system'");
+  ensureColumn('users', 'bio', 'bio TEXT NULL');
+  ensureColumn('users', 'location', 'location TEXT NULL');
+  ensureColumn('users', 'privacy_settings_json', 'privacy_settings_json TEXT NULL');
+  ensureColumn('users', 'dashboard_preferences_json', 'dashboard_preferences_json TEXT NULL');
+  ensureColumn('notification_preferences', 'payroll_alerts', 'payroll_alerts INTEGER NOT NULL DEFAULT 1');
   ensureColumn('businesses', 'business_code', 'business_code TEXT NULL');
   ensureColumn('businesses', 'is_public_listed', 'is_public_listed INTEGER NOT NULL DEFAULT 1');
   ensureColumn('businesses', 'deleted_at', 'deleted_at TEXT NULL');
@@ -857,10 +1233,12 @@ export function getDialect() {
 function adaptSqlForDialect(sql) {
   if (activeDialect !== 'mysql') return sql;
   return sql
+    .replace(/datetime\(\s*'now'\s*,\s*'\+(\d+)\s+days'\s*\)/gi, 'DATE_ADD(NOW(), INTERVAL $1 DAY)')
     .replace(/datetime\(\s*'now'\s*,\s*'-(\d+)\s+days'\s*\)/gi, 'DATE_SUB(NOW(), INTERVAL $1 DAY)')
     .replace(/datetime\(\s*'now'\s*\)/gi, 'NOW()')
     .replace(/date\(\s*'now'\s*\)/gi, 'CURDATE()')
     .replace(/strftime\(\s*'%Y-%m'\s*,\s*([^)]+)\)/gi, "DATE_FORMAT($1, '%Y-%m')")
+    .replace(/strftime\(\s*'%Y'\s*,\s*([^)]+)\)/gi, "DATE_FORMAT($1, '%Y')")
     .replace(/MAX\(\s*0\s*,/gi, 'GREATEST(0,');
 }
 

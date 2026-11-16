@@ -3,7 +3,8 @@ import { api } from '../services/api.js';
 import { useAuth } from './AuthContext.jsx';
 
 const ThemeContext = createContext(null);
-const STORAGE_KEY = 'bizflow_theme';
+const STORAGE_KEY = 'biztrade_theme';
+const LEGACY_STORAGE_KEY = 'bizflow_theme';
 const VALID_THEMES = ['light', 'dark', 'system'];
 
 function normalizeTheme(val) {
@@ -18,7 +19,11 @@ function getSystemIsDark() {
 export function ThemeProvider({ children }) {
   const { user, token, updateUserFields } = useAuth();
   const [themePreference, setThemePreference] = useState(() =>
-    normalizeTheme(typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : 'system')
+    normalizeTheme(
+      typeof window !== 'undefined'
+        ? localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)
+        : 'system'
+    )
   );
   const [systemIsDark, setSystemIsDark] = useState(getSystemIsDark);
   const [savingTheme, setSavingTheme] = useState(false);

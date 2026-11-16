@@ -105,7 +105,7 @@ export async function queryBusinessAssistant({ businessId, branchId, allBranches
     contents: `Authorized Business Data JSON:\n${JSON.stringify(groundedContext, null, 2)}\n\nUser Question: ${userPrompt}`,
     config: {
       systemInstruction:
-        'You are the BizFlow Africa Business Assistant. Answer strictly using the provided authorized database JSON. ' +
+        'You are the BizTrade Africa Business Assistant. Answer strictly using the provided authorized database JSON. ' +
         'Clearly distinguish ACTUAL DATABASE RESULTS from ESTIMATES or RECOMMENDATIONS. ' +
         'Never invent figures that are not in the JSON; if data is missing or zero, state that explicitly. ' +
         'Format currency clearly in the business currency (default RWF). Keep answers concise, executive, and actionable.',

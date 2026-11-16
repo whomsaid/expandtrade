@@ -9,6 +9,7 @@ import { upload } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, logAudit } from '../services/auditService.js';
 import { sendMail } from '../services/mailService.js';
+import { getCached, setCached } from '../services/cacheService.js';
 
 const ALLOWED_EMPLOYEE_ROLES = ['manager', 'branch_manager', 'accountant', 'cashier', 'salesperson', 'inventory_manager', 'customer_service'];
 
@@ -109,7 +110,7 @@ router.post(
             businessId,
             language,
             `Thank you for choosing ${name.trim()}`,
-            'Powered by BizFlow Africa',
+            'Powered by BizTrade Africa',
             JSON.stringify(['cash', 'mtn_momo', 'airtel_money', 'bank_transfer', 'card']),
           ]
         );
@@ -422,9 +423,15 @@ router.put(
 // Roles & Employees / Members
 router.get('/roles', authenticate, requireBusiness, async (_req, res, next) => {
   try {
-    const roles = await query('SELECT * FROM roles ORDER BY id ASC');
-    const permissions = await query('SELECT * FROM permissions ORDER BY module, id');
-    res.json({ roles, permissions });
+    const cached = getCached('rbac:roles-perms');
+    if (cached) return res.json(cached);
+    const [roles, permissions] = await Promise.all([
+      query('SELECT * FROM roles ORDER BY id ASC'),
+      query('SELECT * FROM permissions ORDER BY module, id'),
+    ]);
+    const payload = { roles, permissions };
+    setCached('rbac:roles-perms', payload, 120_000);
+    res.json(payload);
   } catch (err) {
     next(err);
   }
@@ -527,7 +534,7 @@ router.post(
       const activationUrl = `/activate-account?token=${inviteToken}`;
       const mailResult = await sendMail({
         to: email,
-        subject: `Invitation to join ${req.business.name} on BizFlow Africa`,
+        subject: `Invitation to join ${req.business.name} on BizTrade Africa`,
         text: `Hello ${full_name.trim()}, you have been invited to join ${req.business.name} as ${role.name}. Open ${activationUrl} to set your password and activate your account.`,
       });
 

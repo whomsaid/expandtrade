@@ -1,4 +1,4 @@
--- BizFlow Africa - Entity Relationships & Tenant Isolation Verification Queries
+-- BizTrade Africa - Entity Relationships & Tenant Isolation Verification Queries
 -- Every tenant-owned entity references businesses(id) via business_id.
 -- Branch-scoped operational tables additionally reference branches(id) via branch_id.
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { createElement, useEffect, useRef, useState } from 'react';
 
 export function useRevealOnScroll({ threshold = 0.08, rootMargin = '0px 0px -32px 0px' } = {}) {
   const ref = useRef(null);
@@ -46,14 +46,14 @@ export function useRevealOnScroll({ threshold = 0.08, rootMargin = '0px 0px -32p
 export function RevealBlock({ as: Tag = 'div', className = '', delayMs = 0, children, ...rest }) {
   const [ref, isVisible] = useRevealOnScroll();
 
-  return (
-    <Tag
-      ref={ref}
-      style={delayMs ? { transitionDelay: `${delayMs}ms` } : undefined}
-      className={`reveal-section ${isVisible ? 'is-visible' : ''} ${className}`}
-      {...rest}
-    >
-      {children}
-    </Tag>
+  return createElement(
+    Tag,
+    {
+      ref,
+      style: delayMs ? { transitionDelay: `${delayMs}ms` } : undefined,
+      className: `reveal-section ${isVisible ? 'is-visible' : ''} ${className}`.trim(),
+      ...rest,
+    },
+    children
   );
 }

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
+  Banknote,
   BarChart3,
   Bell,
   Bot,
   Boxes,
+  Briefcase,
   Building2,
   ClipboardList,
   CreditCard,
@@ -68,7 +70,10 @@ export default function AppLayout() {
     { to: '/app/suppliers', label: t(language, 'suppliers'), icon: Truck, perm: 'suppliers.view' },
     { to: '/app/purchases', label: t(language, 'purchases'), icon: CreditCard, perm: 'purchases.view' },
     { to: '/app/finance', label: t(language, 'finance'), icon: Wallet, perm: 'finance.view' },
+    { to: '/app/payroll', label: t(language, 'payroll'), icon: Banknote, perm: 'payroll.view' },
+    { to: '/app/my-payroll', label: t(language, 'myPayroll'), icon: BarChart3, perm: null, requiresMember: true },
     { to: '/app/employees', label: t(language, 'employees'), icon: Users, perm: 'employees.view' },
+    { to: '/app/recruitment', label: t(language, 'recruitment'), icon: Briefcase, perm: 'recruitment.view' },
     { to: '/app/branches', label: t(language, 'branches'), icon: GitBranch, perm: 'branches.view' },
     { to: '/app/ads', label: t(language, 'ads'), icon: Video, perm: 'ads.view' },
     { to: '/app/tasks', label: t(language, 'tasks'), icon: ClipboardList, perm: 'tasks.view' },
@@ -78,7 +83,10 @@ export default function AppLayout() {
     { to: '/app/settings', label: t(language, 'settings'), icon: Settings, perm: null },
   ];
 
-  const visibleNav = navItems.filter((item) => !item.perm || hasPermission(item.perm));
+  const visibleNav = navItems.filter((item) => {
+    if (item.requiresMember && memberships.length === 0) return false;
+    return !item.perm || hasPermission(item.perm);
+  });
 
   const handleMarkAllRead = async () => {
     try {
@@ -175,6 +183,9 @@ export default function AppLayout() {
             <LogOut className="w-4 h-4" />
             <span>{t(language, 'signOut')}</span>
           </button>
+          <div className="px-3 text-[11px] text-slate-500">
+            Developed by <span className="font-semibold text-slate-400">softworld</span>
+          </div>
         </div>
       </aside>
 
@@ -278,6 +289,15 @@ export default function AppLayout() {
                         <div key={n.id} className={`p-3 text-xs ${n.is_read ? 'bg-white dark:bg-slate-900' : 'bg-sky-50/50 dark:bg-sky-950/40'}`}>
                           <div className="font-semibold text-slate-900 dark:text-slate-100">{n.title}</div>
                           <div className="text-slate-600 dark:text-slate-300 mt-0.5">{n.message}</div>
+                          {n.related_url && (
+                            <Link
+                              to={n.related_url}
+                              onClick={() => setNotifOpen(false)}
+                              className="inline-block mt-1 text-[11px] font-semibold text-sky-700 dark:text-sky-400 hover:underline"
+                            >
+                              Open →
+                            </Link>
+                          )}
                         </div>
                       ))
                     )}

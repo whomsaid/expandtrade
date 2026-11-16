@@ -32,12 +32,6 @@ export async function requireBusiness(req, res, next) {
         code: 'PASSWORD_CHANGE_REQUIRED',
       });
     }
-    if (!req.user?.avatar_url || !String(req.user.avatar_url).trim()) {
-      return res.status(403).json({
-        error: 'A profile image is required before accessing the application.',
-        code: 'PROFILE_IMAGE_REQUIRED',
-      });
-    }
 
     const rawBusinessId =
       req.headers['x-business-id'] ||
@@ -50,6 +44,8 @@ export async function requireBusiness(req, res, next) {
       return res.status(400).json({ error: 'Active business workspace header (x-business-id) is required' });
     }
 
+    const isSuperAdmin = Boolean(req.user?.is_platform_admin);
+
     const business = await queryOne(
       'SELECT * FROM businesses WHERE id = ?',
       [businessId]
@@ -57,17 +53,19 @@ export async function requireBusiness(req, res, next) {
     if (!business || business.status === 'deleted' || business.deleted_at) {
       return res.status(404).json({ error: 'Business workspace not found' });
     }
-    if (business.status === 'suspended') {
-      return res.status(403).json({ error: 'This business workspace is currently suspended. Contact BizFlow support.' });
-    }
-    if (business.status === 'deactivated') {
-      return res.status(403).json({ error: 'This business workspace has been deactivated by the platform administrator.' });
-    }
-    if (business.status === 'pending_activation') {
-      return res.status(403).json({ error: 'This business workspace is pending Business Admin account activation.' });
+    if (!isSuperAdmin) {
+      if (business.status === 'suspended') {
+        return res.status(403).json({ error: 'This business workspace is currently suspended. Contact BizTrade Africa support.' });
+      }
+      if (business.status === 'deactivated') {
+        return res.status(403).json({ error: 'This business workspace has been deactivated by the platform administrator.' });
+      }
+      if (business.status === 'pending_activation') {
+        return res.status(403).json({ error: 'This business workspace is pending Business Admin account activation.' });
+      }
     }
 
-    const membership = await queryOne(
+    let membership = await queryOne(
       `SELECT bm.*, r.code AS role_code, r.name AS role_name
        FROM business_members bm
        JOIN roles r ON r.id = bm.role_id
@@ -75,13 +73,35 @@ export async function requireBusiness(req, res, next) {
       [businessId, req.user.id]
     );
 
+    if (!membership && isSuperAdmin) {
+      membership = {
+        id: 0,
+        business_id: businessId,
+        user_id: req.user.id,
+        role_id: 0,
+        assigned_branch_id: null,
+        all_branches_access: 1,
+        job_title: 'Platform Super Admin',
+        status: 'active',
+        role_code: 'business_owner',
+        role_name: 'Super Admin Control',
+        is_super_admin_override: true,
+      };
+    }
+
     if (!membership) {
       return res.status(403).json({
         error: 'Tenant isolation violation: you do not belong to this business workspace',
       });
     }
 
-    const permissions = await loadMemberPermissions(membership.id, membership.role_id);
+    let permissions;
+    if (isSuperAdmin || membership.is_super_admin_override) {
+      const allPerms = await query('SELECT perm_key FROM permissions');
+      permissions = allPerms.map((p) => p.perm_key);
+    } else {
+      permissions = await loadMemberPermissions(membership.id, membership.role_id);
+    }
     const requestedBranchId = Number(req.headers['x-branch-id'] || req.query.branchId || req.body?.branch_id || 0);
 
     let effectiveBranchId = membership.assigned_branch_id || null;
@@ -93,7 +113,7 @@ export async function requireBusiness(req, res, next) {
       if (!branch) {
         return res.status(403).json({ error: 'Branch does not belong to this business or is inactive' });
       }
-      if (!membership.all_branches_access && membership.assigned_branch_id && membership.assigned_branch_id !== requestedBranchId) {
+      if (!isSuperAdmin && !membership.all_branches_access && membership.assigned_branch_id && membership.assigned_branch_id !== requestedBranchId) {
         return res.status(403).json({ error: 'You are not authorized to access this branch' });
       }
       effectiveBranchId = requestedBranchId;
@@ -120,6 +140,9 @@ export async function requireBusiness(req, res, next) {
 
 export function requirePermission(permKey) {
   return (req, res, next) => {
+    if (req.user?.is_platform_admin) {
+      return next();
+    }
     if (!req.membership) {
       return res.status(403).json({ error: 'Business membership required' });
     }

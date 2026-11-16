@@ -13,6 +13,8 @@ import operationsRoutes from './routes/operationsRoutes.js';
 import collaborationRoutes from './routes/collaborationRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
 import videoRoutes from './routes/videoRoutes.js';
+import recruitmentRoutes from './routes/recruitmentRoutes.js';
+import payrollRoutes from './routes/payrollRoutes.js';
 
 export function createBackendApp() {
   const app = express();
@@ -36,14 +38,21 @@ export function createBackendApp() {
     legacyHeaders: false,
   });
 
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'backend', 'uploads')));
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'backend', 'uploads'), { maxAge: '7d' }));
 
   app.get('/api/health', async (_req, res) => {
     try {
       await queryOne('SELECT 1 AS ok');
       res.json({
         status: 'ok',
-        platform: 'BizFlow Africa',
+        platform: 'BizTrade Africa',
         dialect: getDialect(),
         timestamp: new Date().toISOString(),
       });
@@ -53,6 +62,8 @@ export function createBackendApp() {
   });
 
   app.use('/api/auth', authLimiter, authRoutes);
+  app.use('/api', apiLimiter);
+  app.use('/api', payrollRoutes);
   app.use('/api', businessRoutes);
   app.use('/api', catalogRoutes);
   app.use('/api', salesRoutes);
@@ -60,6 +71,7 @@ export function createBackendApp() {
   app.use('/api', collaborationRoutes);
   app.use('/api', customerRoutes);
   app.use('/api', videoRoutes);
+  app.use('/api', recruitmentRoutes);
 
   app.use('/api/*', (_req, res) => {
     res.status(404).json({ error: 'API endpoint not found' });

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Camera, Upload } from 'lucide-react';
+import { Camera, Trash2, Upload } from 'lucide-react';
 import { api } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { optimizeProfileImage } from '../utils/imageOptimizer.js';
 import UserAvatar from './UserAvatar.jsx';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -20,7 +21,7 @@ export function validateAvatarFile(file) {
 
 export default function ProfilePhotoUploader({
   title = 'Profile Photo',
-  description = 'Upload a clear profile picture (JPG, JPEG, PNG, or WEBP, max 5MB).',
+  description = 'Optional: upload a clear profile picture (JPG, JPEG, PNG, or WEBP, max 5MB). Leave empty to keep your default initials avatar.',
   requiredMode = false,
   onUploaded,
 }) {
@@ -28,6 +29,7 @@ export default function ProfilePhotoUploader({
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -71,8 +73,9 @@ export default function ProfilePhotoUploader({
 
     setUploading(true);
     try {
+      const optimized = await optimizeProfileImage(selectedFile, 512, 0.85);
       const fd = new FormData();
-      fd.append('avatar', selectedFile);
+      fd.append('avatar', optimized);
       const { data } = await api.post('/auth/avatar', fd);
       setSelectedFile(null);
       setSuccess(data.message || 'Profile image updated successfully.');
@@ -82,6 +85,24 @@ export default function ProfilePhotoUploader({
       setError(err.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setError('');
+    setSuccess('');
+    setRemoving(true);
+    try {
+      const { data } = await api.delete('/auth/avatar');
+      setSelectedFile(null);
+      setPreviewUrl('');
+      setSuccess(data.message || 'Profile image removed. Using default initials avatar.');
+      await refreshMe();
+      if (onUploaded) onUploaded(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -109,7 +130,7 @@ export default function ProfilePhotoUploader({
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
               <Upload className="w-3.5 h-3.5" />
-              <span>{selectedFile ? 'Choose Another Image' : 'Select Profile Image'}</span>
+              <span>{selectedFile ? 'Choose Another Image' : user?.avatar_url ? 'Change Profile Photo' : 'Upload Profile Photo'}</span>
               <input
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -125,7 +146,19 @@ export default function ProfilePhotoUploader({
                 onClick={handleUpload}
                 className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
               >
-                {uploading ? 'Uploading...' : requiredMode ? 'Save Profile Image & Continue' : 'Save Profile Image'}
+                {uploading ? 'Optimizing & Uploading...' : requiredMode ? 'Save Profile Image & Continue' : 'Save Profile Image'}
+              </button>
+            )}
+
+            {user?.avatar_url && !requiredMode && (
+              <button
+                type="button"
+                disabled={removing || uploading}
+                onClick={handleRemove}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{removing ? 'Removing...' : 'Remove Photo'}</span>
               </button>
             )}
           </div>

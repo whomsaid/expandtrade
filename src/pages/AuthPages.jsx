@@ -10,9 +10,21 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { validatePasswordStrength } from '../utils/passwordPolicy.js';
 
-function getLandingRoute(user, memberships) {
-  if (user?.must_change_password) return '/change-temporary-password';
-  if (!user?.avatar_url) return '/complete-profile';
+function sanitizeRedirect(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return '';
+  return trimmed;
+}
+
+function getLandingRoute(user, memberships, redirectPath = '') {
+  const safeRedirect = sanitizeRedirect(redirectPath);
+  if (user?.must_change_password) {
+    return safeRedirect
+      ? `/change-temporary-password?redirect=${encodeURIComponent(safeRedirect)}`
+      : '/change-temporary-password';
+  }
+  if (safeRedirect && !user.is_platform_admin) return safeRedirect;
   if (user.is_platform_admin) return '/app/admin';
   if (memberships?.length > 0) return '/app/dashboard';
   return '/customer';
@@ -21,6 +33,8 @@ function getLandingRoute(user, memberships) {
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTarget = sanitizeRedirect(searchParams.get('redirect'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -32,7 +46,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       const data = await login(email, password);
-      navigate(getLandingRoute(data.user, data.memberships));
+      navigate(getLandingRoute(data.user, data.memberships, redirectTarget), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -46,7 +60,7 @@ export function LoginPage() {
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">Sign in to BizFlow Africa</h1>
+            <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">Sign in to BizTrade Africa</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Sign in with your Platform Admin, Business Admin, Employee, or Customer credentials.
             </p>
@@ -91,12 +105,15 @@ export function LoginPage() {
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2 text-center text-xs text-slate-600 dark:text-slate-400">
             <p>
               New customer?{' '}
-              <Link to="/register" className="font-semibold text-sky-700 dark:text-sky-400 hover:underline">
+              <Link
+                to={redirectTarget ? `/register?redirect=${encodeURIComponent(redirectTarget)}` : '/register'}
+                className="font-semibold text-sky-700 dark:text-sky-400 hover:underline"
+              >
                 Create a Customer Account
               </Link>
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Business workspaces are provisioned exclusively by BizFlow Africa Platform Super Admin.{' '}
+              Business workspaces are provisioned exclusively by BizTrade Africa Platform Super Admin.{' '}
               <Link to="/contact" className="text-sky-700 dark:text-sky-400 hover:underline">Request onboarding</Link>.
             </p>
           </div>
@@ -109,6 +126,8 @@ export function LoginPage() {
 export function RegisterPage() {
   const { completeSession } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTarget = sanitizeRedirect(searchParams.get('redirect'));
   const [step, setStep] = useState('form');
   const [form, setForm] = useState({
     full_name: '',
@@ -117,8 +136,6 @@ export function RegisterPage() {
     password: '',
     confirm_password: '',
   });
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState('');
   const [otp, setOtp] = useState('');
   const [devOtp, setDevOtp] = useState('');
   const [pendingSession, setPendingSession] = useState(null);
@@ -126,42 +143,10 @@ export function RegisterPage() {
   const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!avatarFile) {
-      setAvatarPreview('');
-      return;
-    }
-    const url = URL.createObjectURL(avatarFile);
-    setAvatarPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [avatarFile]);
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files?.[0];
-    setError('');
-    if (!file) {
-      setAvatarFile(null);
-      return;
-    }
-    const validationErr = validateAvatarFile(file);
-    if (validationErr) {
-      setError(validationErr);
-      setAvatarFile(null);
-      e.target.value = '';
-      return;
-    }
-    setAvatarFile(file);
-  };
-
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
     setNotice('');
-    const avatarErr = validateAvatarFile(avatarFile);
-    if (avatarErr) {
-      setError(avatarErr);
-      return;
-    }
     const pwErr = validatePasswordStrength(form.password);
     if (pwErr) {
       setError(pwErr);
@@ -173,15 +158,13 @@ export function RegisterPage() {
     }
     setSubmitting(true);
     try {
-      const fd = new FormData();
-      fd.append('full_name', form.full_name);
-      fd.append('email', form.email);
-      fd.append('phone', form.phone);
-      fd.append('password', form.password);
-      fd.append('confirm_password', form.confirm_password);
-      fd.append('avatar', avatarFile);
-
-      const { data } = await api.post('/auth/register', fd);
+      const { data } = await api.post('/auth/register', {
+        full_name: form.full_name,
+        email: form.email,
+        phone: form.phone,
+        password: form.password,
+        confirm_password: form.confirm_password,
+      });
       setPendingSession(data);
       if (data.devOtpPreview) setDevOtp(data.devOtpPreview);
       setStep('verify');
@@ -211,7 +194,7 @@ export function RegisterPage() {
     try {
       await api.post('/auth/verify-email', { email: form.email, otp_code: otp });
       await completeSession(pendingSession.token, { ...pendingSession.user, is_email_verified: 1 }, []);
-      navigate('/customer');
+      navigate(redirectTarget || '/customer', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -229,31 +212,11 @@ export function RegisterPage() {
               <div className="space-y-1">
                 <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">Create Customer Account</h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Register to browse listed businesses, place orders, track deliveries, and view your receipts.
+                  Quick registration — add a profile photo anytime later in your account settings.
                 </p>
               </div>
               {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
               <form onSubmit={handleRegister} className="space-y-3.5">
-                <div className="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg">
-                  <UserAvatar src={avatarPreview} name={form.full_name || 'Customer'} size="lg" />
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      Profile Image <span className="text-rose-600 dark:text-rose-400">*</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">Required · JPG, JPEG, PNG, or WEBP (max 5MB)</div>
-                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{avatarFile ? 'Change Image' : 'Upload Photo'}</span>
-                      <input
-                        type="file"
-                        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={handleAvatarChange}
-                      />
-                    </label>
-                  </div>
-                </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Full Name</label>
                   <input
@@ -313,18 +276,26 @@ export function RegisterPage() {
                   disabled={submitting}
                   className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
                 >
-                  {submitting ? 'Creating Account...' : 'Register & Verify Email'}
+                  {submitting ? 'Creating Account...' : 'Create Account'}
                 </button>
               </form>
               <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
-                Already registered? <Link to="/login" className="font-semibold text-sky-700 dark:text-sky-400 hover:underline">Sign In</Link>
+                Already registered?{' '}
+                <Link
+                  to={redirectTarget ? `/login?redirect=${encodeURIComponent(redirectTarget)}` : '/login'}
+                  className="font-semibold text-sky-700 dark:text-sky-400 hover:underline"
+                >
+                  Sign In
+                </Link>
               </p>
             </>
           ) : (
             <>
               <div className="space-y-1">
-                <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Verify Your Email</h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Enter the 6-digit OTP code sent to {form.email}.</p>
+                <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Enter the code we sent to your entered email</h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  We sent a 6-digit verification code to <span className="font-medium text-slate-700 dark:text-slate-200">{form.email}</span>. Enter it below to continue.
+                </p>
               </div>
               {devOtp && (
                 <div className="p-3 bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 rounded-lg text-xs text-sky-900 dark:text-sky-200">
@@ -338,11 +309,11 @@ export function RegisterPage() {
                   required
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
-                  placeholder="6-digit OTP code"
+                  placeholder="6-digit verification code"
                   className="w-full px-3 py-2.5 text-center text-lg font-mono tracking-widest bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg"
                 />
                 <button type="submit" disabled={submitting} className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                  {submitting ? 'Verifying...' : 'Verify & Open Customer Portal'}
+                  {submitting ? 'Verifying...' : 'Verify & Continue'}
                 </button>
               </form>
               <button
@@ -441,10 +412,12 @@ export function ActivateAccountPage() {
   const handleActivate = async (e) => {
     e.preventDefault();
     setError('');
-    const avatarErr = validateAvatarFile(avatarFile);
-    if (avatarErr) {
-      setError(avatarErr);
-      return;
+    if (avatarFile) {
+      const avatarErr = validateAvatarFile(avatarFile);
+      if (avatarErr) {
+        setError(avatarErr);
+        return;
+      }
     }
     const pwErr = validatePasswordStrength(password);
     if (pwErr) {
@@ -461,7 +434,9 @@ export function ActivateAccountPage() {
       fd.append('token', token.trim());
       fd.append('password', password);
       fd.append('confirm_password', confirmPassword);
-      fd.append('avatar', avatarFile);
+      if (avatarFile) {
+        fd.append('avatar', avatarFile);
+      }
 
       const { data } = await api.post('/auth/activate-account', fd);
       await completeSession(data.token, data.user, data.memberships || []);
@@ -481,7 +456,7 @@ export function ActivateAccountPage() {
           <div className="space-y-1">
             <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">Activate Business Account</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Upload your profile image, verify your invitation, and set a secure password to open your workspace.
+              Verify your invitation and set a secure password to open your workspace. Profile photo is optional.
             </p>
           </div>
 
@@ -520,12 +495,12 @@ export function ActivateAccountPage() {
                 <UserAvatar src={avatarPreview} name={preview.full_name} size="lg" />
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                    Profile Image <span className="text-rose-600 dark:text-rose-400">*</span>
+                    Profile Image <span className="text-slate-400 font-normal">(Optional)</span>
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Required · JPG, JPEG, PNG, or WEBP (max 5MB)</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">JPG, JPEG, PNG, or WEBP (max 5MB)</div>
                   <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
                     <Camera className="w-3.5 h-3.5" />
-                    <span>{avatarFile ? 'Change Image' : 'Upload Profile Image'}</span>
+                    <span>{avatarFile ? 'Change Image' : 'Add Photo (Optional)'}</span>
                     <input
                       type="file"
                       accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -563,7 +538,7 @@ export function ActivateAccountPage() {
                 disabled={submitting}
                 className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
               >
-                {submitting ? 'Activating Account...' : 'Upload Photo, Set Password & Activate'}
+                {submitting ? 'Activating Account...' : 'Activate Account & Open Workspace'}
               </button>
             </form>
           )}
@@ -576,11 +551,15 @@ export function ActivateAccountPage() {
 export function CompleteProfilePage() {
   const { user, memberships, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTarget = sanitizeRedirect(searchParams.get('redirect'));
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   const handleUploaded = (data) => {
     const updatedUser = data?.user || { ...user, avatar_url: data?.avatar_url };
-    if (updatedUser?.is_platform_admin) {
+    if (redirectTarget && !updatedUser?.is_platform_admin) {
+      navigate(redirectTarget, { replace: true });
+    } else if (updatedUser?.is_platform_admin) {
       navigate('/app/admin', { replace: true });
     } else if (memberships?.length > 0) {
       navigate('/app/dashboard', { replace: true });
@@ -604,7 +583,7 @@ export function CompleteProfilePage() {
             <div className="space-y-1">
               <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Complete Your Account Profile</h1>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                Every BizFlow Africa account requires a profile image before accessing the platform.
+                Every BizTrade Africa account requires a profile image before accessing the platform.
               </p>
             </div>
             <button
@@ -642,6 +621,8 @@ export function CompleteProfilePage() {
 export function ForceChangePasswordPage() {
   const { user, refreshMe, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTarget = sanitizeRedirect(searchParams.get('redirect'));
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -670,8 +651,8 @@ export function ForceChangePasswordPage() {
       });
       await refreshMe();
       const updatedUser = data?.user;
-      if (!updatedUser?.avatar_url) {
-        navigate('/complete-profile', { replace: true });
+      if (redirectTarget && !updatedUser?.is_platform_admin) {
+        navigate(redirectTarget, { replace: true });
       } else if (updatedUser?.is_platform_admin) {
         navigate('/app/admin', { replace: true });
       } else if ((data?.memberships || []).length > 0) {

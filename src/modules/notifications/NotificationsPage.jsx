@@ -12,6 +12,7 @@ export default function NotificationsPage() {
     low_stock_alerts: 1,
     order_alerts: 1,
     expense_alerts: 1,
+    payroll_alerts: 1,
   });
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
@@ -84,6 +85,7 @@ export default function NotificationsPage() {
             ['low_stock_alerts', 'Low & Out-of-Stock Alerts'],
             ['order_alerts', 'New & Updated Customer Orders'],
             ['expense_alerts', 'Expense Approval Requests'],
+            ['payroll_alerts', 'Employee Payroll Due & Salary Alerts'],
           ].map(([key, label]) => (
             <label key={key} className="flex items-center justify-between py-1">
               <span className="text-slate-700 dark:text-slate-300">{label}</span>

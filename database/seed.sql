@@ -1,4 +1,4 @@
--- BizFlow Africa - Development Seed Data (Rwanda-First Multi-Tenant SaaS)
+-- BizTrade Africa - Development Seed Data (Rwanda-First Multi-Tenant SaaS)
 -- Note: For development & QA verification only.
 
 INSERT INTO subscription_plans (code, name, target_audience, monthly_price_rwf, annual_price_rwf, max_employees, max_branches, max_products, max_storage_mb, max_ai_requests_monthly, advanced_reports_enabled, integrations_enabled)

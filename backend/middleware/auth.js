@@ -42,23 +42,24 @@ export async function authenticate(req, res, next) {
     }
 
     const decoded = jwt.verify(token, env.jwtSecret);
-    const session = await queryOne(
-      'SELECT id, is_revoked FROM user_sessions WHERE token_jti = ? AND user_id = ?',
+    const row = await queryOne(
+      `SELECT u.id, u.full_name, u.email, u.phone, u.avatar_url, u.bio, u.location,
+              u.privacy_settings_json, u.dashboard_preferences_json,
+              u.must_change_password, u.is_email_verified, u.is_active, u.is_platform_admin,
+              u.preferred_language, u.theme_preference, us.is_revoked
+       FROM user_sessions us
+       JOIN users u ON u.id = us.user_id
+       WHERE us.token_jti = ? AND us.user_id = ?`,
       [decoded.jti, decoded.sub]
     );
-    if (!session || session.is_revoked) {
+    if (!row || row.is_revoked) {
       return res.status(401).json({ error: 'Session expired or revoked. Please sign in again.' });
     }
-
-    const user = await queryOne(
-      `SELECT id, full_name, email, phone, avatar_url, must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
-       FROM users WHERE id = ?`,
-      [decoded.sub]
-    );
-    if (!user || !user.is_active) {
+    if (!row.is_active) {
       return res.status(401).json({ error: 'Account inactive or not found' });
     }
 
+    const { is_revoked: _revoked, ...user } = row;
     req.user = user;
     req.tokenJti = decoded.jti;
     next();
@@ -80,23 +81,9 @@ export function requirePasswordChanged(req, res, next) {
   next();
 }
 
+// Profile image is now optional; kept as an exported alias for password-change enforcement across routes.
 export function requireProfileImage(req, res, next) {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  if (req.user.must_change_password) {
-    return res.status(403).json({
-      error: 'Temporary password must be changed immediately before accessing the application.',
-      code: 'PASSWORD_CHANGE_REQUIRED',
-    });
-  }
-  if (!req.user.avatar_url || !String(req.user.avatar_url).trim()) {
-    return res.status(403).json({
-      error: 'A profile image is required before accessing the application.',
-      code: 'PROFILE_IMAGE_REQUIRED',
-    });
-  }
-  next();
+  return requirePasswordChanged(req, res, next);
 }
 
 export function requirePlatformAdmin(req, res, next) {
@@ -107,12 +94,6 @@ export function requirePlatformAdmin(req, res, next) {
     return res.status(403).json({
       error: 'Temporary password must be changed immediately before accessing the application.',
       code: 'PASSWORD_CHANGE_REQUIRED',
-    });
-  }
-  if (!req.user.avatar_url || !String(req.user.avatar_url).trim()) {
-    return res.status(403).json({
-      error: 'A profile image is required before accessing the application.',
-      code: 'PROFILE_IMAGE_REQUIRED',
     });
   }
   next();

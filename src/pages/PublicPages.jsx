@@ -210,24 +210,63 @@ const SUPPORTED_BUSINESSES = [
 
 const TECH_STACK = [
   {
-    category: 'Frontend',
+    category: 'Languages & Frontend',
     icon: Layers,
-    items: ['React.js', 'JavaScript', 'Vite', 'CSS / Tailwind CSS'],
+    items: ['JavaScript (ES2023+)', 'React.js', 'Vite', 'Tailwind CSS', 'HTML5 & CSS3'],
   },
   {
-    category: 'Backend',
+    category: 'Backend & APIs',
     icon: Code2,
-    items: ['Node.js', 'Express.js'],
+    items: ['Node.js', 'Express.js', 'REST API Architecture', 'JWT & Role-Based Auth'],
   },
   {
-    category: 'Database',
+    category: 'Database Technologies',
     icon: Database,
-    items: ['MySQL'],
+    items: ['MySQL', 'SQLite', 'Relational Schema Design', 'Transaction Integrity'],
   },
   {
-    category: 'Tools & Workflow',
+    category: 'Development Tools',
     icon: Wrench,
-    items: ['Git', 'GitHub', 'VS Code', 'Postman'],
+    items: ['Git', 'GitHub', 'VS Code', 'Postman', 'npm & Vite Tooling'],
+  },
+];
+
+const DEVELOPER_PROJECTS = [
+  {
+    id: 'biztrade-africa',
+    name: 'BizTradeAfrica',
+    image: '/src/assets/images/project_biztrade_africa_1794832786709.jpg',
+    fallbackCode: 'BT',
+    description:
+      'An African-focused business and employment platform designed to connect businesses, customers, traders and job seekers.',
+    technologies: ['React.js', 'Vite', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
+    status: 'IN DEVELOPMENT',
+    publicRoute: '/',
+    publicLabel: 'Open Platform',
+  },
+  {
+    id: 'kigali-store',
+    name: 'Kigali-Store',
+    image: '/src/assets/images/project_kigali_store_1794832787098.jpg',
+    fallbackCode: 'KS',
+    description:
+      'An electronics e-commerce platform for managing products, customers, shopping activities, orders and business operations.',
+    technologies: ['React.js', 'JavaScript', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
+    status: 'IN DEVELOPMENT',
+    publicRoute: null,
+    publicLabel: null,
+  },
+  {
+    id: 'electrovault',
+    name: 'ElectroVault',
+    image: '/src/assets/images/project_electrovault_1794832787681.jpg',
+    fallbackCode: 'EV',
+    description:
+      'A modern electronics shopping platform focused on providing customers with an organized and convenient electronics shopping experience.',
+    technologies: ['React.js', 'Vite', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
+    status: 'IN DEVELOPMENT',
+    publicRoute: null,
+    publicLabel: null,
   },
 ];
 
@@ -286,15 +325,15 @@ export function HomePage() {
         <div className="max-w-7xl mx-auto px-6 py-16 lg:py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-center space-y-6 animate-fade-up">
             <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
-              Complete Multi-Tenant Business Operations Platform
+              BizTrade Africa — Complete Multi-Tenant Business Platform
             </p>
             <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-[#0B192C] dark:text-white leading-[1.1] [text-wrap:balance]">
-              Expand Your Trade with BizFlow Africa
+              Expand Your Business. Manage Everything.
             </h1>
             <p className="text-base text-slate-600 dark:text-slate-300 leading-relaxed max-w-xl">
-              BizFlow Africa helps businesses manage their daily operations, Point of Sale transactions,
-              multi-branch inventory, customers, suppliers, employees, finances, and commercial activities
-              from one structured, secure platform.
+              An all-in-one business-management platform designed to help African businesses manage,
+              grow, and expand their operations—from Point of Sale and multi-branch inventory to customers,
+              suppliers, employees, finances, and commercial trade.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <a
@@ -330,7 +369,7 @@ export function HomePage() {
             <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 relative">
               <img
                 src="/src/assets/images/hero_kigali_commerce_1794724575172.jpg"
-                alt="Retail and wholesale business operations running on BizFlow Africa"
+                alt="Retail and wholesale business operations running on BizTrade Africa"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />
@@ -353,7 +392,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* 2. About BizFlow Africa Section */}
+      {/* 2. About BizTrade Africa Section */}
       <RevealBlock as="section" id="about" className="scroll-mt-20 max-w-7xl mx-auto px-6 py-20 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
           <div className="lg:col-span-5 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 min-h-[280px]">
@@ -366,15 +405,15 @@ export function HomePage() {
           </div>
           <div className="lg:col-span-7 flex flex-col justify-center space-y-6">
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">About BizFlow Africa</p>
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">About BizTrade Africa</p>
               <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
                 Engineered to replace fragmented notebooks and spreadsheets with structured control
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                BizFlow Africa is a centralized business management SaaS platform built specifically for
-                growing retail, wholesale, pharmacy, hardware, hospitality, and service businesses across Rwanda
-                and Africa. Instead of juggling separate notebooks, disconnected POS terminals, and scattered spreadsheets,
-                every team works inside one governed multi-tenant workspace.
+                BizTrade Africa is an all-in-one business-management platform designed to help African businesses
+                manage, grow, and expand their operations. Instead of juggling separate notebooks, disconnected
+                POS terminals, and scattered spreadsheets across retail, wholesale, pharmacy, hardware, hospitality,
+                and service teams, everyone works inside one governed multi-tenant workspace.
               </p>
             </div>
 
@@ -393,6 +432,16 @@ export function HomePage() {
                   profit and operational visibility.
                 </p>
               </div>
+            </div>
+
+            <div className="pt-1">
+              <Link
+                to="/about"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline"
+              >
+                <span>Read full About Us &amp; Developer Profile</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </div>
         </div>
@@ -431,10 +480,10 @@ export function HomePage() {
         </div>
       </RevealBlock>
 
-      {/* 4. How BizFlow Africa Works */}
+      {/* 4. How BizTrade Africa Works */}
       <RevealBlock as="section" id="how-it-works" className="scroll-mt-20 max-w-7xl mx-auto px-6 py-20 w-full space-y-12">
         <div className="max-w-2xl space-y-3">
-          <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">How BizFlow Africa Works</p>
+          <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">How BizTrade Africa Works</p>
           <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
             Structured governance from onboarding to daily trade
           </h2>
@@ -462,7 +511,7 @@ export function HomePage() {
         <div className="max-w-7xl mx-auto px-6 space-y-16">
           <div className="space-y-8">
             <div className="max-w-2xl space-y-2">
-              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">Why Businesses Choose BizFlow Africa</p>
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">Why Businesses Choose BizTrade Africa</p>
               <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
                 Practical operational benefits across every branch
               </h2>
@@ -514,122 +563,14 @@ export function HomePage() {
         </div>
       </RevealBlock>
 
-      {/* 6. Developer Information Section */}
-      <RevealBlock as="section" id="developer" className="scroll-mt-20 max-w-7xl mx-auto px-6 py-20 w-full space-y-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">Developer Information</p>
-              <h2 className="text-2xl font-bold text-[#0B192C] dark:text-white">
-                {config.developer_name ? config.developer_name : (config.developer_role || 'Full Stack Developer')}
-              </h2>
-              {config.developer_name && (
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                  {config.developer_role || 'Full Stack Developer'}
-                </div>
-              )}
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              {config.developer_bio?.trim()
-                ? config.developer_bio
-                : 'BizFlow Africa is architected and engineered as a modern full-stack multi-tenant platform focused on reliable transaction integrity, clear financial reporting, and accessible business tooling for SMEs across Africa.'}
-            </p>
-
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-              <div className="text-xs font-semibold text-[#0B192C] dark:text-white">Project Vision</div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Equip growing African businesses with dependable digital record-keeping, multi-branch accountability,
-                and customer connectivity without complex infrastructure overhead.
-              </p>
-            </div>
-
-            {(config.developer_email ||
-              config.developer_portfolio_url ||
-              config.developer_github_url ||
-              config.developer_linkedin_url) && (
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-3 text-xs">
-                {config.developer_email && (
-                  <a
-                    href={`mailto:${config.developer_email}`}
-                    className="inline-flex items-center gap-1.5 text-sky-700 dark:text-sky-400 hover:underline"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    <span>{config.developer_email}</span>
-                  </a>
-                )}
-                {config.developer_portfolio_url && (
-                  <a
-                    href={config.developer_portfolio_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sky-700 dark:text-sky-400 hover:underline"
-                  >
-                    <span>Portfolio</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-                {config.developer_github_url && (
-                  <a
-                    href={config.developer_github_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sky-700 dark:text-sky-400 hover:underline"
-                  >
-                    <span>GitHub</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-                {config.developer_linkedin_url && (
-                  <a
-                    href={config.developer_linkedin_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sky-700 dark:text-sky-400 hover:underline"
-                  >
-                    <span>LinkedIn</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {TECH_STACK.map((group) => {
-              const Icon = group.icon;
-              return (
-                <div
-                  key={group.category}
-                  className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3"
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-[#0B192C] dark:text-white">
-                    <Icon className="w-4 h-4 text-sky-700 dark:text-sky-400" />
-                    <span>{group.category}</span>
-                  </div>
-                  <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                    {group.items.map((tech) => (
-                      <li key={tech} className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span>{tech}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </RevealBlock>
-
-      {/* 7. Contact Section */}
-      <RevealBlock as="section" id="contact" className="scroll-mt-20 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-20">
+      {/* 6. Contact Section */}
+      <RevealBlock as="section" id="contact" className="scroll-mt-20 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 py-20">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5 space-y-6">
             <div className="space-y-2">
               <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">Contact & Onboarding</p>
               <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
-                Connect with the BizFlow Africa team
+                Connect with the BizTrade Africa team
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Reach out to request new business onboarding, schedule a platform walkthrough, or ask questions about workspace administration.
@@ -640,10 +581,10 @@ export function HomePage() {
               <div className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-sky-700 dark:text-sky-400 shrink-0" />
                 <a
-                  href={`mailto:${config.support_email || 'support@bizflow.africa'}`}
+                  href={`mailto:${config.support_email || 'allofme140@gmail.com'}`}
                   className="font-medium text-slate-900 dark:text-white hover:underline"
                 >
-                  {config.support_email || 'support@bizflow.africa'}
+                  {config.support_email || 'allofme140@gmail.com'}
                 </a>
               </div>
               {config.support_phone && (
@@ -803,7 +744,7 @@ export function PublicBusinessesPage() {
           <div className="space-y-1.5">
             <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">Registered Businesses Directory</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Browse verified businesses on BizFlow Africa, explore published catalogs, and place customer orders.
+              Browse verified businesses on BizTrade Africa, explore published catalogs, and place customer orders.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -852,7 +793,7 @@ export function PublicBusinessesPage() {
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
                     {b.logo_url ? (
-                      <img src={b.logo_url} alt={b.name} referrerPolicy="no-referrer" className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
+                      <img src={b.logo_url} alt={b.name} loading="lazy" referrerPolicy="no-referrer" className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
                     ) : (
                       <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm font-bold text-[#0B192C] dark:text-sky-300 shrink-0">
                         {b.name?.slice(0, 2).toUpperCase()}
@@ -902,7 +843,7 @@ export function PublicBusinessesPage() {
             <div>
               <h2 className="text-xl font-bold text-[#0B192C] dark:text-white">Featured Promotional Videos</h2>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                Watch product and service showcases published by verified businesses on BizFlow Africa.
+                Watch product and service showcases published by verified businesses on BizTrade Africa.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1109,6 +1050,47 @@ export function PublicBusinessDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {data.videos.map((vid) => (
                     <VideoAdPlayer key={vid.id} video={vid} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Open Job Vacancies at This Business */}
+            {data.vacancies?.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Open Job Positions</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Apply directly to join the team at {data.business.name}.
+                    </p>
+                  </div>
+                  <Link to="/jobs" className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline">
+                    View All Platform Jobs →
+                  </Link>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {data.vacancies.map((vac) => (
+                    <div key={vac.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3 text-xs">
+                      <div className="space-y-1">
+                        <div className="font-bold text-sm text-slate-900 dark:text-white">{vac.title}</div>
+                        <div className="text-slate-500 dark:text-slate-400">
+                          {vac.department || 'General'} · {vac.location}
+                        </div>
+                        {vac.application_deadline && (
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                            Deadline: {formatDate(vac.application_deadline)}
+                          </div>
+                        )}
+                      </div>
+                      <Link
+                        to={`/jobs/${vac.id}`}
+                        className="inline-flex items-center justify-center gap-1 px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
+                      >
+                        View Vacancy & Apply
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -1476,33 +1458,304 @@ export function PricingPage() {
   );
 }
 
+function ProjectPreviewMedia({ project }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed || !project.image) {
+    return (
+      <div className="aspect-[4/3] w-full bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center border-b border-slate-200 dark:border-slate-800">
+        <span className="text-2xl font-bold tracking-tight text-[#0B192C] dark:text-white">
+          {project.fallbackCode}
+        </span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">{project.name}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
+      <img
+        src={project.image}
+        alt={`${project.name} software platform preview`}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+      />
+    </div>
+  );
+}
+
 export function AboutPage() {
+  const { config } = usePlatformConfig();
+  const [portraitFailed, setPortraitFailed] = useState(false);
+
+  const developerName = config.developer_name?.trim() || 'Xavine Hakim';
+  const developerRole = config.developer_role?.trim() || 'Full Stack Developer';
+  const portfolioUrl = config.developer_portfolio_url?.trim() || 'https://xavineanoited.vercel.app/';
+  const developerBio =
+    config.developer_bio?.trim() ||
+    'Full Stack Developer at softworld specializing in multi-tenant commercial platforms, relational database architecture, and responsive web applications built for African businesses and digital retail—including BizTradeAfrica, Kigali-Store, and ElectroVault.';
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-4xl mx-auto px-6 py-16 space-y-8 animate-fade-up">
-        <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">About BizFlow Africa</h1>
-        <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-          BizFlow Africa was engineered to replace fragmented paper books, disconnected POS terminals,
-          and insecure spreadsheets across Rwanda and East Africa with one reliable commercial cloud platform.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Rwanda-First Engineering</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Configured out of the box with Rwandan Franc (RWF), +250 phone validation, Africa/Kigali
-              timezone, configurable VAT rates, and MTN MoMo / Airtel Money tracking.
+
+      <main className="flex-1">
+        {/* About BizTrade Africa Overview */}
+        <section className="max-w-6xl mx-auto px-6 py-16 space-y-8 animate-fade-up">
+          <div className="max-w-3xl space-y-4">
+            <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
+              About BizTrade Africa
+            </p>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0B192C] dark:text-white">
+              Structured Business Management &amp; Employment Infrastructure
+            </h1>
+            <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed">
+              BizTrade Africa is an all-in-one business-management platform designed to help African businesses
+              manage, grow, and expand their operations across Rwanda and East Africa on one reliable commercial cloud platform.
             </p>
           </div>
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Built for Continental Growth</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Multi-country localization settings allow businesses expanding into Kenya, Uganda, Tanzania,
-              Ghana, or Nigeria to configure regional currencies and tax rules in seconds.
-            </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Rwanda-First Engineering</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Configured out of the box with Rwandan Franc (RWF), +250 phone validation, Africa/Kigali
+                timezone, configurable VAT rates, and MTN MoMo / Airtel Money tracking.
+              </p>
+            </div>
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Built for Continental Growth</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Multi-country localization settings allow businesses expanding into Kenya, Uganda, Tanzania,
+                Ghana, or Nigeria to configure regional currencies and tax rules in seconds.
+              </p>
+            </div>
           </div>
-        </div>
+        </section>
+
+        {/* Dedicated Developer Section */}
+        <section
+          aria-labelledby="about-developer-heading"
+          className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-16 lg:py-20"
+        >
+          <div className="max-w-6xl mx-auto px-6 space-y-14">
+            {/* Section Header */}
+            <div className="max-w-2xl space-y-2">
+              <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
+                Engineering &amp; Product Development
+              </p>
+              <h2
+                id="about-developer-heading"
+                className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white"
+              >
+                Developer &amp; Architecture Profile
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Designed and engineered with a focus on dependable transaction records, clean multi-tenant
+                isolation, and accessible commercial tooling.
+              </p>
+            </div>
+
+            {/* Developer Profile + Skills Split */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Left Column: Developer Identity Card */}
+              <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-950 p-6 sm:p-7 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6">
+                <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row items-start sm:items-center lg:items-start xl:items-center gap-5">
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-200 dark:bg-slate-800 shrink-0">
+                    {portraitFailed ? (
+                      <div className="w-full h-full flex items-center justify-center text-lg font-bold text-[#0B192C] dark:text-white">
+                        XH
+                      </div>
+                    ) : (
+                      <img
+                        src="/src/assets/images/developer_xavine_portrait_1794832786905.jpg"
+                        alt={`${developerName} — ${developerRole}`}
+                        referrerPolicy="no-referrer"
+                        onError={() => setPortraitFailed(true)}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
+                      Developed by softworld
+                    </div>
+                    <h3 className="text-xl font-bold tracking-tight text-[#0B192C] dark:text-white">
+                      {developerName}
+                    </h3>
+                    <div className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      {developerRole}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 pt-0.5">
+                      BizTradeAfrica · Kigali-Store · ElectroVault
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {developerBio}
+                </p>
+
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="text-xs font-semibold text-[#0B192C] dark:text-white">
+                    Project Vision
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Equip growing African businesses and digital storefronts with dependable stock tracking,
+                    transparent accounting, and structured hiring workflows without unnecessary complexity.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <a
+                      href={portfolioUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
+                    >
+                      <span>Visit Developer Portfolio</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+
+                    {config.developer_email && (
+                      <a
+                        href={`mailto:${config.developer_email}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Email</span>
+                      </a>
+                    )}
+                    {config.developer_github_url && (
+                      <a
+                        href={config.developer_github_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <span>GitHub</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                    {config.developer_linkedin_url && (
+                      <a
+                        href={config.developer_linkedin_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <span>LinkedIn</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Technical Skills & Engineering Stack */}
+              <div className="lg:col-span-7 space-y-5">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-[#0B192C] dark:text-white">
+                    Technical Skills &amp; Stack
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Core programming languages, application frameworks, databases, and engineering workflow tools.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {TECH_STACK.map((group) => {
+                    const Icon = group.icon;
+                    return (
+                      <div
+                        key={group.category}
+                        className="bg-slate-50 dark:bg-slate-950 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-sky-500/40"
+                      >
+                        <div className="flex items-center gap-2 text-sm font-semibold text-[#0B192C] dark:text-white">
+                          <Icon className="w-4 h-4 text-sky-700 dark:text-sky-400 shrink-0" />
+                          <span>{group.category}</span>
+                        </div>
+                        <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                          {group.items.map((tech) => (
+                            <li key={tech} className="flex items-center gap-2">
+                              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <span>{tech}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Developer Projects Showcase */}
+            <div className="pt-8 border-t border-slate-200 dark:border-slate-800 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
+                    Active Software Systems
+                  </p>
+                  <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#0B192C] dark:text-white">
+                    Featured Developer Projects
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Developed by <span className="font-semibold text-slate-700 dark:text-slate-200">softworld</span> · Built by {developerName} ({developerRole})
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {DEVELOPER_PROJECTS.map((project) => (
+                  <article
+                    key={project.id}
+                    className="group bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col justify-between transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-sky-500/40"
+                  >
+                    <div>
+                      <ProjectPreviewMedia project={project} />
+                      <div className="p-6 space-y-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h4 className="text-lg font-bold tracking-tight text-[#0B192C] dark:text-white">
+                            {project.name}
+                          </h4>
+                          <span className="text-[11px] font-semibold tracking-wider text-amber-700 dark:text-amber-400 whitespace-nowrap shrink-0">
+                            {project.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                          {project.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="px-6 pb-6 pt-3 border-t border-slate-200/80 dark:border-slate-800 space-y-3">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">Technologies: </span>
+                        {project.technologies.join(' · ')}
+                      </div>
+
+                      {project.publicRoute && (
+                        <div>
+                          <Link
+                            to={project.publicRoute}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline"
+                          >
+                            <span>{project.publicLabel}</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
+
       <PublicFooter />
     </div>
   );
@@ -1535,7 +1788,10 @@ export function ContactPage() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">Contact Our Kigali Team</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Request new business registration, enterprise onboarding, branch hardware advice, or custom support.
+            Request new business registration, enterprise onboarding, branch hardware advice, or custom support. Inquiries are routed directly to{' '}
+            <a href="mailto:allofme140@gmail.com" className="font-semibold text-sky-700 dark:text-sky-400 hover:underline">
+              allofme140@gmail.com
+            </a>.
           </p>
         </div>
 
@@ -1710,12 +1966,12 @@ export function LegalPage({ title }) {
         <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{title}</h1>
         <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
           <p>
-            BizFlow Africa operates as a multi-tenant commercial software platform with strict data isolation.
+            BizTrade Africa operates as a multi-tenant commercial software platform with strict data isolation.
             Each registered business owns all operational records, product catalogs, customer data, and financial
             transactions created inside its workspace.
           </p>
           <p>
-            When a subscription expires, BizFlow Africa preserves tenant records under defined grace-period
+            When a subscription expires, BizTrade Africa preserves tenant records under defined grace-period
             and retention policies rather than deleting business history unexpectedly. Platform administrators
             never receive unrestricted access to private tenant financial entries.
           </p>

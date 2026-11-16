@@ -1,6 +1,6 @@
 {
-  "name": "BizFlow Africa",
-  "description": "One Platform. Multiple Businesses. Complete multi-tenant SaaS business management platform built for Rwanda and African enterprises.",
+  "name": "BizTrade Africa",
+  "description": "Expand Your Business. Manage Everything. An all-in-one business-management platform designed to help African businesses manage, grow, and expand their operations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -202,7 +202,7 @@ router.get('/ads/videos/:id/stream', async (req, res, next) => {
       'SELECT id, avatar_url, must_change_password, is_active FROM users WHERE id = ?',
       [decoded.sub]
     );
-    if (!user || !user.is_active || user.must_change_password || !user.avatar_url) {
+    if (!user || !user.is_active || user.must_change_password) {
       return res.status(403).json({ error: 'Account authorization incomplete' });
     }
 

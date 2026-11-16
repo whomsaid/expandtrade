@@ -1,8 +1,8 @@
-# BizFlow Africa
+# BizTrade Africa
 
-**One Platform. Multiple Businesses. Complete Business Management.**
+**Expand Your Business. Manage Everything.**
 
-BizFlow Africa is a commercial, multi-tenant SaaS business operating system designed initially for **Rwanda** (RWF, `+250`, `Africa/Kigali`, configurable 18% VAT, English / Kinyarwanda / French UI, Cash / MTN Mobile Money / Airtel Money / Bank Transfer / Card) and built to scale across African commerce.
+BizTrade Africa is an all-in-one business-management platform designed to help African businesses manage, grow, and expand their operations (RWF, `+250`, `Africa/Kigali`, configurable 18% VAT, English / Kinyarwanda / French UI, Cash / MTN Mobile Money / Airtel Money / Bank Transfer / Card).
 
 ---
 
@@ -32,9 +32,9 @@ npm install
 ### 3. MySQL Setup (Optional for Production / External DB)
 ```bash
 mysql -u root -p < database/schema.sql
-mysql -u root -p bizflow_africa < database/seed.sql
+mysql -u root -p biztrade_africa < database/seed.sql
 ```
-Set `DB_CLIENT=mysql` and `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` in `.env`. If omitted or unreachable, BizFlow automatically persists to `./data/bizflow.sqlite`.
+Set `DB_CLIENT=mysql` and `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` in `.env`. If omitted or unreachable, BizTrade Africa automatically persists locally.
 
 ### 4. Run Development Server (Port 3000)
 ```bash
@@ -46,17 +46,6 @@ npm run dev
 npm run build
 npm start
 ```
-
----
-
-## Demo Accounts (Seeded on First Boot)
-
-| Role | Email | Password | Workspace |
-| :--- | :--- | :--- | :--- |
-| Business Owner | `owner@kigalitech.rw` | `BizFlow@2026!` | Kigali Tech & Trading Ltd |
-| Cashier | `cashier@kigalitech.rw` | `BizFlow@2026!` | Kigali Tech & Trading Ltd |
-| Isolated Tenant Owner | `owner@nyabugogopharma.rw` | `BizFlow@2026!` | Nyabugogo Pharmacy Ltd |
-| Platform Super Admin | `admin@bizflow.africa` | `BizFlow@2026!` | Platform Console (`/admin`) |
 
 ---
 

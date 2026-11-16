@@ -24,8 +24,8 @@ export default function PublicFooter() {
             />
           </Link>
           <p className="text-sm text-slate-400 max-w-sm leading-relaxed">
-            One unified SaaS workspace to manage business operations, sales, inventory, customers,
-            employees, branches, and financial records across Rwanda and Africa.
+            Expand Your Business. Manage Everything. An all-in-one business-management platform
+            designed to help African businesses manage, grow, and expand their operations.
           </p>
           <div className="space-y-1.5 text-xs text-slate-400 pt-1">
             {config.platform_location && (
@@ -36,8 +36,8 @@ export default function PublicFooter() {
             )}
             <div className="flex items-center gap-2">
               <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-              <a href={`mailto:${config.support_email || 'support@bizflow.africa'}`} className="hover:text-white transition-colors">
-                {config.support_email || 'support@bizflow.africa'}
+              <a href={`mailto:${config.support_email || 'allofme140@gmail.com'}`} className="hover:text-white transition-colors">
+                {config.support_email || 'allofme140@gmail.com'}
               </a>
             </div>
             {config.support_phone && (
@@ -68,10 +68,9 @@ export default function PublicFooter() {
           <div className="text-xs font-semibold text-white">Navigation</div>
           <ul className="space-y-2 text-sm text-slate-400">
             <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
-            <li><a href="/#about" className="hover:text-white transition-colors">About</a></li>
+            <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
             <li><a href="/#features" className="hover:text-white transition-colors">Features</a></li>
             <li><a href="/#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
-            <li><a href="/#developer" className="hover:text-white transition-colors">Developer</a></li>
             <li><a href="/#contact" className="hover:text-white transition-colors">Contact</a></li>
           </ul>
         </div>
@@ -80,6 +79,7 @@ export default function PublicFooter() {
           <div className="text-xs font-semibold text-white">Platform Modules</div>
           <ul className="space-y-2 text-sm text-slate-400">
             <li><Link to="/businesses" className="hover:text-white transition-colors">Businesses Directory</Link></li>
+            <li><Link to="/jobs" className="hover:text-white transition-colors">Job Vacancies & Careers</Link></li>
             <li><Link to="/features" className="hover:text-white transition-colors">POS & Inventory Control</Link></li>
             <li><Link to="/pricing" className="hover:text-white transition-colors">Subscription Plans</Link></li>
             <li><Link to="/track-order" className="hover:text-white transition-colors">Customer Order Tracking</Link></li>
@@ -90,7 +90,7 @@ export default function PublicFooter() {
         <div className="lg:col-span-3 space-y-3">
           <div className="text-xs font-semibold text-white">Governance & Legal</div>
           <ul className="space-y-2 text-sm text-slate-400">
-            <li><Link to="/about" className="hover:text-white transition-colors">About BizFlow Africa</Link></li>
+            <li><Link to="/about" className="hover:text-white transition-colors">About BizTrade Africa</Link></li>
             <li><Link to="/contact" className="hover:text-white transition-colors">Business Onboarding Inquiry</Link></li>
             <li><Link to="/login" className="hover:text-white transition-colors">Sign In to Account</Link></li>
             <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
@@ -101,11 +101,9 @@ export default function PublicFooter() {
 
       <div className="border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <span>© {new Date().getFullYear()} {config.platform_name || 'BizFlow Africa'}. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} {config.platform_name || 'BizTrade Africa'}. All rights reserved.</span>
           <span>
-            {config.developer_name
-              ? `Developed by ${config.developer_name} · ${config.developer_role || 'Full Stack Developer'}`
-              : `Built by ${config.developer_role || 'Full Stack Developer'} · Multi-Tenant Commercial Platform`}
+            Developed by <span className="font-semibold text-slate-300">softworld</span> · Multi-Tenant Commercial &amp; Workforce Platform · Africa
           </span>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const SIZE_CLASSES = {
   xs: 'w-6 h-6 text-[10px]',
@@ -22,11 +22,16 @@ export default function UserAvatar({ src, name, size = 'sm', className = '' }) {
   const [imgError, setImgError] = useState(false);
   const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES.sm;
 
+  useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
   if (src && !imgError) {
     return (
       <img
         src={src}
         alt={name || 'User profile'}
+        loading="lazy"
         referrerPolicy="no-referrer"
         onError={() => setImgError(true)}
         className={`${sizeClass} rounded-full object-cover border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 ${className}`}

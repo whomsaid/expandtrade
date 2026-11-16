@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   Building2,
@@ -65,7 +66,8 @@ const USER_CATEGORY_LABELS = {
 };
 
 export default function SuperAdminPage() {
-  const { user, refreshMe } = useAuth();
+  const navigate = useNavigate();
+  const { user, refreshMe, switchBusiness } = useAuth();
   const { refreshPlatformConfig } = usePlatformConfig();
   const [tab, setTab] = useState('businesses');
   const [data, setData] = useState(null);
@@ -325,6 +327,44 @@ export default function SuperAdminPage() {
     }
   };
 
+  const handleOpenWorkspace = async (biz) => {
+    try {
+      setError('');
+      await switchBusiness(biz.id);
+      navigate('/app/dashboard');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleVerifyUserEmail = async (u) => {
+    try {
+      setError('');
+      const res = await api.patch(`/admin/users/${u.id}/verify-email`);
+      showFlash(res.data.message);
+      await loadOverview();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleResetUserPassword = async (u) => {
+    try {
+      setError('');
+      const res = await api.post(`/admin/users/${u.id}/reset-password`, {});
+      showFlash(res.data.message);
+      if (res.data.temporary_password) {
+        setActivationResult({
+          title: `Temporary Password for ${u.full_name} (${u.email})`,
+          url: `Temporary Password: ${res.data.temporary_password} (User must change password on next login)`,
+        });
+      }
+      await loadOverview();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleSavePlan = async (e) => {
     e.preventDefault();
     if (!planDraft) return;
@@ -352,6 +392,17 @@ export default function SuperAdminPage() {
         status,
         admin_notes: ticketNotes[id] || undefined,
       });
+      showFlash(res.data.message);
+      await loadOverview();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleDeleteInquiry = async (inqId) => {
+    try {
+      setError('');
+      const res = await api.delete(`/admin/inquiries/${inqId}`);
       showFlash(res.data.message);
       await loadOverview();
     } catch (err) {
@@ -803,6 +854,13 @@ export default function SuperAdminPage() {
                       <td className="py-3 px-4 text-right whitespace-nowrap space-x-2.5">
                         {b.status !== 'deleted' && (
                           <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenWorkspace(b)}
+                              className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+                            >
+                              Open Workspace
+                            </button>
                             <button type="button" onClick={() => setEditBiz({ ...b })} className="font-medium text-slate-700 dark:text-slate-300 hover:underline">
                               Edit
                             </button>
@@ -944,6 +1002,24 @@ export default function SuperAdminPage() {
                     <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">{u.active_sessions}</td>
                     <td className="py-3 px-4"><StatusBadge status={u.is_active ? 'active' : 'suspended'} /></td>
                     <td className="py-3 px-4 text-right space-x-3 whitespace-nowrap">
+                      {!u.is_email_verified && (
+                        <button
+                          type="button"
+                          onClick={() => handleVerifyUserEmail(u)}
+                          className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+                        >
+                          Verify Email
+                        </button>
+                      )}
+                      {u.id !== user?.id && (
+                        <button
+                          type="button"
+                          onClick={() => handleResetUserPassword(u)}
+                          className="font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                        >
+                          Reset Password
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleRevokeSessions(u)}
@@ -1097,11 +1173,20 @@ export default function SuperAdminPage() {
               <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                 {data.inquiries.map((inq) => (
                   <div key={inq.id} className="py-3 first:pt-0 space-y-1">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-start gap-2">
                       <span className="font-semibold text-slate-900 dark:text-slate-100">
                         {inq.full_name} {inq.target_business_name || inq.business_name ? `(${inq.target_business_name || inq.business_name})` : ''}
                       </span>
-                      <span className="text-slate-400 dark:text-slate-500 tabular-nums">{formatDate(inq.created_at)}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-slate-400 dark:text-slate-500 tabular-nums">{formatDate(inq.created_at)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteInquiry(inq.id)}
+                          className="text-rose-600 dark:text-rose-400 hover:underline font-medium"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                     <div className="text-slate-500 dark:text-slate-400">{inq.email} {inq.phone ? `· ${inq.phone}` : ''}</div>
                     <div className="text-slate-700 dark:text-slate-300">{inq.message}</div>
@@ -1122,7 +1207,7 @@ export default function SuperAdminPage() {
               <div>
                 <h2 className="text-sm font-bold text-[#0B192C] dark:text-slate-100">Official Platform Logo</h2>
                 <p className="text-slate-500 dark:text-slate-400 mt-0.5">
-                  Upload, replace, or remove the official BizFlow Africa logo shown across the public site, auth pages, and workspace headers. Supports PNG, JPG, JPEG, SVG, and WEBP (max 5MB).
+                  Upload, replace, or remove the official BizTrade Africa logo shown across the public site, auth pages, and workspace headers. Supports PNG, JPG, JPEG, SVG, and WEBP (max 5MB).
                 </p>
               </div>
               {platformSettings.platform_logo_url && (
@@ -1143,7 +1228,7 @@ export default function SuperAdminPage() {
                 {platformSettings.platform_logo_url ? (
                   <img
                     src={platformSettings.platform_logo_url}
-                    alt={platformSettings.platform_name || 'BizFlow Africa'}
+                    alt={platformSettings.platform_name || 'BizTrade Africa'}
                     referrerPolicy="no-referrer"
                     className="max-h-14 max-w-[180px] object-contain"
                   />
@@ -1188,7 +1273,7 @@ export default function SuperAdminPage() {
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Platform Name</label>
                 <input
-                  value={platformSettings.platform_name || 'BizFlow Africa'}
+                  value={platformSettings.platform_name || 'BizTrade Africa'}
                   onChange={(e) => setPlatformSettings({ ...platformSettings, platform_name: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                 />
@@ -1283,7 +1368,7 @@ export default function SuperAdminPage() {
             </div>
 
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-              <div className="font-semibold text-slate-900 dark:text-slate-100">Developer Information (Displayed in Public Developer Section)</div>
+              <div className="font-semibold text-slate-900 dark:text-slate-100">Developer Information (Displayed in About Us — Developer Section)</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Developer Name (Optional)</label>

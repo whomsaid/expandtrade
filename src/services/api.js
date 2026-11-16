@@ -2,10 +2,39 @@ import axios from 'axios';
 
 export const api = axios.create({
   baseURL: '/api',
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+const clientResponseCache = new Map();
+
+export async function cachedGet(url, { params, ttlMs = 60000 } = {}) {
+  const key = `${url}:${params ? JSON.stringify(params) : ''}`;
+  const existing = clientResponseCache.get(key);
+  if (existing && existing.expiresAt > Date.now()) {
+    return existing.data;
+  }
+  const { data } = await api.get(url, params ? { params } : undefined);
+  clientResponseCache.set(key, {
+    expiresAt: Date.now() + ttlMs,
+    data,
+  });
+  return data;
+}
+
+export function invalidateApiCache(prefix = '') {
+  if (!prefix) {
+    clientResponseCache.clear();
+    return;
+  }
+  for (const key of clientResponseCache.keys()) {
+    if (key.startsWith(prefix)) {
+      clientResponseCache.delete(key);
+    }
+  }
+}
 
 api.interceptors.request.use((config) => {
   config.headers = config.headers || {};
@@ -13,9 +42,9 @@ api.interceptors.request.use((config) => {
     delete config.headers['Content-Type'];
   }
 
-  const token = localStorage.getItem('bizflow_token');
-  const businessId = localStorage.getItem('bizflow_business_id');
-  const branchId = localStorage.getItem('bizflow_branch_id');
+  const token = localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token');
+  const businessId = localStorage.getItem('biztrade_business_id') || localStorage.getItem('bizflow_business_id');
+  const branchId = localStorage.getItem('biztrade_branch_id') || localStorage.getItem('bizflow_branch_id');
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -35,17 +64,25 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const url = error.config?.url || '';
     if (status === 401 && !url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/reset-password')) {
+      localStorage.removeItem('biztrade_token');
+      localStorage.removeItem('biztrade_business_id');
+      localStorage.removeItem('biztrade_branch_id');
       localStorage.removeItem('bizflow_token');
       localStorage.removeItem('bizflow_business_id');
       localStorage.removeItem('bizflow_branch_id');
+      clientResponseCache.clear();
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('bizflow:unauthorized'));
+        window.dispatchEvent(new CustomEvent('biztrade:unauthorized'));
       }
     }
-    const message = error.response?.data?.error || error.message || 'Request failed';
+    const isTimeout = error.code === 'ECONNABORTED';
+    const message =
+      error.response?.data?.error ||
+      (isTimeout ? 'Request timed out. Please check your connection and try again.' : error.message) ||
+      'Request failed';
     const err = new Error(message);
     err.status = status;
-    err.code = error.response?.data?.code;
+    err.code = error.response?.data?.code || error.code;
     return Promise.reject(err);
   }
 );

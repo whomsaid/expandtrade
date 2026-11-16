@@ -127,7 +127,7 @@ export default function ReceiptModal({ receipt, onClose }) {
           </div>
 
           <div className="text-center text-[11px] text-slate-500 dark:text-slate-400 pt-3 border-t border-dashed border-slate-300 dark:border-slate-700">
-            Thank you for your business. Powered by BizFlow Africa.
+            Thank you for your business. Powered by BizTrade Africa.
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
--- BizFlow Africa - Production MySQL 8+ Schema
+-- BizTrade Africa - Production MySQL 8+ Schema
 -- Multi-tenant, Branch-aware, Rwanda-first Business Management Platform
 
 SET NAMES utf8mb4;
@@ -836,5 +836,209 @@ CREATE TABLE IF NOT EXISTS report_exports (
   export_format ENUM('csv', 'pdf', 'xlsx') NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 12. RECRUITMENT & JOB APPLICATION MANAGEMENT SYSTEM
+CREATE TABLE IF NOT EXISTS job_vacancies (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  branch_id INT UNSIGNED NULL,
+  created_by_user_id INT UNSIGNED NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  slug VARCHAR(200) NOT NULL,
+  department VARCHAR(120) NULL,
+  employment_type ENUM('full_time', 'part_time', 'contract', 'internship', 'temporary') NOT NULL DEFAULT 'full_time',
+  work_mode ENUM('on_site', 'hybrid', 'remote') NOT NULL DEFAULT 'on_site',
+  location VARCHAR(180) NOT NULL,
+  salary_min DECIMAL(15,2) NULL,
+  salary_max DECIMAL(15,2) NULL,
+  currency_code VARCHAR(10) NOT NULL DEFAULT 'RWF',
+  show_salary TINYINT(1) NOT NULL DEFAULT 0,
+  summary TEXT NULL,
+  description TEXT NOT NULL,
+  responsibilities TEXT NULL,
+  requirements TEXT NULL,
+  required_education_level VARCHAR(100) NULL,
+  min_experience_years INT UNSIGNED NOT NULL DEFAULT 0,
+  required_document_types_json JSON NULL,
+  custom_questions_json JSON NULL,
+  allow_reapplication TINYINT(1) NOT NULL DEFAULT 0,
+  positions_count INT UNSIGNED NOT NULL DEFAULT 1,
+  application_deadline DATE NULL,
+  status ENUM('draft', 'published', 'closed', 'archived') NOT NULL DEFAULT 'draft',
+  published_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_vac_biz_slug (business_id, slug),
+  INDEX idx_vac_biz_status (business_id, status),
+  CONSTRAINT fk_vac_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_vac_branch FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+  CONSTRAINT fk_vac_creator FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS job_applications (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  reference_number VARCHAR(64) NULL UNIQUE,
+  vacancy_id INT UNSIGNED NOT NULL,
+  business_id INT UNSIGNED NOT NULL,
+  applicant_user_id INT UNSIGNED NOT NULL,
+  full_name VARCHAR(150) NOT NULL,
+  profile_photo_url VARCHAR(500) NULL,
+  date_of_birth DATE NULL,
+  gender VARCHAR(40) NULL,
+  phone VARCHAR(40) NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  nationality VARCHAR(80) NULL,
+  country VARCHAR(80) NULL,
+  province VARCHAR(80) NULL,
+  district VARCHAR(80) NULL,
+  sector VARCHAR(80) NULL,
+  residential_address VARCHAR(255) NULL,
+  has_work_experience TINYINT(1) NULL,
+  years_of_experience INT UNSIGNED NOT NULL DEFAULT 0,
+  skills_summary TEXT NULL,
+  availability VARCHAR(120) NULL,
+  preferred_employment_type VARCHAR(60) NULL,
+  expected_salary DECIMAL(15,2) NULL,
+  why_want_position TEXT NULL,
+  why_select_you TEXT NULL,
+  cover_letter TEXT NULL,
+  accuracy_confirmed TINYINT(1) NOT NULL DEFAULT 0,
+  status ENUM('draft', 'submitted', 'under_review', 'shortlisted', 'interview_scheduled', 'interview_completed', 'accepted', 'rejected', 'withdrawn') NOT NULL DEFAULT 'draft',
+  submitted_at TIMESTAMP NULL,
+  withdrawn_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_apps_biz_vac_status (business_id, vacancy_id, status),
+  INDEX idx_apps_user (applicant_user_id, vacancy_id),
+  CONSTRAINT fk_ja_vac FOREIGN KEY (vacancy_id) REFERENCES job_vacancies(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ja_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ja_user FOREIGN KEY (applicant_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS applicant_education (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  education_level VARCHAR(100) NOT NULL,
+  institution_name VARCHAR(180) NOT NULL,
+  field_of_study VARCHAR(150) NOT NULL,
+  qualification_obtained VARCHAR(150) NOT NULL,
+  start_year SMALLINT UNSIGNED NULL,
+  graduation_year SMALLINT UNSIGNED NULL,
+  country VARCHAR(80) NULL,
+  education_status ENUM('Completed', 'In Progress', 'Graduated') NOT NULL DEFAULT 'Completed',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_edu_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS applicant_experiences (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  company_name VARCHAR(180) NOT NULL,
+  job_title VARCHAR(150) NOT NULL,
+  employment_type VARCHAR(80) NULL,
+  work_location VARCHAR(150) NULL,
+  start_date VARCHAR(20) NOT NULL,
+  end_date VARCHAR(20) NULL,
+  is_current TINYINT(1) NOT NULL DEFAULT 0,
+  responsibilities TEXT NULL,
+  achievements TEXT NULL,
+  reason_for_leaving VARCHAR(255) NULL,
+  reference_person VARCHAR(150) NULL,
+  reference_phone VARCHAR(50) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_exp_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS applicant_skills (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  skill_category ENUM('technical', 'professional', 'computer', 'training', 'language', 'other') NOT NULL DEFAULT 'technical',
+  skill_name VARCHAR(150) NOT NULL,
+  proficiency_level VARCHAR(60) NULL,
+  notes VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_sk_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS application_documents (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  business_id INT UNSIGNED NOT NULL,
+  applicant_user_id INT UNSIGNED NOT NULL,
+  document_category ENUM('cv', 'certificate') NOT NULL,
+  document_type VARCHAR(100) NOT NULL,
+  document_name VARCHAR(200) NOT NULL,
+  original_filename VARCHAR(255) NOT NULL,
+  stored_path VARCHAR(500) NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  file_size_bytes INT UNSIGNED NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_app_docs_app (application_id, is_active),
+  CONSTRAINT fk_doc_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  CONSTRAINT fk_doc_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_doc_user FOREIGN KEY (applicant_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS application_answers (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  vacancy_id INT UNSIGNED NOT NULL,
+  question_key VARCHAR(100) NOT NULL,
+  question_label VARCHAR(255) NOT NULL,
+  answer_text TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ans_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ans_vac FOREIGN KEY (vacancy_id) REFERENCES job_vacancies(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS application_status_history (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  previous_status VARCHAR(40) NULL,
+  new_status VARCHAR(40) NOT NULL,
+  changed_by_user_id INT UNSIGNED NOT NULL,
+  note VARCHAR(500) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ash_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ash_user FOREIGN KEY (changed_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS job_interviews (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  business_id INT UNSIGNED NOT NULL,
+  vacancy_id INT UNSIGNED NOT NULL,
+  scheduled_by_user_id INT UNSIGNED NOT NULL,
+  interview_date VARCHAR(20) NOT NULL,
+  interview_time VARCHAR(20) NOT NULL,
+  interview_mode VARCHAR(60) NOT NULL DEFAULT 'In-person',
+  location_or_link VARCHAR(300) NULL,
+  interviewer_name VARCHAR(150) NULL,
+  instructions TEXT NULL,
+  feedback TEXT NULL,
+  outcome ENUM('pending', 'passed', 'failed', 'no_show', 'rescheduled') NOT NULL DEFAULT 'pending',
+  status ENUM('scheduled', 'completed', 'cancelled') NOT NULL DEFAULT 'scheduled',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_app_int (application_id, business_id),
+  CONSTRAINT fk_int_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  CONSTRAINT fk_int_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_int_vac FOREIGN KEY (vacancy_id) REFERENCES job_vacancies(id) ON DELETE CASCADE,
+  CONSTRAINT fk_int_user FOREIGN KEY (scheduled_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS recruitment_notes (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  application_id INT UNSIGNED NOT NULL,
+  business_id INT UNSIGNED NOT NULL,
+  author_user_id INT UNSIGNED NOT NULL,
+  note TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_rn_app (application_id, business_id),
+  CONSTRAINT fk_rn_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rn_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rn_user FOREIGN KEY (author_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

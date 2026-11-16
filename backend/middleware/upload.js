@@ -8,8 +8,9 @@ const AVATAR_DIR = path.join(UPLOAD_ROOT, 'avatars');
 export const PLATFORM_DIR = path.join(UPLOAD_ROOT, 'platform');
 export const VIDEO_THUMB_DIR = path.join(UPLOAD_ROOT, 'video-thumbnails');
 export const VIDEO_STORAGE_DIR = path.resolve(process.cwd(), 'backend', 'storage', 'videos');
+export const RECRUITMENT_DIR = path.resolve(process.cwd(), 'backend', 'storage', 'recruitment');
 
-for (const dir of [UPLOAD_ROOT, AVATAR_DIR, PLATFORM_DIR, VIDEO_THUMB_DIR, VIDEO_STORAGE_DIR]) {
+for (const dir of [UPLOAD_ROOT, AVATAR_DIR, PLATFORM_DIR, VIDEO_THUMB_DIR, VIDEO_STORAGE_DIR, RECRUITMENT_DIR]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -254,6 +255,107 @@ export function verifyVideoSignature(filePath, mimetype) {
   }
 }
 
+const CV_ALLOWED_EXT = new Set(['.pdf', '.docx']);
+const CV_ALLOWED_MIME = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+const CERT_ALLOWED_EXT = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+const CERT_ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
+const recruitmentStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, RECRUITMENT_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const safeExt = ['.pdf', '.docx', '.jpg', '.jpeg', '.png'].includes(ext) ? ext : '.bin';
+    cb(null, `${crypto.randomUUID()}${safeExt}`);
+  },
+});
+
+export const cvUpload = multer({
+  storage: recruitmentStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const mimeOk = CV_ALLOWED_MIME.has(file.mimetype);
+    const extOk = !ext || CV_ALLOWED_EXT.has(ext);
+    if (!mimeOk || !extOk) {
+      const err = new Error('Unsupported CV format. Allowed formats: PDF and DOCX (max 10MB).');
+      err.statusCode = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
+});
+
+export const certificateUpload = multer({
+  storage: recruitmentStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const mimeOk = CERT_ALLOWED_MIME.has(file.mimetype);
+    const extOk = !ext || CERT_ALLOWED_EXT.has(ext);
+    if (!mimeOk || !extOk) {
+      const err = new Error('Unsupported certificate format. Allowed formats: PDF, JPG, JPEG, and PNG (max 10MB).');
+      err.statusCode = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
+});
+
+export function verifyPdfSignature(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(5);
+    const bytesRead = fs.readSync(fd, buf, 0, 5, 0);
+    fs.closeSync(fd);
+    return bytesRead === 5 && buf.toString('ascii', 0, 5) === '%PDF-';
+  } catch {
+    return false;
+  }
+}
+
+export function verifyDocxSignature(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(4);
+    const bytesRead = fs.readSync(fd, buf, 0, 4, 0);
+    fs.closeSync(fd);
+    return (
+      bytesRead === 4 &&
+      buf[0] === 0x50 &&
+      buf[1] === 0x4b &&
+      (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function verifyCvSignature(filePath, mimetype) {
+  const ext = path.extname(filePath || '').toLowerCase();
+  if (mimetype === 'application/pdf' || ext === '.pdf') {
+    return verifyPdfSignature(filePath);
+  }
+  if (
+    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    ext === '.docx'
+  ) {
+    return verifyDocxSignature(filePath);
+  }
+  return false;
+}
+
+export function verifyCertificateSignature(filePath, mimetype) {
+  const ext = path.extname(filePath || '').toLowerCase();
+  if (mimetype === 'application/pdf' || ext === '.pdf') {
+    return verifyPdfSignature(filePath);
+  }
+  return verifyImageSignature(filePath);
+}
+
 export function removeUploadedFile(filePathOrUrl) {
   if (!filePathOrUrl) return;
   try {
@@ -264,7 +366,7 @@ export function removeUploadedFile(filePathOrUrl) {
     } else {
       target = path.resolve(filePathOrUrl);
     }
-    const allowedRoots = [UPLOAD_ROOT + path.sep, VIDEO_STORAGE_DIR + path.sep];
+    const allowedRoots = [UPLOAD_ROOT + path.sep, VIDEO_STORAGE_DIR + path.sep, RECRUITMENT_DIR + path.sep];
     if (!allowedRoots.some((root) => target.startsWith(root))) return;
     if (fs.existsSync(target) && fs.statSync(target).isFile()) {
       fs.unlinkSync(target);

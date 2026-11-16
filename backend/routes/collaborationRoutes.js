@@ -10,6 +10,7 @@ import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, emitToBusiness, logAudit } from '../services/auditService.js';
 import { queryBusinessAssistant } from '../services/aiService.js';
 import { sendMail } from '../services/mailService.js';
+import { getCached, invalidateCache, setCached } from '../services/cacheService.js';
 
 const router = express.Router();
 
@@ -24,16 +25,26 @@ router.get('/tasks', authenticate, requireBusiness, requirePermission('tasks.vie
        LEFT JOIN users u1 ON u1.id = t.assigned_to_user_id
        LEFT JOIN users u2 ON u2.id = t.created_by_user_id
        WHERE t.business_id = ?
-       ORDER BY t.id DESC`,
+       ORDER BY t.id DESC LIMIT 150`,
       [req.businessId]
     );
-    for (const t of tasks) {
-      t.comments = await query(
+    if (tasks.length > 0) {
+      const ids = tasks.map((t) => t.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const allComments = await query(
         `SELECT tc.*, u.full_name AS author_name, u.avatar_url AS author_avatar
          FROM task_comments tc JOIN users u ON u.id = tc.user_id
-         WHERE tc.task_id = ? ORDER BY tc.id ASC`,
-        [t.id]
+         WHERE tc.task_id IN (${placeholders}) ORDER BY tc.id ASC`,
+        ids
       );
+      const byTask = new Map();
+      for (const c of allComments) {
+        if (!byTask.has(c.task_id)) byTask.set(c.task_id, []);
+        byTask.get(c.task_id).push(c);
+      }
+      for (const t of tasks) {
+        t.comments = byTask.get(t.id) || [];
+      }
     }
     res.json({ tasks });
   } catch (err) {
@@ -196,13 +207,30 @@ router.patch('/notifications/read-all', authenticate, requireProfileImage, async
 
 router.put('/notifications/preferences', authenticate, requireProfileImage, async (req, res, next) => {
   try {
-    const { in_app_enabled = 1, email_enabled = 1, sms_enabled = 0, low_stock_alerts = 1, order_alerts = 1, expense_alerts = 1 } = req.body;
+    const {
+      in_app_enabled = 1,
+      email_enabled = 1,
+      sms_enabled = 0,
+      low_stock_alerts = 1,
+      order_alerts = 1,
+      expense_alerts = 1,
+      payroll_alerts = 1,
+    } = req.body;
     await execute(
       `UPDATE notification_preferences SET
          in_app_enabled = ?, email_enabled = ?, sms_enabled = ?,
-         low_stock_alerts = ?, order_alerts = ?, expense_alerts = ?
+         low_stock_alerts = ?, order_alerts = ?, expense_alerts = ?, payroll_alerts = ?
        WHERE user_id = ?`,
-      [in_app_enabled ? 1 : 0, email_enabled ? 1 : 0, sms_enabled ? 1 : 0, low_stock_alerts ? 1 : 0, order_alerts ? 1 : 0, expense_alerts ? 1 : 0, req.user.id]
+      [
+        in_app_enabled ? 1 : 0,
+        email_enabled ? 1 : 0,
+        sms_enabled ? 1 : 0,
+        low_stock_alerts ? 1 : 0,
+        order_alerts ? 1 : 0,
+        expense_alerts ? 1 : 0,
+        payroll_alerts ? 1 : 0,
+        req.user.id,
+      ]
     );
     res.json({ message: 'Notification preferences saved' });
   } catch (err) {
@@ -216,95 +244,124 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
     const branchFilter = !req.membership.all_branches_access && req.branchId ? ' AND branch_id = ?' : req.query.branch_id ? ' AND branch_id = ?' : '';
     const filterBranchId = !req.membership.all_branches_access && req.branchId ? req.branchId : req.query.branch_id ? Number(req.query.branch_id) : null;
     const baseParams = filterBranchId ? [req.businessId, filterBranchId] : [req.businessId];
-
-    const today = await queryOne(
-      `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-       FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND date(created_at) = date('now')${branchFilter}`,
-      baseParams
-    );
-    const month = await queryOne(
-      `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-       FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')${branchFilter}`,
-      baseParams
-    );
-    const year = await queryOne(
-      `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-       FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND strftime('%Y', created_at) = strftime('%Y', 'now')${branchFilter}`,
-      baseParams
-    );
-    const exp = await queryOne(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE business_id = ? AND approval_status = 'approved'${branchFilter}`,
-      baseParams
-    );
-    const cogs = await queryOne(
-      `SELECT COALESCE(SUM(si.quantity * si.unit_cost), 0) AS total
-       FROM sale_items si JOIN sales s ON s.id = si.sale_id
-       WHERE s.business_id = ? AND s.sale_status != 'cancelled' AND s.sale_status != 'refunded'${filterBranchId ? ' AND s.branch_id = ?' : ''}`,
-      baseParams
-    );
-
-    const invStats = await queryOne(
-      `SELECT COUNT(DISTINCT p.id) AS total_products,
-              SUM(CASE WHEN COALESCE(i.quantity, 0) > 0 AND COALESCE(i.quantity, 0) <= p.min_stock THEN 1 ELSE 0 END) AS low_stock,
-              SUM(CASE WHEN COALESCE(i.quantity, 0) <= 0 THEN 1 ELSE 0 END) AS out_of_stock
-       FROM products p
-       LEFT JOIN inventory i ON i.product_id = p.id AND i.branch_id = ?
-       WHERE p.business_id = ? AND p.status = 'active'`,
-      [filterBranchId || req.branchId || 0, req.businessId]
-    );
-
-    const pendingOrders = await queryOne(
-      `SELECT COUNT(*) AS cnt FROM orders WHERE business_id = ? AND order_status IN ('pending', 'confirmed', 'processing')`,
-      [req.businessId]
-    );
-    const custStats = await queryOne(
-      `SELECT COUNT(*) AS total_customers, COALESCE(SUM(outstanding_balance), 0) AS customer_balances FROM customers WHERE business_id = ?`,
-      [req.businessId]
-    );
-    const supStats = await queryOne(
-      `SELECT COALESCE(SUM(outstanding_balance), 0) AS supplier_balances FROM suppliers WHERE business_id = ?`,
-      [req.businessId]
-    );
-
-    const dailyChart = await query(
-      `SELECT date(created_at) AS day, COALESCE(SUM(total_amount), 0) AS revenue, COUNT(*) AS transactions
-       FROM sales WHERE business_id = ? AND sale_status != 'cancelled'${branchFilter}
-       GROUP BY date(created_at) ORDER BY day DESC LIMIT 14`,
-      baseParams
-    );
-    const topProducts = await query(
-      `SELECT si.product_name, SUM(si.quantity) AS qty, SUM(si.line_total) AS revenue
-       FROM sale_items si JOIN sales s ON s.id = si.sale_id
-       WHERE s.business_id = ? AND s.sale_status != 'cancelled'
-       GROUP BY si.product_id, si.product_name ORDER BY revenue DESC LIMIT 6`,
-      [req.businessId]
-    );
-    const salesByCategory = await query(
-      `SELECT COALESCE(c.name, 'Uncategorized') AS category, SUM(si.line_total) AS revenue
-       FROM sale_items si
-       JOIN sales s ON s.id = si.sale_id
-       JOIN products p ON p.id = si.product_id
-       LEFT JOIN categories c ON c.id = p.category_id
-       WHERE s.business_id = ? AND s.sale_status != 'cancelled'
-       GROUP BY c.name ORDER BY revenue DESC`,
-      [req.businessId]
-    );
-    const salesByBranch = await query(
-      `SELECT b.name AS branch_name, COALESCE(SUM(s.total_amount), 0) AS revenue
-       FROM branches b
-       LEFT JOIN sales s ON s.branch_id = b.id AND s.business_id = ? AND s.sale_status != 'cancelled'
-       WHERE b.business_id = ?
-       GROUP BY b.id, b.name ORDER BY revenue DESC`,
-      [req.businessId, req.businessId]
-    );
-    const recentActivities = await query(
-      `SELECT al.*, u.full_name AS user_name, u.avatar_url AS user_avatar
-       FROM activity_logs al LEFT JOIN users u ON u.id = al.user_id
-       WHERE al.business_id = ? ORDER BY al.id DESC LIMIT 12`,
-      [req.businessId]
-    );
-
     const canViewFinance = ['business_owner', 'business_admin'].includes(req.membership.role_code) || req.permissions.includes('finance.view');
+    const canViewPayroll = ['business_owner', 'business_admin'].includes(req.membership.role_code) || req.permissions.includes('payroll.view');
+
+    const [
+      today,
+      month,
+      year,
+      exp,
+      cogs,
+      invStats,
+      pendingOrders,
+      custStats,
+      supStats,
+      dailyChart,
+      topProducts,
+      salesByCategory,
+      salesByBranch,
+      recentActivities,
+      payrollSummary,
+    ] = await Promise.all([
+      queryOne(
+        `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
+         FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND date(created_at) = date('now')${branchFilter}`,
+        baseParams
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
+         FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')${branchFilter}`,
+        baseParams
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
+         FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND strftime('%Y', created_at) = strftime('%Y', 'now')${branchFilter}`,
+        baseParams
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE business_id = ? AND approval_status = 'approved'${branchFilter}`,
+        baseParams
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(si.quantity * si.unit_cost), 0) AS total
+         FROM sale_items si JOIN sales s ON s.id = si.sale_id
+         WHERE s.business_id = ? AND s.sale_status != 'cancelled' AND s.sale_status != 'refunded'${filterBranchId ? ' AND s.branch_id = ?' : ''}`,
+        baseParams
+      ),
+      queryOne(
+        `SELECT COUNT(DISTINCT p.id) AS total_products,
+                SUM(CASE WHEN COALESCE(i.quantity, 0) > 0 AND COALESCE(i.quantity, 0) <= p.min_stock THEN 1 ELSE 0 END) AS low_stock,
+                SUM(CASE WHEN COALESCE(i.quantity, 0) <= 0 THEN 1 ELSE 0 END) AS out_of_stock
+         FROM products p
+         LEFT JOIN inventory i ON i.product_id = p.id AND i.branch_id = ?
+         WHERE p.business_id = ? AND p.status = 'active'`,
+        [filterBranchId || req.branchId || 0, req.businessId]
+      ),
+      queryOne(
+        `SELECT COUNT(*) AS cnt FROM orders WHERE business_id = ? AND order_status IN ('pending', 'confirmed', 'processing')`,
+        [req.businessId]
+      ),
+      queryOne(
+        `SELECT COUNT(*) AS total_customers, COALESCE(SUM(outstanding_balance), 0) AS customer_balances FROM customers WHERE business_id = ?`,
+        [req.businessId]
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(outstanding_balance), 0) AS supplier_balances FROM suppliers WHERE business_id = ?`,
+        [req.businessId]
+      ),
+      query(
+        `SELECT date(created_at) AS day, COALESCE(SUM(total_amount), 0) AS revenue, COUNT(*) AS transactions
+         FROM sales WHERE business_id = ? AND sale_status != 'cancelled'${branchFilter}
+         GROUP BY date(created_at) ORDER BY day DESC LIMIT 14`,
+        baseParams
+      ),
+      query(
+        `SELECT si.product_name, SUM(si.quantity) AS qty, SUM(si.line_total) AS revenue
+         FROM sale_items si JOIN sales s ON s.id = si.sale_id
+         WHERE s.business_id = ? AND s.sale_status != 'cancelled'
+         GROUP BY si.product_id, si.product_name ORDER BY revenue DESC LIMIT 6`,
+        [req.businessId]
+      ),
+      query(
+        `SELECT COALESCE(c.name, 'Uncategorized') AS category, SUM(si.line_total) AS revenue
+         FROM sale_items si
+         JOIN sales s ON s.id = si.sale_id
+         JOIN products p ON p.id = si.product_id
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE s.business_id = ? AND s.sale_status != 'cancelled'
+         GROUP BY c.name ORDER BY revenue DESC`,
+        [req.businessId]
+      ),
+      query(
+        `SELECT b.name AS branch_name, COALESCE(SUM(s.total_amount), 0) AS revenue
+         FROM branches b
+         LEFT JOIN sales s ON s.branch_id = b.id AND s.business_id = ? AND s.sale_status != 'cancelled'
+         WHERE b.business_id = ?
+         GROUP BY b.id, b.name ORDER BY revenue DESC`,
+        [req.businessId, req.businessId]
+      ),
+      query(
+        `SELECT al.*, u.full_name AS user_name, u.avatar_url AS user_avatar
+         FROM activity_logs al LEFT JOIN users u ON u.id = al.user_id
+         WHERE al.business_id = ? ORDER BY al.id DESC LIMIT 12`,
+        [req.businessId]
+      ),
+      canViewPayroll
+        ? queryOne(
+            `SELECT
+               (SELECT COUNT(*) FROM employee_payroll_configs WHERE business_id = ? AND payroll_status = 'active') AS active_employees,
+               (SELECT COUNT(*) FROM employee_payroll_configs WHERE business_id = ?) AS configured_employees,
+               (SELECT COUNT(*) FROM employee_payroll_configs WHERE business_id = ? AND payroll_status = 'active' AND next_payment_date <= date('now')) AS due_count,
+               (SELECT COALESCE(SUM(salary_amount), 0) FROM employee_payroll_configs WHERE business_id = ? AND payroll_status = 'active' AND next_payment_date <= date('now')) AS due_amount,
+               (SELECT COUNT(*) FROM payroll_transactions WHERE business_id = ? AND status IN ('pending', 'processing')) AS pending_count,
+               (SELECT COUNT(*) FROM payroll_transactions WHERE business_id = ? AND status = 'paid') AS paid_count,
+               (SELECT COALESCE(available_balance, 0) FROM business_payroll_accounts WHERE business_id = ?) AS available_balance`,
+            [req.businessId, req.businessId, req.businessId, req.businessId, req.businessId, req.businessId, req.businessId]
+          )
+        : Promise.resolve(null),
+    ]);
+
     const grossProfit = roundMoney(Number(year.total) - Number(cogs.total));
     const netProfit = roundMoney(grossProfit - Number(exp.total));
 
@@ -324,6 +381,17 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
         total_customers: Number(custStats?.total_customers || 0),
         outstanding_customer_balances: canViewFinance ? roundMoney(custStats?.customer_balances || 0) : null,
         supplier_balances: canViewFinance ? roundMoney(supStats?.supplier_balances || 0) : null,
+        payroll: canViewPayroll
+          ? {
+              active_employees: Number(payrollSummary?.active_employees || 0),
+              configured_employees: Number(payrollSummary?.configured_employees || 0),
+              due_count: Number(payrollSummary?.due_count || 0),
+              due_amount: roundMoney(payrollSummary?.due_amount || 0),
+              pending_count: Number(payrollSummary?.pending_count || 0),
+              paid_count: Number(payrollSummary?.paid_count || 0),
+              available_balance: roundMoney(payrollSummary?.available_balance || 0),
+            }
+          : null,
       },
       charts: {
         daily_sales: dailyChart.reverse(),
@@ -421,7 +489,10 @@ router.post(
 // ================= SUBSCRIPTIONS & PLATFORM SUPER ADMIN =================
 router.get('/subscriptions/plans', async (_req, res, next) => {
   try {
+    const cached = getCached('public:subscription-plans');
+    if (cached) return res.json({ plans: cached });
     const plans = await query('SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY monthly_price_rwf ASC');
+    setCached('public:subscription-plans', plans, 60_000);
     res.json({ plans });
   } catch (err) {
     next(err);
@@ -475,62 +546,104 @@ router.post('/subscriptions/subscribe', authenticate, requireBusiness, requirePe
 // Platform Super Admin endpoints (full platform governance, business registration, admin assignment, settings)
 router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, res, next) => {
   try {
-    const stats = await queryOne(
-      `SELECT (SELECT COUNT(*) FROM businesses WHERE status != 'deleted' AND deleted_at IS NULL) AS total_businesses,
-              (SELECT COUNT(*) FROM businesses WHERE status = 'active' AND deleted_at IS NULL) AS active_businesses,
-              (SELECT COUNT(*) FROM businesses WHERE status = 'suspended' AND deleted_at IS NULL) AS suspended_businesses,
-              (SELECT COUNT(*) FROM businesses WHERE status = 'pending_activation' AND deleted_at IS NULL) AS pending_activation_businesses,
-              (SELECT COUNT(*) FROM businesses WHERE status = 'deleted' OR deleted_at IS NOT NULL) AS deleted_businesses,
-              (SELECT COUNT(*) FROM users) AS total_users,
-              (SELECT COUNT(*) FROM users WHERE is_active = 1) AS active_users,
-              (SELECT COUNT(*) FROM users u WHERE u.is_platform_admin = 0 AND NOT EXISTS (SELECT 1 FROM business_members bm WHERE bm.user_id = u.id AND bm.status = 'active')) AS customer_count,
-              (SELECT COUNT(*) FROM user_sessions WHERE is_revoked = 0) AS active_sessions,
-              (SELECT COUNT(*) FROM support_tickets WHERE status != 'resolved') AS open_tickets,
-              (SELECT COUNT(*) FROM activity_logs) AS total_audit_events,
-              (SELECT COUNT(*) FROM sales WHERE sale_status != 'cancelled') AS total_sales_count,
-              (SELECT COALESCE(SUM(amount_rwf), 0) FROM subscription_payments WHERE status = 'verified') AS platform_subscription_revenue`
-    );
-
-    const businesses = await query(
-      `SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
-              b.email, b.phone, b.country, b.province, b.district, b.physical_address,
-              b.currency_code, b.timezone, b.tax_enabled, b.default_tax_rate,
-              b.tax_identification_number, b.operating_hours, b.is_public_listed,
-              b.status, b.deleted_at, b.created_at,
-              COALESCE(ba_user.id, u.id) AS primary_admin_user_id,
-              COALESCE(ba_user.full_name, u.full_name) AS owner_name,
-              COALESCE(ba_user.email, u.email) AS owner_email,
-              COALESCE(ba_user.phone, u.phone) AS owner_phone,
-              COALESCE(ba_user.avatar_url, u.avatar_url) AS owner_avatar,
-              ba.status AS admin_activation_status,
-              ba.activation_token AS admin_activation_token,
-              ba.activated_at AS admin_activated_at,
-              p.id AS plan_id, p.name AS plan_name, s.status AS subscription_status, s.billing_cycle, s.ends_at AS subscription_ends_at,
-              (SELECT COUNT(*) FROM business_members bm WHERE bm.business_id = b.id AND bm.status = 'active') AS employee_count,
-              (SELECT COUNT(*) FROM branches br WHERE br.business_id = b.id) AS branch_count,
-              (SELECT COUNT(*) FROM sales sl WHERE sl.business_id = b.id AND sl.sale_status != 'cancelled') AS sales_count
-       FROM businesses b
-       JOIN users u ON u.id = b.owner_user_id
-       LEFT JOIN business_admins ba ON ba.id = (
-         SELECT id FROM business_admins WHERE business_id = b.id AND is_primary = 1 ORDER BY id DESC LIMIT 1
-       )
-       LEFT JOIN users ba_user ON ba_user.id = ba.user_id
-       LEFT JOIN subscriptions s ON s.id = (SELECT id FROM subscriptions WHERE business_id = b.id ORDER BY id DESC LIMIT 1)
-       LEFT JOIN subscription_plans p ON p.id = s.plan_id
-       ORDER BY b.id DESC`
-    );
-
-    const rawUsers = await query(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.avatar_url, u.is_email_verified, u.is_active, u.is_platform_admin,
-              u.last_login_at, u.created_at,
-              cp.city AS customer_city, cp.country AS customer_country, cp.loyalty_tier,
-              (SELECT COUNT(*) FROM business_members bm JOIN businesses b ON b.id = bm.business_id WHERE bm.user_id = u.id AND bm.status = 'active' AND b.deleted_at IS NULL) AS business_count,
-              (SELECT COUNT(*) FROM business_admins ba JOIN businesses b ON b.id = ba.business_id WHERE ba.user_id = u.id AND b.deleted_at IS NULL) AS admin_business_count,
-              (SELECT COUNT(*) FROM user_sessions us WHERE us.user_id = u.id AND us.is_revoked = 0) AS active_sessions
-       FROM users u
-       LEFT JOIN customer_profiles cp ON cp.user_id = u.id
-       ORDER BY u.is_platform_admin DESC, u.id DESC LIMIT 300`
-    );
+    const [
+      stats,
+      businesses,
+      rawUsers,
+      admins,
+      plans,
+      tickets,
+      inquiries,
+      activityLogs,
+      loginAttempts,
+      settingsRows,
+    ] = await Promise.all([
+      queryOne(
+        `SELECT (SELECT COUNT(*) FROM businesses WHERE status != 'deleted' AND deleted_at IS NULL) AS total_businesses,
+                (SELECT COUNT(*) FROM businesses WHERE status = 'active' AND deleted_at IS NULL) AS active_businesses,
+                (SELECT COUNT(*) FROM businesses WHERE status = 'suspended' AND deleted_at IS NULL) AS suspended_businesses,
+                (SELECT COUNT(*) FROM businesses WHERE status = 'pending_activation' AND deleted_at IS NULL) AS pending_activation_businesses,
+                (SELECT COUNT(*) FROM businesses WHERE status = 'deleted' OR deleted_at IS NOT NULL) AS deleted_businesses,
+                (SELECT COUNT(*) FROM users) AS total_users,
+                (SELECT COUNT(*) FROM users WHERE is_active = 1) AS active_users,
+                (SELECT COUNT(*) FROM users u WHERE u.is_platform_admin = 0 AND NOT EXISTS (SELECT 1 FROM business_members bm WHERE bm.user_id = u.id AND bm.status = 'active')) AS customer_count,
+                (SELECT COUNT(*) FROM user_sessions WHERE is_revoked = 0) AS active_sessions,
+                (SELECT COUNT(*) FROM support_tickets WHERE status != 'resolved') AS open_tickets,
+                (SELECT COUNT(*) FROM activity_logs) AS total_audit_events,
+                (SELECT COUNT(*) FROM sales WHERE sale_status != 'cancelled') AS total_sales_count,
+                (SELECT COALESCE(SUM(amount_rwf), 0) FROM subscription_payments WHERE status = 'verified') AS platform_subscription_revenue`
+      ),
+      query(
+        `SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
+                b.email, b.phone, b.country, b.province, b.district, b.physical_address,
+                b.currency_code, b.timezone, b.tax_enabled, b.default_tax_rate,
+                b.tax_identification_number, b.operating_hours, b.is_public_listed,
+                b.status, b.deleted_at, b.created_at,
+                COALESCE(ba_user.id, u.id) AS primary_admin_user_id,
+                COALESCE(ba_user.full_name, u.full_name) AS owner_name,
+                COALESCE(ba_user.email, u.email) AS owner_email,
+                COALESCE(ba_user.phone, u.phone) AS owner_phone,
+                COALESCE(ba_user.avatar_url, u.avatar_url) AS owner_avatar,
+                ba.status AS admin_activation_status,
+                ba.activation_token AS admin_activation_token,
+                ba.activated_at AS admin_activated_at,
+                p.id AS plan_id, p.name AS plan_name, s.status AS subscription_status, s.billing_cycle, s.ends_at AS subscription_ends_at,
+                (SELECT COUNT(*) FROM business_members bm WHERE bm.business_id = b.id AND bm.status = 'active') AS employee_count,
+                (SELECT COUNT(*) FROM branches br WHERE br.business_id = b.id) AS branch_count,
+                (SELECT COUNT(*) FROM sales sl WHERE sl.business_id = b.id AND sl.sale_status != 'cancelled') AS sales_count
+         FROM businesses b
+         JOIN users u ON u.id = b.owner_user_id
+         LEFT JOIN business_admins ba ON ba.id = (
+           SELECT id FROM business_admins WHERE business_id = b.id AND is_primary = 1 ORDER BY id DESC LIMIT 1
+         )
+         LEFT JOIN users ba_user ON ba_user.id = ba.user_id
+         LEFT JOIN subscriptions s ON s.id = (SELECT id FROM subscriptions WHERE business_id = b.id ORDER BY id DESC LIMIT 1)
+         LEFT JOIN subscription_plans p ON p.id = s.plan_id
+         ORDER BY b.id DESC`
+      ),
+      query(
+        `SELECT u.id, u.full_name, u.email, u.phone, u.avatar_url, u.is_email_verified, u.is_active, u.is_platform_admin,
+                u.last_login_at, u.created_at,
+                cp.city AS customer_city, cp.country AS customer_country, cp.loyalty_tier,
+                (SELECT COUNT(*) FROM business_members bm JOIN businesses b ON b.id = bm.business_id WHERE bm.user_id = u.id AND bm.status = 'active' AND b.deleted_at IS NULL) AS business_count,
+                (SELECT COUNT(*) FROM business_admins ba JOIN businesses b ON b.id = ba.business_id WHERE ba.user_id = u.id AND b.deleted_at IS NULL) AS admin_business_count,
+                (SELECT COUNT(*) FROM user_sessions us WHERE us.user_id = u.id AND us.is_revoked = 0) AS active_sessions
+         FROM users u
+         LEFT JOIN customer_profiles cp ON cp.user_id = u.id
+         ORDER BY u.is_platform_admin DESC, u.id DESC LIMIT 300`
+      ),
+      query(
+        `SELECT u.id, u.full_name, u.email, u.phone, u.avatar_url, u.is_active, u.last_login_at, u.created_at,
+                COALESCE(pa.admin_level, 'super_admin') AS admin_level
+         FROM users u
+         LEFT JOIN platform_admins pa ON pa.user_id = u.id
+         WHERE u.is_platform_admin = 1
+         ORDER BY u.id ASC`
+      ),
+      query('SELECT * FROM subscription_plans ORDER BY monthly_price_rwf ASC'),
+      query(
+        `SELECT st.*, u.full_name AS user_name, u.email AS user_email, u.avatar_url AS user_avatar, b.name AS business_name
+         FROM support_tickets st
+         LEFT JOIN users u ON u.id = st.user_id
+         LEFT JOIN businesses b ON b.id = st.business_id
+         ORDER BY st.id DESC`
+      ),
+      query(
+        `SELECT ci.*, b.name AS target_business_name
+         FROM contact_inquiries ci
+         LEFT JOIN businesses b ON b.id = ci.business_id
+         ORDER BY ci.id DESC LIMIT 100`
+      ),
+      query(
+        `SELECT al.*, u.full_name AS user_name, u.email AS user_email, u.avatar_url AS user_avatar, b.name AS business_name
+         FROM activity_logs al
+         LEFT JOIN users u ON u.id = al.user_id
+         LEFT JOIN businesses b ON b.id = al.business_id
+         ORDER BY al.id DESC LIMIT 200`
+      ),
+      query('SELECT * FROM login_attempts ORDER BY id DESC LIMIT 100'),
+      query('SELECT setting_key, setting_value FROM platform_settings ORDER BY id ASC'),
+    ]);
 
     const users = rawUsers.map((u) => {
       let account_category = 'customer';
@@ -540,37 +653,6 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
       return { ...u, account_category };
     });
 
-    const admins = await query(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.avatar_url, u.is_active, u.last_login_at, u.created_at,
-              COALESCE(pa.admin_level, 'super_admin') AS admin_level
-       FROM users u
-       LEFT JOIN platform_admins pa ON pa.user_id = u.id
-       WHERE u.is_platform_admin = 1
-       ORDER BY u.id ASC`
-    );
-    const plans = await query('SELECT * FROM subscription_plans ORDER BY monthly_price_rwf ASC');
-    const tickets = await query(
-      `SELECT st.*, u.full_name AS user_name, u.email AS user_email, u.avatar_url AS user_avatar, b.name AS business_name
-       FROM support_tickets st
-       LEFT JOIN users u ON u.id = st.user_id
-       LEFT JOIN businesses b ON b.id = st.business_id
-       ORDER BY st.id DESC`
-    );
-    const inquiries = await query(
-      `SELECT ci.*, b.name AS target_business_name
-       FROM contact_inquiries ci
-       LEFT JOIN businesses b ON b.id = ci.business_id
-       ORDER BY ci.id DESC LIMIT 100`
-    );
-    const activityLogs = await query(
-      `SELECT al.*, u.full_name AS user_name, u.email AS user_email, u.avatar_url AS user_avatar, b.name AS business_name
-       FROM activity_logs al
-       LEFT JOIN users u ON u.id = al.user_id
-       LEFT JOIN businesses b ON b.id = al.business_id
-       ORDER BY al.id DESC LIMIT 200`
-    );
-    const loginAttempts = await query('SELECT * FROM login_attempts ORDER BY id DESC LIMIT 100');
-    const settingsRows = await query('SELECT setting_key, setting_value FROM platform_settings ORDER BY id ASC');
     const platformSettings = settingsRows.reduce((acc, row) => {
       acc[row.setting_key] = row.setting_value;
       return acc;
@@ -711,7 +793,7 @@ router.post(
           [
             businessId,
             `Thank you for choosing ${name.trim()}`,
-            'Powered by BizFlow Africa',
+            'Powered by BizTrade Africa',
             JSON.stringify(['cash', 'mtn_momo', 'airtel_money', 'bank_transfer', 'card']),
           ]
         );
@@ -768,7 +850,7 @@ router.post(
       const mailResult = await sendMail({
         to: admin_email,
         subject: `Activate your Business Admin account for ${name.trim()}`,
-        text: `Hello ${admin_full_name.trim()}, Platform Super Admin registered ${name.trim()} (${businessCode}) on BizFlow Africa and assigned you as Business Admin. Open ${activationUrl} to verify your email, upload your profile photo, and set your permanent password. If you sign in with the temporary initial password, you will be required to change it immediately before accessing the business dashboard. For security, passwords are never sent via email.`,
+        text: `Hello ${admin_full_name.trim()}, Platform Super Admin registered ${name.trim()} (${businessCode}) on BizTrade Africa and assigned you as Business Admin. Open ${activationUrl} to verify your email, upload your profile photo, and set your permanent password. If you sign in with the temporary initial password, you will be required to change it immediately before accessing the business dashboard. For security, passwords are never sent via email.`,
       });
 
       await logAudit({
@@ -1114,7 +1196,7 @@ router.post('/admin/businesses/:id/reset-admin-access', authenticate, requirePla
 
     const mailResult = await sendMail({
       to: primaryAdmin.email,
-      subject: `Account Access Reset for ${biz.name} — BizFlow Africa`,
+      subject: `Account Access Reset for ${biz.name} — BizTrade Africa`,
       text: `Platform Super Admin initiated an account access reset for ${biz.name}. Use recovery token ${token} on the Forgot Password page to set a new password.`,
     });
 
@@ -1207,6 +1289,7 @@ router.put('/admin/settings', authenticate, requirePlatformAdmin, async (req, re
       acc[row.setting_key] = row.setting_value;
       return acc;
     }, {});
+    invalidateCache('public:platform-config');
     res.json({ message: 'Platform settings saved', settings });
   } catch (err) {
     next(err);
@@ -1258,6 +1341,7 @@ router.post(
         changes: { platform_logo_url: nextLogoUrl },
         ipAddress: req.ip,
       });
+      invalidateCache('public:platform-config');
 
       res.json({ message: 'Official platform logo updated.', platform_logo_url: nextLogoUrl });
     } catch (err) {
@@ -1295,6 +1379,7 @@ router.delete('/admin/platform-logo', authenticate, requirePlatformAdmin, async 
       entityType: 'platform_settings',
       ipAddress: req.ip,
     });
+    invalidateCache('public:platform-config');
 
     res.json({ message: 'Official platform logo removed.', platform_logo_url: '' });
   } catch (err) {
@@ -1370,6 +1455,60 @@ router.post('/admin/users/:id/revoke-sessions', authenticate, requirePlatformAdm
     next(err);
   }
 });
+
+router.patch('/admin/users/:id/verify-email', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const targetId = Number(req.params.id);
+    await execute(`UPDATE users SET is_email_verified = 1, updated_at = datetime('now') WHERE id = ?`, [targetId]);
+    await logAudit({
+      userId: req.user.id,
+      action: 'platform.user_email_verified',
+      entityType: 'user',
+      entityId: targetId,
+      ipAddress: req.ip,
+    });
+    res.json({ message: 'User email marked verified' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post(
+  '/admin/users/:id/reset-password',
+  authenticate,
+  requirePlatformAdmin,
+  [body('new_password').optional({ values: 'falsy' }).isLength({ min: 8 }).withMessage('Password must be at least 8 characters')],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const targetId = Number(req.params.id);
+      const target = await queryOne('SELECT id, full_name, email FROM users WHERE id = ?', [targetId]);
+      if (!target) return res.status(404).json({ error: 'User not found' });
+
+      const tempPassword = String(req.body.new_password || 'BizTrade@123').trim();
+      const hash = await bcrypt.hash(tempPassword, 10);
+      await execute(
+        `UPDATE users SET password_hash = ?, must_change_password = 1, is_active = 1, updated_at = datetime('now') WHERE id = ?`,
+        [hash, targetId]
+      );
+      await execute('UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ?', [targetId]);
+      await logAudit({
+        userId: req.user.id,
+        action: 'platform.user_password_reset',
+        entityType: 'user',
+        entityId: targetId,
+        changes: { email: target.email },
+        ipAddress: req.ip,
+      });
+      res.json({
+        message: `Temporary password configured for ${target.full_name} and active sessions revoked.`,
+        temporary_password: tempPassword,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 router.patch('/admin/plans/:id', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
@@ -1548,6 +1687,29 @@ router.post('/support/tickets', authenticate, requireProfileImage, async (req, r
       'INSERT INTO support_tickets (business_id, user_id, subject, message, priority) VALUES (?, ?, ?, ?, ?)',
       [business_id, req.user.id, subject.trim(), message.trim(), priority]
     );
+
+    const supportRow = await queryOne(`SELECT setting_value FROM platform_settings WHERE setting_key = 'support_email'`);
+    const recipients = Array.from(new Set(['allofme140@gmail.com', supportRow?.setting_value].filter(Boolean))).join(',');
+    void sendMail({
+      to: recipients,
+      replyTo: req.user.email,
+      subject: `[BizTrade Africa Support Ticket #${r.insertId}] ${subject.trim()}`,
+      text: `New support ticket from ${req.user.full_name} (${req.user.email})\nPriority: ${priority}\n\n${message.trim()}`,
+    });
+
+    const superAdmins = await query('SELECT id FROM users WHERE is_platform_admin = 1 AND is_active = 1');
+    void Promise.all(
+      superAdmins.map((sa) =>
+        createNotification({
+          userId: sa.id,
+          eventType: 'support_ticket',
+          title: `New Support Ticket: ${subject.trim()}`,
+          message: `${req.user.full_name} (${req.user.email}) — ${message.trim().slice(0, 120)}`,
+          relatedUrl: '/app/admin',
+        })
+      )
+    );
+
     res.status(201).json({ id: r.insertId, message: 'Support ticket submitted' });
   } catch (err) {
     next(err);
@@ -1575,7 +1737,16 @@ router.patch('/admin/tickets/:id', authenticate, requirePlatformAdmin, async (re
   }
 });
 
-// Public Contact Form
+router.delete('/admin/inquiries/:id', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    await execute('DELETE FROM contact_inquiries WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Inquiry deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Public Contact Form — saves to DB, notifies Super Admins, and sends inquiry email to allofme140@gmail.com
 router.post(
   '/public/contact',
   [
@@ -1587,11 +1758,55 @@ router.post(
   async (req, res, next) => {
     try {
       const { full_name, email, phone = '', business_name = '', message } = req.body;
-      await execute(
-        'INSERT INTO contact_inquiries (full_name, email, phone, business_name, message) VALUES (?, ?, ?, ?, ?)',
-        [full_name.trim(), email, phone, business_name, message.trim()]
+      const cleanName = full_name.trim();
+      const cleanEmail = String(email).trim().toLowerCase();
+      const cleanMsg = message.trim();
+
+      const [insRes, supportRow, superAdmins] = await Promise.all([
+        execute(
+          'INSERT INTO contact_inquiries (full_name, email, phone, business_name, message) VALUES (?, ?, ?, ?, ?)',
+          [cleanName, cleanEmail, phone, business_name, cleanMsg]
+        ),
+        queryOne(`SELECT setting_value FROM platform_settings WHERE setting_key = 'support_email'`),
+        query('SELECT id FROM users WHERE is_platform_admin = 1 AND is_active = 1'),
+      ]);
+
+      const recipients = Array.from(new Set(['allofme140@gmail.com', supportRow?.setting_value].filter(Boolean))).join(',');
+      const emailBody = [
+        `New BizTrade Africa Inquiry (#${insRes.insertId})`,
+        `From: ${cleanName}`,
+        `Email: ${cleanEmail}`,
+        `Phone: ${phone || 'Not provided'}`,
+        `Business: ${business_name || 'Not specified'}`,
+        '',
+        'Message:',
+        cleanMsg,
+      ].join('\n');
+
+      void sendMail({
+        to: recipients,
+        replyTo: cleanEmail,
+        subject: `BizTrade Africa Inquiry from ${cleanName}${business_name ? ` (${business_name})` : ''}`,
+        text: emailBody,
+      });
+
+      void Promise.all(
+        superAdmins.map((sa) =>
+          createNotification({
+            userId: sa.id,
+            eventType: 'contact_inquiry',
+            title: `New Inquiry from ${cleanName}`,
+            message: `${cleanEmail}${business_name ? ` · ${business_name}` : ''} — ${cleanMsg.slice(0, 140)}`,
+            relatedUrl: '/app/admin',
+          })
+        )
       );
-      res.status(201).json({ message: 'Thank you. Our Kigali team will reach out shortly.' });
+
+      res.status(201).json({
+        id: insRes.insertId,
+        routed_to: 'allofme140@gmail.com',
+        message: 'Thank you! Your inquiry has been sent to our support team (allofme140@gmail.com) and we will reach out shortly.',
+      });
     } catch (err) {
       next(err);
     }

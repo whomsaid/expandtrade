@@ -5,6 +5,8 @@ import { execute, query, queryOne, roundMoney, transaction } from '../config/db.
 import { authenticate, requireProfileImage } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { logAudit, notifyBusinessManagers } from '../services/auditService.js';
+import { getCached, setCached } from '../services/cacheService.js';
+import { sendMail } from '../services/mailService.js';
 
 const router = express.Router();
 
@@ -30,13 +32,16 @@ const PUBLIC_CONFIG_KEYS = [
 // ================= PUBLIC PLATFORM CONFIG =================
 router.get('/public/platform-config', async (_req, res, next) => {
   try {
+    const cached = getCached('public:platform-config');
+    if (cached) return res.json({ config: cached });
+
     const rows = await query('SELECT setting_key, setting_value FROM platform_settings');
     const config = {};
     for (const k of PUBLIC_CONFIG_KEYS) {
       config[k] = '';
     }
-    config.platform_name = 'BizFlow Africa';
-    config.support_email = 'support@bizflow.africa';
+    config.platform_name = 'BizTrade Africa';
+    config.support_email = 'allofme140@gmail.com';
     config.platform_location = 'KN 4 Ave, Kigali, Rwanda';
     config.developer_role = 'Full Stack Developer';
 
@@ -45,6 +50,7 @@ router.get('/public/platform-config', async (_req, res, next) => {
         config[row.setting_key] = row.setting_value ?? '';
       }
     }
+    setCached('public:platform-config', config, 30_000);
     res.json({ config });
   } catch (err) {
     next(err);
@@ -57,6 +63,10 @@ router.get('/public/businesses', async (req, res, next) => {
     const q = String(req.query.q || '').trim().toLowerCase();
     const category = String(req.query.category || '').trim();
     const district = String(req.query.district || '').trim();
+
+    const cacheKey = `public:businesses:${q}:${category}:${district}`;
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
 
     let sql = `
       SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
@@ -84,12 +94,16 @@ router.get('/public/businesses', async (req, res, next) => {
     }
 
     sql += ' ORDER BY b.id DESC LIMIT 100';
-    const businesses = await query(sql, params);
-    const categories = await query(
-      `SELECT DISTINCT category FROM businesses WHERE status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL ORDER BY category ASC`
-    );
+    const [businesses, categories] = await Promise.all([
+      query(sql, params),
+      query(
+        `SELECT DISTINCT category FROM businesses WHERE status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL ORDER BY category ASC`
+      ),
+    ]);
 
-    res.json({ businesses, categories: categories.map((c) => c.category) });
+    const payload = { businesses, categories: categories.map((c) => c.category) };
+    setCached(cacheKey, payload, 15_000);
+    res.json(payload);
   } catch (err) {
     next(err);
   }
@@ -109,56 +123,60 @@ router.get('/public/businesses/:slug', async (req, res, next) => {
       return res.status(404).json({ error: 'Business not found or not publicly listed' });
     }
 
-    const branches = await query(
-      `SELECT id, name, code, province, district, address, phone, is_main
-       FROM branches WHERE business_id = ? AND is_active = 1 ORDER BY is_main DESC, id ASC`,
-      [business.id]
-    );
-
-    // Public catalog intentionally hides cost/purchase_price and private exact warehouse stock counts
-    const products = await query(
-      `SELECT p.id, p.name, p.sku, p.description, p.unit, p.selling_price, p.image_url,
-              c.name AS category_name,
-              CASE WHEN COALESCE((SELECT SUM(i.quantity) FROM inventory i WHERE i.product_id = p.id), 0) > 0 THEN 1 ELSE 0 END AS in_stock
-       FROM products p
-       LEFT JOIN categories c ON c.id = p.category_id
-       WHERE p.business_id = ? AND p.status = 'active'
-       ORDER BY p.id DESC`,
-      [business.id]
-    );
-
-    const reviews = await query(
-      `SELECT pr.id, pr.product_id, pr.rating, pr.comment, pr.created_at,
-              u.full_name AS customer_name, u.avatar_url AS customer_avatar,
-              p.name AS product_name
-       FROM product_reviews pr
-       JOIN users u ON u.id = pr.user_id
-       LEFT JOIN products p ON p.id = pr.product_id
-       WHERE pr.business_id = ?
-       ORDER BY pr.id DESC LIMIT 30`,
-      [business.id]
-    );
-
-    const videos = await query(
-      `SELECT bv.id, bv.business_id, bv.product_id, bv.title, bv.description,
-              bv.video_mime_type, bv.file_size_bytes, bv.thumbnail_url, bv.is_published, bv.published_at, bv.created_at,
-              p.name AS product_name, p.selling_price AS product_price
-       FROM business_videos bv
-       LEFT JOIN products p ON p.id = bv.product_id
-       WHERE bv.business_id = ? AND bv.is_published = 1
-       ORDER BY COALESCE(bv.published_at, bv.created_at) DESC, bv.id DESC`,
-      [business.id]
-    );
-
-    const reviewSetting = await queryOne(
-      `SELECT setting_value FROM platform_settings WHERE setting_key = 'allow_customer_reviews'`
-    );
+    const [branches, products, reviews, videos, vacancies, reviewSetting] = await Promise.all([
+      query(
+        `SELECT id, name, code, province, district, address, phone, is_main
+         FROM branches WHERE business_id = ? AND is_active = 1 ORDER BY is_main DESC, id ASC`,
+        [business.id]
+      ),
+      // Public catalog intentionally hides cost/purchase_price and private exact warehouse stock counts
+      query(
+        `SELECT p.id, p.name, p.sku, p.description, p.unit, p.selling_price, p.image_url,
+                c.name AS category_name,
+                CASE WHEN COALESCE((SELECT SUM(i.quantity) FROM inventory i WHERE i.product_id = p.id), 0) > 0 THEN 1 ELSE 0 END AS in_stock
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE p.business_id = ? AND p.status = 'active'
+         ORDER BY p.id DESC`,
+        [business.id]
+      ),
+      query(
+        `SELECT pr.id, pr.product_id, pr.rating, pr.comment, pr.created_at,
+                u.full_name AS customer_name, u.avatar_url AS customer_avatar,
+                p.name AS product_name
+         FROM product_reviews pr
+         JOIN users u ON u.id = pr.user_id
+         LEFT JOIN products p ON p.id = pr.product_id
+         WHERE pr.business_id = ?
+         ORDER BY pr.id DESC LIMIT 30`,
+        [business.id]
+      ),
+      query(
+        `SELECT bv.id, bv.business_id, bv.product_id, bv.title, bv.description,
+                bv.video_mime_type, bv.file_size_bytes, bv.thumbnail_url, bv.is_published, bv.published_at, bv.created_at,
+                p.name AS product_name, p.selling_price AS product_price
+         FROM business_videos bv
+         LEFT JOIN products p ON p.id = bv.product_id
+         WHERE bv.business_id = ? AND bv.is_published = 1
+         ORDER BY COALESCE(bv.published_at, bv.created_at) DESC, bv.id DESC`,
+        [business.id]
+      ),
+      query(
+        `SELECT id, title, slug, department, employment_type, work_mode, location, application_deadline, positions_count, published_at
+         FROM job_vacancies
+         WHERE business_id = ? AND status = 'published'
+         ORDER BY COALESCE(published_at, created_at) DESC, id DESC`,
+        [business.id]
+      ),
+      queryOne(`SELECT setting_value FROM platform_settings WHERE setting_key = 'allow_customer_reviews'`),
+    ]);
 
     res.json({
       business,
       branches,
       products,
       reviews,
+      vacancies,
       videos: videos.map((v) => ({
         ...v,
         is_published: true,
@@ -251,12 +269,30 @@ router.get('/customer/orders', authenticate, requireProfileImage, async (req, re
       [req.user.id, req.user.id]
     );
 
-    for (const o of orders) {
-      o.items = await query('SELECT * FROM order_items WHERE order_id = ?', [o.id]);
-      o.history = await query(
-        `SELECT old_status, new_status, note, created_at FROM order_status_history WHERE order_id = ? ORDER BY id ASC`,
-        [o.id]
-      );
+    if (orders.length > 0) {
+      const ids = orders.map((o) => o.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const [allItems, allHistory] = await Promise.all([
+        query(`SELECT * FROM order_items WHERE order_id IN (${placeholders})`, ids),
+        query(
+          `SELECT order_id, old_status, new_status, note, created_at FROM order_status_history WHERE order_id IN (${placeholders}) ORDER BY id ASC`,
+          ids
+        ),
+      ]);
+      const itemsByOrder = new Map();
+      const histByOrder = new Map();
+      for (const it of allItems) {
+        if (!itemsByOrder.has(it.order_id)) itemsByOrder.set(it.order_id, []);
+        itemsByOrder.get(it.order_id).push(it);
+      }
+      for (const h of allHistory) {
+        if (!histByOrder.has(h.order_id)) histByOrder.set(h.order_id, []);
+        histByOrder.get(h.order_id).push(h);
+      }
+      for (const o of orders) {
+        o.items = itemsByOrder.get(o.id) || [];
+        o.history = histByOrder.get(o.id) || [];
+      }
     }
     res.json({ orders });
   } catch (err) {
@@ -475,7 +511,7 @@ router.post(
   async (req, res, next) => {
     try {
       const business = await queryOne(
-        `SELECT id, name FROM businesses WHERE id = ? AND status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL`,
+        `SELECT id, name, email FROM businesses WHERE id = ? AND status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL`,
         [req.params.businessId]
       );
       if (!business) return res.status(404).json({ error: 'Business not found' });
@@ -493,6 +529,14 @@ router.post(
         req.body.message.trim().slice(0, 160),
         '/app/customers'
       );
+
+      const recipients = Array.from(new Set(['allofme140@gmail.com', business.email].filter(Boolean))).join(',');
+      void sendMail({
+        to: recipients,
+        replyTo: req.user.email,
+        subject: `Customer Inquiry for ${business.name} from ${req.user.full_name}`,
+        text: `Business: ${business.name}\nCustomer: ${req.user.full_name} (${req.user.email} · ${req.user.phone})\n\nMessage:\n${req.body.message.trim()}`,
+      });
 
       res.status(201).json({ id: r.insertId, message: `Message sent to ${business.name}.` });
     } catch (err) {

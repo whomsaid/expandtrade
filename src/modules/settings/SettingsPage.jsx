@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { LayoutGrid, Mail, MonitorSmartphone, Shield, Upload } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ProfilePhotoUploader from '../../components/ProfilePhotoUploader.jsx';
@@ -8,8 +8,22 @@ import ThemeSelector from '../../components/ThemeSelector.jsx';
 import { AFRICAN_COUNTRIES, formatDate, formatDateTime, formatMoney, PAYMENT_METHOD_LABELS } from '../../utils/format.js';
 import { validatePasswordStrength } from '../../utils/passwordPolicy.js';
 
+const DEFAULT_DASHBOARD_PREFS = {
+  density: 'comfortable',
+  default_tab: 'overview',
+  widgets: {
+    sales_kpis: true,
+    finance_summary: true,
+    payroll_summary: true,
+    daily_chart: true,
+    top_products: true,
+    branch_performance: true,
+    audit_activity: true,
+  },
+};
+
 export default function SettingsPage() {
-  const { user, activeBusinessId, workspace, loadWorkspace, changeLanguage, hasPermission } = useAuth();
+  const { user, activeBusinessId, workspace, loadWorkspace, changeLanguage, hasPermission, refreshMe, savePreferences } = useAuth();
   const canManageBusiness = hasPermission('settings.manage');
   const [tab, setTab] = useState('account');
   const [profile, setProfile] = useState({});
@@ -18,8 +32,61 @@ export default function SettingsPage() {
   const [security, setSecurity] = useState({ sessions: [], loginHistory: [] });
   const [auditLogs, setAuditLogs] = useState([]);
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+
+  // Personal Profile, Privacy & Email Change
+  const [personalForm, setPersonalForm] = useState({
+    full_name: user?.full_name || '',
+    phone: user?.phone || '',
+    bio: user?.bio || '',
+    location: user?.location || '',
+    privacy_settings: {
+      profile_visibility: user?.privacy_settings?.profile_visibility || 'workspace',
+      show_online_status: user?.privacy_settings?.show_online_status !== false,
+      activity_tracking: user?.privacy_settings?.activity_tracking !== false,
+    },
+  });
+  const [emailChange, setEmailChange] = useState({
+    open: false,
+    step: 'request',
+    new_email: '',
+    current_password: '',
+    otp_code: '',
+    devOtpPreview: '',
+  });
+  const [dashPrefs, setDashPrefs] = useState(() => ({
+    ...DEFAULT_DASHBOARD_PREFS,
+    ...(user?.dashboard_preferences || {}),
+    widgets: {
+      ...DEFAULT_DASHBOARD_PREFS.widgets,
+      ...(user?.dashboard_preferences?.widgets || {}),
+    },
+  }));
+
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    setPersonalForm({
+      full_name: user.full_name || '',
+      phone: user.phone || '',
+      bio: user.bio || '',
+      location: user.location || '',
+      privacy_settings: {
+        profile_visibility: user.privacy_settings?.profile_visibility || 'workspace',
+        show_online_status: user.privacy_settings?.show_online_status !== false,
+        activity_tracking: user.privacy_settings?.activity_tracking !== false,
+      },
+    });
+    setDashPrefs({
+      ...DEFAULT_DASHBOARD_PREFS,
+      ...(user.dashboard_preferences || {}),
+      widgets: {
+        ...DEFAULT_DASHBOARD_PREFS.widgets,
+        ...(user.dashboard_preferences?.widgets || {}),
+      },
+    });
+  }, [user]);
 
   const loadSettingsData = useCallback(async () => {
     if (workspace?.business) {
@@ -52,6 +119,68 @@ export default function SettingsPage() {
   useEffect(() => {
     loadSettingsData();
   }, [loadSettingsData]);
+
+  const handleSavePersonal = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.put('/auth/profile', personalForm);
+      await refreshMe();
+      setMessage(data.message || 'Personal profile updated.');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleRequestEmailChange = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post('/auth/request-email-change', {
+        new_email: emailChange.new_email,
+        current_password: emailChange.current_password,
+      });
+      setEmailChange((prev) => ({
+        ...prev,
+        step: 'verify',
+        devOtpPreview: data.devOtpPreview || '',
+      }));
+      setMessage(data.message);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleVerifyEmailChange = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post('/auth/verify-email-change', {
+        new_email: emailChange.new_email,
+        otp_code: emailChange.otp_code,
+      });
+      await refreshMe();
+      setEmailChange({ open: false, step: 'request', new_email: '', current_password: '', otp_code: '', devOtpPreview: '' });
+      setMessage(data.message);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleSaveDashPrefs = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      const data = await savePreferences({ dashboard_preferences: dashPrefs });
+      setMessage(data.message || 'Dashboard customization preferences saved.');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -112,17 +241,58 @@ export default function SettingsPage() {
     }
   };
 
+  const handleRevokeSession = async (sessionId) => {
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.delete(`/auth/sessions/${sessionId}`);
+      setMessage(data.message);
+      await loadSettingsData();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleRevokeOtherSessions = async () => {
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post('/auth/sessions/revoke-others');
+      setMessage(data.message);
+      await loadSettingsData();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const toggleMethod = (method) => {
     const current = profile.enabled_payment_methods || [];
     const next = current.includes(method) ? current.filter((m) => m !== method) : [...current, method];
     setProfile({ ...profile, enabled_payment_methods: next });
   };
 
+  // RBAC-filtered widget customization options
+  const widgetOptions = [
+    ...(hasPermission('dashboard.view') || user?.is_platform_admin
+      ? [
+          ['sales_kpis', 'Sales & Inventory KPI Strip'],
+          ['daily_chart', 'Daily Revenue Chart'],
+          ['top_products', 'Best-Selling Products Panel'],
+          ['branch_performance', 'Sales by Branch Panel'],
+        ]
+      : []),
+    ...(hasPermission('finance.view') || user?.is_platform_admin ? [['finance_summary', 'Financial Expenses & Balances Strip']] : []),
+    ...(hasPermission('payroll.view') || user?.is_platform_admin ? [['payroll_summary', 'Employee Payroll Summary Strip']] : []),
+    ...(hasPermission('reports.view') || user?.is_platform_admin ? [['audit_activity', 'Recent Audit Activity Stream']] : []),
+  ];
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Account & Business Settings</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Manage your profile photo, appearance theme, password, and business workspace configuration.</p>
+        <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Account &amp; Workspace Settings</h1>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Manage your profile photo, personal information, verified email, dashboard customization, active sessions, and business configuration.
+        </p>
       </div>
 
       {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
@@ -130,7 +300,8 @@ export default function SettingsPage() {
 
       <div role="tablist" aria-label="Settings sections" className="inline-flex flex-wrap p-1 bg-slate-200/70 dark:bg-slate-800 rounded-lg">
         {[
-          ['account', 'My Account & Theme'],
+          ['account', 'My Account & Profile'],
+          ['customize', 'Theme & Dashboard Layout'],
           ...(canManageBusiness
             ? [
                 ['profile', 'Business Profile & Localization'],
@@ -146,7 +317,9 @@ export default function SettingsPage() {
             role="tab"
             aria-selected={tab === k}
             onClick={() => setTab(k)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${tab === k ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+              tab === k ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
           >
             {label}
           </button>
@@ -154,42 +327,173 @@ export default function SettingsPage() {
       </div>
 
       {tab === 'account' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
-            <ProfilePhotoUploader
-              title="My Profile Image"
-              description="Visible across dashboards, team chat, and audit logs. Allowed: JPG, JPEG, PNG, WEBP (max 5MB)."
-            />
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
-              <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">Application Theme</div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Choose Light Mode, Dark Mode, or System Default. Saved automatically to your account.
-              </p>
-              <ThemeSelector showLabels />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
+              <ProfilePhotoUploader
+                title="Profile Image"
+                description="Upload, replace, or remove your photo (JPG, JPEG, PNG, WEBP, max 5MB). Removing restores your initials avatar."
+              />
+
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-slate-500 dark:text-slate-400">Account Email</div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">{user?.email}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEmailChange((prev) => ({ ...prev, open: !prev.open }))}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 font-medium border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    Change Email
+                  </button>
+                </div>
+
+                {emailChange.open && (
+                  <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                    {emailChange.step === 'request' ? (
+                      <form onSubmit={handleRequestEmailChange} className="space-y-2.5">
+                        <div className="font-semibold text-slate-900 dark:text-white">Verify New Email Address</div>
+                        <input
+                          required
+                          type="email"
+                          placeholder="New email address"
+                          value={emailChange.new_email}
+                          onChange={(e) => setEmailChange({ ...emailChange, new_email: e.target.value })}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
+                        />
+                        <input
+                          required
+                          type="password"
+                          placeholder="Current account password"
+                          value={emailChange.current_password}
+                          onChange={(e) => setEmailChange({ ...emailChange, current_password: e.target.value })}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
+                        />
+                        <div className="flex gap-2">
+                          <button type="submit" className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
+                            Send 6-Digit Verification OTP
+                          </button>
+                          <button type="button" onClick={() => setEmailChange({ ...emailChange, open: false })} className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg">
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleVerifyEmailChange} className="space-y-2.5">
+                        <div className="font-semibold text-slate-900 dark:text-white">
+                          Enter OTP Sent to {emailChange.new_email}
+                        </div>
+                        {emailChange.devOtpPreview && (
+                          <div className="p-2 rounded bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-200">
+                            Verification OTP preview: <span className="font-mono font-bold">{emailChange.devOtpPreview}</span>
+                          </div>
+                        )}
+                        <input
+                          required
+                          placeholder="6-digit OTP code"
+                          value={emailChange.otp_code}
+                          onChange={(e) => setEmailChange({ ...emailChange, otp_code: e.target.value })}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+                        />
+                        <div className="flex gap-2">
+                          <button type="submit" className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
+                            Verify &amp; Update Email
+                          </button>
+                          <button type="button" onClick={() => setEmailChange({ ...emailChange, step: 'request' })} className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg">
+                            Back
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">Full Name</div>
-                <div className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{user?.full_name}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">Email Address</div>
-                <div className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{user?.email}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">Phone</div>
-                <div className="font-medium text-slate-800 dark:text-slate-200 mt-0.5 tabular-nums">{user?.phone || '—'}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">Workspace Role</div>
-                <div className="font-medium text-slate-800 dark:text-slate-200 mt-0.5">
-                  {workspace?.membership?.role_name || (user?.is_platform_admin ? 'Platform Super Admin' : 'User')}
+
+            <form onSubmit={handleSavePersonal} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3.5 text-xs">
+              <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Personal Information &amp; Privacy</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Full Name</label>
+                  <input
+                    required
+                    value={personalForm.full_name}
+                    onChange={(e) => setPersonalForm({ ...personalForm, full_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Phone Number</label>
+                  <input
+                    required
+                    value={personalForm.phone}
+                    onChange={(e) => setPersonalForm({ ...personalForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+                  />
                 </div>
               </div>
-            </div>
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Location</label>
+                <input
+                  value={personalForm.location}
+                  onChange={(e) => setPersonalForm({ ...personalForm, location: e.target.value })}
+                  placeholder="e.g. Kigali, Rwanda"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Biography</label>
+                <textarea
+                  rows={2}
+                  value={personalForm.bio}
+                  onChange={(e) => setPersonalForm({ ...personalForm, bio: e.target.value })}
+                  placeholder="Short professional bio or role summary..."
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </div>
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="font-semibold text-slate-800 dark:text-slate-200">Privacy Controls</div>
+                <div>
+                  <label className="block text-slate-500 dark:text-slate-400 mb-1">Profile Visibility</label>
+                  <select
+                    value={personalForm.privacy_settings.profile_visibility}
+                    onChange={(e) =>
+                      setPersonalForm({
+                        ...personalForm,
+                        privacy_settings: { ...personalForm.privacy_settings, profile_visibility: e.target.value },
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                  >
+                    <option value="workspace">Workspace Team Only</option>
+                    <option value="public">Public Directory &amp; Team</option>
+                    <option value="private">Private (Admins Only)</option>
+                  </select>
+                </div>
+                <label className="flex items-center justify-between py-1">
+                  <span className="text-slate-700 dark:text-slate-300">Show online availability in team chat</span>
+                  <input
+                    type="checkbox"
+                    checked={personalForm.privacy_settings.show_online_status}
+                    onChange={(e) =>
+                      setPersonalForm({
+                        ...personalForm,
+                        privacy_settings: { ...personalForm.privacy_settings, show_online_status: e.target.checked },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
+                Save Personal Profile
+              </button>
+            </form>
           </div>
 
-          <form onSubmit={handlePasswordChange} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
+          <form onSubmit={handlePasswordChange} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs self-start">
             <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Change Password</h2>
             <p className="text-slate-500 dark:text-slate-400">
               Enter your current password and set a strong new password (min 8 chars, uppercase, lowercase, number, and special character).
@@ -220,7 +524,68 @@ export default function SettingsPage() {
               onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })}
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             />
-            <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Update Password</button>
+            <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
+              Update Password
+            </button>
+          </form>
+        </div>
+      )}
+
+      {tab === 'customize' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Theme &amp; Appearance</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Choose Light Mode, Dark Mode, or System Default. Saved automatically to your account.
+            </p>
+            <ThemeSelector showLabels />
+          </div>
+
+          <form onSubmit={handleSaveDashPrefs} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-xs">
+            <div className="flex items-center gap-2">
+              <LayoutGrid className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+              <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Personal Dashboard Layout &amp; Widgets</h2>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400">
+              Customize only your personal workspace view and accessible widgets. Role permissions remain enforced on all data.
+            </p>
+
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Interface Spacing Density</label>
+              <select
+                value={dashPrefs.density}
+                onChange={(e) => setDashPrefs({ ...dashPrefs, density: e.target.value })}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+              >
+                <option value="comfortable">Comfortable (Standard SaaS spacing)</option>
+                <option value="compact">Compact (High information density)</option>
+              </select>
+            </div>
+
+            {widgetOptions.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="font-semibold text-slate-800 dark:text-slate-200">Visible Dashboard Widgets</div>
+                {widgetOptions.map(([key, label]) => (
+                  <label key={key} className="flex items-center justify-between py-1">
+                    <span className="text-slate-700 dark:text-slate-300">{label}</span>
+                    <input
+                      type="checkbox"
+                      checked={dashPrefs.widgets[key] !== false}
+                      onChange={(e) =>
+                        setDashPrefs({
+                          ...dashPrefs,
+                          widgets: { ...dashPrefs.widgets, [key]: e.target.checked },
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
+              Save Interface Preferences
+            </button>
           </form>
         </div>
       )}
@@ -248,7 +613,7 @@ export default function SettingsPage() {
               <input value={profile.name || ''} onChange={(e) => setProfile({ ...profile, name: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Country & Currency Preset</label>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Country &amp; Currency Preset</label>
               <select
                 value={profile.country || 'Rwanda'}
                 onChange={(e) => {
@@ -361,17 +726,55 @@ export default function SettingsPage() {
 
       {tab === 'security' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <form onSubmit={handlePasswordChange} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
-            <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Change Password</h2>
-            <input required type="password" placeholder="Current password" value={pwForm.current_password} onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
-            <input required minLength={8} type="password" placeholder="New password (min 8 chars)" value={pwForm.new_password} onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
-            <input required minLength={8} type="password" placeholder="Confirm new password" value={pwForm.confirm_password} onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
-            <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">Update Password</button>
-          </form>
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 font-bold text-sm text-[#0B192C] dark:text-white">
+                <MonitorSmartphone className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                Active &amp; Recent Sessions
+              </div>
+              <button
+                type="button"
+                onClick={handleRevokeOtherSessions}
+                className="px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+              >
+                Sign Out Other Devices
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+              {security.sessions.map((s) => (
+                <div key={s.id} className="py-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {s.device_info || 'Browser session'} {s.is_current ? '(Current)' : ''}
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      IP: {s.ip_address || 'Unknown'} · {formatDateTime(s.created_at)}
+                    </div>
+                  </div>
+                  {s.is_revoked ? (
+                    <StatusBadge status="inactive" />
+                  ) : s.is_current ? (
+                    <StatusBadge status="active" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeSession(s.id)}
+                      className="px-2.5 py-1 text-[11px] font-medium border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
+                    >
+                      Revoke
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
-            <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Recent Login Attempts</h2>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-56 overflow-y-auto">
+            <div className="flex items-center gap-1.5 font-bold text-sm text-[#0B192C] dark:text-white">
+              <Shield className="w-4 h-4 text-slate-500" />
+              Recent Login Attempts
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
               {security.loginHistory.map((h, i) => (
                 <div key={i} className="py-2 flex justify-between text-slate-700 dark:text-slate-300">
                   <span>{h.was_successful ? 'Successful sign-in' : 'Failed attempt'} · {h.ip_address}</span>

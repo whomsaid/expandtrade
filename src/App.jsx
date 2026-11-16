@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { PlatformConfigProvider } from './context/PlatformConfigContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
@@ -14,6 +15,7 @@ import {
   PublicBusinessesPage,
   TrackOrderPage,
 } from './pages/PublicPages.jsx';
+import { PublicJobDetailPage, PublicJobsPage } from './pages/JobsPages.jsx';
 import {
   ActivateAccountPage,
   CompleteProfilePage,
@@ -22,31 +24,36 @@ import {
   LoginPage,
   RegisterPage,
 } from './pages/AuthPages.jsx';
-import CustomerPortalPage from './modules/customer/CustomerPortalPage.jsx';
-import DashboardPage from './modules/dashboard/DashboardPage.jsx';
-import ProductsPage from './modules/products/ProductsPage.jsx';
-import InventoryPage from './modules/inventory/InventoryPage.jsx';
-import PosPage from './modules/pos/PosPage.jsx';
-import SalesPage from './modules/sales/SalesPage.jsx';
-import OrdersPage from './modules/orders/OrdersPage.jsx';
-import CustomersPage from './modules/customers/CustomersPage.jsx';
-import SuppliersPage from './modules/suppliers/SuppliersPage.jsx';
-import PurchasesPage from './modules/purchases/PurchasesPage.jsx';
-import FinancePage from './modules/finance/FinancePage.jsx';
-import EmployeesPage from './modules/employees/EmployeesPage.jsx';
-import BranchesPage from './modules/branches/BranchesPage.jsx';
-import TasksPage from './modules/tasks/TasksPage.jsx';
-import ReportsPage from './modules/reports/ReportsPage.jsx';
-import AiAssistantPage from './modules/ai/AiAssistantPage.jsx';
-import NotificationsPage from './modules/notifications/NotificationsPage.jsx';
-import SettingsPage from './modules/settings/SettingsPage.jsx';
-import SuperAdminPage from './modules/admin/SuperAdminPage.jsx';
-import AdvertisementsPage from './modules/ads/AdvertisementsPage.jsx';
+
+const CustomerPortalPage = lazy(() => import('./modules/customer/CustomerPortalPage.jsx'));
+const JobApplicationFormPage = lazy(() => import('./modules/customer/JobApplicationFormPage.jsx'));
+const DashboardPage = lazy(() => import('./modules/dashboard/DashboardPage.jsx'));
+const ProductsPage = lazy(() => import('./modules/products/ProductsPage.jsx'));
+const InventoryPage = lazy(() => import('./modules/inventory/InventoryPage.jsx'));
+const PosPage = lazy(() => import('./modules/pos/PosPage.jsx'));
+const SalesPage = lazy(() => import('./modules/sales/SalesPage.jsx'));
+const OrdersPage = lazy(() => import('./modules/orders/OrdersPage.jsx'));
+const CustomersPage = lazy(() => import('./modules/customers/CustomersPage.jsx'));
+const SuppliersPage = lazy(() => import('./modules/suppliers/SuppliersPage.jsx'));
+const PurchasesPage = lazy(() => import('./modules/purchases/PurchasesPage.jsx'));
+const FinancePage = lazy(() => import('./modules/finance/FinancePage.jsx'));
+const PayrollPage = lazy(() => import('./modules/payroll/PayrollPage.jsx'));
+const MyPayrollPage = lazy(() => import('./modules/payroll/MyPayrollPage.jsx'));
+const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage.jsx'));
+const BranchesPage = lazy(() => import('./modules/branches/BranchesPage.jsx'));
+const TasksPage = lazy(() => import('./modules/tasks/TasksPage.jsx'));
+const ReportsPage = lazy(() => import('./modules/reports/ReportsPage.jsx'));
+const AiAssistantPage = lazy(() => import('./modules/ai/AiAssistantPage.jsx'));
+const NotificationsPage = lazy(() => import('./modules/notifications/NotificationsPage.jsx'));
+const SettingsPage = lazy(() => import('./modules/settings/SettingsPage.jsx'));
+const SuperAdminPage = lazy(() => import('./modules/admin/SuperAdminPage.jsx'));
+const AdvertisementsPage = lazy(() => import('./modules/ads/AdvertisementsPage.jsx'));
+const RecruitmentPage = lazy(() => import('./modules/recruitment/RecruitmentPage.jsx'));
 
 function AuthLoadingScreen() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-sm text-slate-500 dark:text-slate-400">
-      Loading BizFlow Africa...
+      Loading BizTrade Africa...
     </div>
   );
 }
@@ -56,7 +63,6 @@ function ForcePasswordChangeProtectedRoute({ children }) {
   if (loading) return <AuthLoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (!user.must_change_password) {
-    if (!user.avatar_url) return <Navigate to="/complete-profile" replace />;
     if (user.is_platform_admin) return <Navigate to="/app/admin" replace />;
     if (memberships?.length > 0) return <Navigate to="/app/dashboard" replace />;
     return <Navigate to="/customer" replace />;
@@ -64,17 +70,14 @@ function ForcePasswordChangeProtectedRoute({ children }) {
   return children;
 }
 
-function CompleteProfileProtectedRoute({ children }) {
+function CompleteProfileProtectedRoute() {
   const { user, memberships, loading } = useAuth();
   if (loading) return <AuthLoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.must_change_password) return <Navigate to="/change-temporary-password" replace />;
-  if (user.avatar_url) {
-    if (user.is_platform_admin) return <Navigate to="/app/admin" replace />;
-    if (memberships?.length > 0) return <Navigate to="/app/dashboard" replace />;
-    return <Navigate to="/customer" replace />;
-  }
-  return children;
+  if (user.is_platform_admin) return <Navigate to="/app/admin" replace />;
+  if (memberships?.length > 0) return <Navigate to="/app/dashboard" replace />;
+  return <Navigate to="/customer" replace />;
 }
 
 // Customers are strictly blocked from /app/* business administration routes
@@ -83,7 +86,6 @@ function BusinessProtectedRoute({ children }) {
   if (loading) return <AuthLoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.must_change_password) return <Navigate to="/change-temporary-password" replace />;
-  if (!user.avatar_url) return <Navigate to="/complete-profile" replace />;
   if (!user.is_platform_admin && (!memberships || memberships.length === 0)) {
     return <Navigate to="/customer" replace />;
   }
@@ -96,7 +98,6 @@ function SuperAdminProtectedRoute({ children }) {
   if (loading) return <AuthLoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.must_change_password) return <Navigate to="/change-temporary-password" replace />;
-  if (!user.avatar_url) return <Navigate to="/complete-profile" replace />;
   if (!user.is_platform_admin) return <Navigate to="/app/dashboard" replace />;
   return children;
 }
@@ -104,10 +105,11 @@ function SuperAdminProtectedRoute({ children }) {
 // Customer Portal guard
 function CustomerProtectedRoute({ children }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <AuthLoadingScreen />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.must_change_password) return <Navigate to="/change-temporary-password" replace />;
-  if (!user.avatar_url) return <Navigate to="/complete-profile" replace />;
+  const redirectParam = `?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
+  if (!user) return <Navigate to={`/login${redirectParam}`} replace />;
+  if (user.must_change_password) return <Navigate to={`/change-temporary-password${redirectParam}`} replace />;
   return children;
 }
 
@@ -117,89 +119,104 @@ export default function App() {
       <ThemeProvider>
         <PlatformConfigProvider>
           <BrowserRouter>
-            <Routes>
-          {/* Public Website Routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/businesses" element={<PublicBusinessesPage />} />
-          <Route path="/businesses/:slug" element={<PublicBusinessDetailPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/features" element={<FeaturesPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/track-order" element={<TrackOrderPage />} />
-          <Route path="/terms" element={<LegalPage title="Terms of Service" />} />
-          <Route path="/privacy" element={<LegalPage title="Privacy Policy" />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/activate-account" element={<ActivateAccountPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route
-            path="/change-temporary-password"
-            element={
-              <ForcePasswordChangeProtectedRoute>
-                <ForceChangePasswordPage />
-              </ForcePasswordChangeProtectedRoute>
-            }
-          />
-          <Route
-            path="/complete-profile"
-            element={
-              <CompleteProfileProtectedRoute>
-                <CompleteProfilePage />
-              </CompleteProfileProtectedRoute>
-            }
-          />
+            <Suspense fallback={<AuthLoadingScreen />}>
+              <Routes>
+                {/* Public Website Routes */}
+                <Route path="/" element={<HomePage />} />
+                <Route path="/businesses" element={<PublicBusinessesPage />} />
+                <Route path="/businesses/:slug" element={<PublicBusinessDetailPage />} />
+                <Route path="/jobs" element={<PublicJobsPage />} />
+                <Route path="/jobs/:id" element={<PublicJobDetailPage />} />
+                <Route
+                  path="/jobs/:id/apply"
+                  element={
+                    <CustomerProtectedRoute>
+                      <JobApplicationFormPage />
+                    </CustomerProtectedRoute>
+                  }
+                />
+                <Route path="/about" element={<AboutPage />} />
+                <Route path="/features" element={<FeaturesPage />} />
+                <Route path="/pricing" element={<PricingPage />} />
+                <Route path="/contact" element={<ContactPage />} />
+                <Route path="/track-order" element={<TrackOrderPage />} />
+                <Route path="/terms" element={<LegalPage title="Terms of Service" />} />
+                <Route path="/privacy" element={<LegalPage title="Privacy Policy" />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/activate-account" element={<ActivateAccountPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route
+                  path="/change-temporary-password"
+                  element={
+                    <ForcePasswordChangeProtectedRoute>
+                      <ForceChangePasswordPage />
+                    </ForcePasswordChangeProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/complete-profile"
+                  element={
+                    <CompleteProfileProtectedRoute>
+                      <CompleteProfilePage />
+                    </CompleteProfileProtectedRoute>
+                  }
+                />
 
-          {/* Customer Portal */}
-          <Route
-            path="/customer"
-            element={
-              <CustomerProtectedRoute>
-                <CustomerPortalPage />
-              </CustomerProtectedRoute>
-            }
-          />
+                {/* Customer Portal */}
+                <Route
+                  path="/customer"
+                  element={
+                    <CustomerProtectedRoute>
+                      <CustomerPortalPage />
+                    </CustomerProtectedRoute>
+                  }
+                />
 
-          {/* Authenticated Business & Super Admin SaaS Workspace Routes */}
-          <Route
-            path="/app"
-            element={
-              <BusinessProtectedRoute>
-                <AppLayout />
-              </BusinessProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/app/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="products" element={<ProductsPage />} />
-            <Route path="inventory" element={<InventoryPage />} />
-            <Route path="pos" element={<PosPage />} />
-            <Route path="sales" element={<SalesPage />} />
-            <Route path="orders" element={<OrdersPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="suppliers" element={<SuppliersPage />} />
-            <Route path="purchases" element={<PurchasesPage />} />
-            <Route path="finance" element={<FinancePage />} />
-            <Route path="employees" element={<EmployeesPage />} />
-            <Route path="branches" element={<BranchesPage />} />
-            <Route path="ads" element={<AdvertisementsPage />} />
-            <Route path="tasks" element={<TasksPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="ai" element={<AiAssistantPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route
-              path="admin"
-              element={
-                <SuperAdminProtectedRoute>
-                  <SuperAdminPage />
-                </SuperAdminProtectedRoute>
-              }
-            />
-          </Route>
+                {/* Authenticated Business & Super Admin SaaS Workspace Routes */}
+                <Route
+                  path="/app"
+                  element={
+                    <BusinessProtectedRoute>
+                      <AppLayout />
+                    </BusinessProtectedRoute>
+                  }
+                >
+                  <Route index element={<Navigate to="/app/dashboard" replace />} />
+                  <Route path="dashboard" element={<DashboardPage />} />
+                  <Route path="products" element={<ProductsPage />} />
+                  <Route path="inventory" element={<InventoryPage />} />
+                  <Route path="pos" element={<PosPage />} />
+                  <Route path="sales" element={<SalesPage />} />
+                  <Route path="orders" element={<OrdersPage />} />
+                  <Route path="customers" element={<CustomersPage />} />
+                  <Route path="suppliers" element={<SuppliersPage />} />
+                  <Route path="purchases" element={<PurchasesPage />} />
+                  <Route path="finance" element={<FinancePage />} />
+                  <Route path="payroll" element={<PayrollPage />} />
+                  <Route path="my-payroll" element={<MyPayrollPage />} />
+                  <Route path="employees" element={<EmployeesPage />} />
+                  <Route path="recruitment" element={<RecruitmentPage />} />
+                  <Route path="branches" element={<BranchesPage />} />
+                  <Route path="ads" element={<AdvertisementsPage />} />
+                  <Route path="tasks" element={<TasksPage />} />
+                  <Route path="reports" element={<ReportsPage />} />
+                  <Route path="ai" element={<AiAssistantPage />} />
+                  <Route path="notifications" element={<NotificationsPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route
+                    path="admin"
+                    element={
+                      <SuperAdminProtectedRoute>
+                        <SuperAdminPage />
+                      </SuperAdminProtectedRoute>
+                    }
+                  />
+                </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </PlatformConfigProvider>
       </ThemeProvider>

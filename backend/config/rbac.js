@@ -36,6 +36,11 @@ export const ALL_PERMISSIONS = [
   { key: 'ai.use', module: 'ai', desc: 'Query AI Business Assistant' },
   { key: 'ads.view', module: 'ads', desc: 'View business promotional videos' },
   { key: 'ads.manage', module: 'ads', desc: 'Upload, edit, publish, and delete business promotional videos' },
+  { key: 'recruitment.view', module: 'recruitment', desc: 'View job vacancies, applications, and interview schedules' },
+  { key: 'recruitment.manage', module: 'recruitment', desc: 'Publish vacancies, review applications, schedule interviews, and update statuses' },
+  { key: 'payroll.view', module: 'payroll', desc: 'View employee payroll schedules, salary configurations, and payroll history' },
+  { key: 'payroll.manage', module: 'payroll', desc: 'Configure employee salaries, mobile money numbers, payment dates, and suspend/reactivate payroll records' },
+  { key: 'payroll.pay', module: 'payroll', desc: 'Authorize and disburse individual and bulk employee payroll payments' },
   { key: 'settings.manage', module: 'settings', desc: 'Configure business profile, taxes, and subscriptions' },
 ];
 
@@ -64,6 +69,8 @@ export const ROLE_DEFINITIONS = [
       'purchases.manage', 'finance.view', 'finance.create', 'finance.approve',
       'employees.view', 'branches.view', 'tasks.view', 'tasks.manage',
       'reports.view', 'reports.export', 'ai.use', 'ads.view', 'ads.manage',
+      'recruitment.view', 'recruitment.manage',
+      'payroll.view', 'payroll.manage', 'payroll.pay',
     ],
   },
   {
@@ -77,7 +84,7 @@ export const ROLE_DEFINITIONS = [
       'customers.view', 'customers.manage', 'suppliers.view', 'purchases.view',
       'purchases.manage', 'finance.view', 'finance.create',
       'employees.view', 'branches.view', 'tasks.view', 'tasks.manage',
-      'reports.view', 'ai.use',
+      'reports.view', 'ai.use', 'recruitment.view', 'payroll.view',
     ],
   },
   {
@@ -87,7 +94,8 @@ export const ROLE_DEFINITIONS = [
     permissions: [
       'dashboard.view', 'sales.view', 'customers.view', 'suppliers.view',
       'suppliers.manage', 'purchases.view', 'finance.view', 'finance.create',
-      'finance.approve', 'reports.view', 'reports.export', 'ai.use', 'tasks.view',
+      'finance.approve', 'payroll.view', 'payroll.manage',
+      'reports.view', 'reports.export', 'ai.use', 'tasks.view',
     ],
   },
   {
@@ -192,20 +200,20 @@ export async function seedCoreRbacAndPlans() {
   }
 
   const defaultSettings = [
-    ['platform_name', 'BizFlow Africa'],
+    ['platform_name', 'BizTrade Africa'],
     ['platform_logo_url', ''],
-    ['support_email', 'support@bizflow.africa'],
+    ['support_email', 'allofme140@gmail.com'],
     ['support_phone', ''],
     ['platform_location', 'KN 4 Ave, Kigali, Rwanda'],
     ['social_facebook_url', ''],
     ['social_instagram_url', ''],
     ['social_x_url', ''],
     ['social_linkedin_url', ''],
-    ['developer_name', ''],
+    ['developer_name', 'Xavine Hakim'],
     ['developer_role', 'Full Stack Developer'],
-    ['developer_bio', ''],
-    ['developer_email', ''],
-    ['developer_portfolio_url', ''],
+    ['developer_bio', 'Full Stack Developer at softworld specializing in multi-tenant commercial platforms, relational database architecture, and responsive web applications built for African businesses and digital retail.'],
+    ['developer_email', 'allofme140@gmail.com'],
+    ['developer_portfolio_url', 'https://xavineanoited.vercel.app/'],
     ['developer_github_url', ''],
     ['developer_linkedin_url', ''],
     ['default_currency', 'RWF'],
@@ -220,6 +228,17 @@ export async function seedCoreRbacAndPlans() {
       await execute('INSERT INTO platform_settings (setting_key, setting_value) VALUES (?, ?)', [key, val]);
     }
   }
+
+  // Safely migrate legacy default brand strings without overwriting custom Super Admin settings
+  await execute(
+    `UPDATE platform_settings SET setting_value = 'BizTrade Africa' WHERE setting_key = 'platform_name' AND setting_value = 'BizFlow Africa'`
+  );
+  await execute(
+    `UPDATE platform_settings SET setting_value = 'allofme140@gmail.com' WHERE setting_key = 'support_email' AND setting_value IN ('support@bizflow.africa', 'support@biztrade.africa')`
+  );
+  await execute(
+    `UPDATE business_settings SET receipt_footer = 'Powered by BizTrade Africa' WHERE receipt_footer = 'Powered by BizFlow Africa'`
+  );
 }
 
 export async function ensureSuperAdmin() {
@@ -246,7 +265,7 @@ export async function ensureSuperAdmin() {
         await execute('INSERT INTO platform_admins (user_id, admin_level) VALUES (?, ?)', [existing.id, 'super_admin']);
       }
     } else {
-      const hash = await bcrypt.hash(targetPassword || 'BizFlow@2026!', 10);
+      const hash = await bcrypt.hash(targetPassword || 'BizTrade@2026!', 10);
       const res = await execute(
         `INSERT INTO users (full_name, email, phone, password_hash, is_email_verified, is_active, is_platform_admin)
          VALUES (?, ?, ?, ?, 1, 1, 1)`,
@@ -259,11 +278,11 @@ export async function ensureSuperAdmin() {
 
   const anyAdmin = await queryOne('SELECT id FROM users WHERE is_platform_admin = 1 LIMIT 1');
   if (!anyAdmin) {
-    const hash = await bcrypt.hash('BizFlow@2026!', 10);
+    const hash = await bcrypt.hash('BizTrade@2026!', 10);
     const res = await execute(
       `INSERT INTO users (full_name, email, phone, password_hash, is_email_verified, is_active, is_platform_admin)
        VALUES (?, ?, ?, ?, 1, 1, 1)`,
-      ['Jean Claude Ndayisaba', 'admin@bizflow.africa', '+250788000001', hash]
+      ['Jean Claude Ndayisaba', 'admin@biztrade.africa', '+250788000001', hash]
     );
     await execute('INSERT INTO platform_admins (user_id, admin_level) VALUES (?, ?)', [res.insertId, 'super_admin']);
   }
