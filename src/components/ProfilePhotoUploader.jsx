@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Camera, Trash2, Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n.js';
 import { api } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { optimizeProfileImage } from '../utils/imageOptimizer.js';
@@ -9,22 +11,23 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export function validateAvatarFile(file) {
-  if (!file) return 'Please select a profile image (JPG, JPEG, PNG, or WEBP).';
+  if (!file) return i18n.t('validation.selectProfileImage');
   if (!ALLOWED_TYPES.includes(file.type)) {
-    return 'Unsupported file format. Please upload a JPG, JPEG, PNG, or WEBP image.';
+    return i18n.t('validation.unsupportedImageFormat');
   }
   if (file.size > MAX_BYTES) {
-    return 'Image file is too large. Maximum allowed size is 5MB.';
+    return i18n.t('validation.imageTooLarge');
   }
   return '';
 }
 
 export default function ProfilePhotoUploader({
-  title = 'Profile Photo',
-  description = 'Optional: upload a clear profile picture (JPG, JPEG, PNG, or WEBP, max 5MB). Leave empty to keep your default initials avatar.',
+  title,
+  description,
   requiredMode = false,
   onUploaded,
 }) {
+  const { t } = useTranslation();
   const { user, refreshMe } = useAuth();
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -32,6 +35,9 @@ export default function ProfilePhotoUploader({
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const resolvedTitle = title || t('components.profilePhoto');
+  const resolvedDesc = description || t('components.profilePhotoDesc');
 
   useEffect(() => {
     if (!selectedFile) {
@@ -78,7 +84,7 @@ export default function ProfilePhotoUploader({
       fd.append('avatar', optimized);
       const { data } = await api.post('/auth/avatar', fd);
       setSelectedFile(null);
-      setSuccess(data.message || 'Profile image updated successfully.');
+      setSuccess(t('components.profileImageUpdated'));
       await refreshMe();
       if (onUploaded) onUploaded(data);
     } catch (err) {
@@ -96,7 +102,7 @@ export default function ProfilePhotoUploader({
       const { data } = await api.delete('/auth/avatar');
       setSelectedFile(null);
       setPreviewUrl('');
-      setSuccess(data.message || 'Profile image removed. Using default initials avatar.');
+      setSuccess(t('components.profileImageRemoved'));
       await refreshMe();
       if (onUploaded) onUploaded(data);
     } catch (err) {
@@ -123,14 +129,20 @@ export default function ProfilePhotoUploader({
 
         <div className="space-y-2 flex-1 min-w-0">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{resolvedTitle}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{resolvedDesc}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
               <Upload className="w-3.5 h-3.5" />
-              <span>{selectedFile ? 'Choose Another Image' : user?.avatar_url ? 'Change Profile Photo' : 'Upload Profile Photo'}</span>
+              <span>
+                {selectedFile
+                  ? t('components.chooseAnotherImage')
+                  : user?.avatar_url
+                    ? t('components.changeProfilePhoto')
+                    : t('components.uploadProfilePhoto')}
+              </span>
               <input
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -146,7 +158,11 @@ export default function ProfilePhotoUploader({
                 onClick={handleUpload}
                 className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
               >
-                {uploading ? 'Optimizing & Uploading...' : requiredMode ? 'Save Profile Image & Continue' : 'Save Profile Image'}
+                {uploading
+                  ? t('components.optimizingUploading')
+                  : requiredMode
+                    ? t('components.savePhotoContinue')
+                    : t('components.savePhoto')}
               </button>
             )}
 
@@ -158,14 +174,14 @@ export default function ProfilePhotoUploader({
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 disabled:opacity-60"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>{removing ? 'Removing...' : 'Remove Photo'}</span>
+                <span>{removing ? t('components.removing') : t('components.removePhoto')}</span>
               </button>
             )}
           </div>
 
           {selectedFile && (
             <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
+              {t('components.selectedFile')}: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
             </div>
           )}
         </div>

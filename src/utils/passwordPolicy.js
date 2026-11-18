@@ -1,22 +1,24 @@
+import i18n from '../i18n.js';
+
 export function validatePasswordStrength(password) {
   const val = String(password || '');
   if (val.length < 8) {
-    return 'Password must be at least 8 characters long';
+    return i18n.t('validation.passwordMin');
   }
   if (val.toLowerCase() === 'admin@123') {
-    return 'The temporary password (admin@123) cannot be used as a permanent password';
+    return i18n.t('validation.passwordTempForbidden');
   }
   if (!/[A-Z]/.test(val)) {
-    return 'Password must include at least one uppercase letter';
+    return i18n.t('validation.passwordUpper');
   }
   if (!/[a-z]/.test(val)) {
-    return 'Password must include at least one lowercase letter';
+    return i18n.t('validation.passwordLower');
   }
   if (!/[0-9]/.test(val)) {
-    return 'Password must include at least one number';
+    return i18n.t('validation.passwordNumber');
   }
   if (!/[^A-Za-z0-9]/.test(val)) {
-    return 'Password must include at least one special character (e.g. @, #, $, !)';
+    return i18n.t('validation.passwordSymbol');
   }
   return null;
 }

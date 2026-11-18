@@ -3,9 +3,10 @@ import { body } from 'express-validator';
 import { execute, query, queryOne, transaction } from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireBusiness, requirePermission } from '../middleware/tenant.js';
-import { upload } from '../middleware/upload.js';
+import { cleanupMulterFiles, imageUpload, removeUploadedFile, verifyFileNonEmpty, verifyImageSignature } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { emitToBusiness, logAudit, notifyBusinessManagers } from '../services/auditService.js';
+import { invalidatePrefix } from '../services/cacheService.js';
 
 const router = express.Router();
 
@@ -128,7 +129,7 @@ router.post(
   authenticate,
   requireBusiness,
   requirePermission('products.create'),
-  upload.single('image'),
+  imageUpload.single('image'),
   [
     body('name').trim().notEmpty().withMessage('Product name is required'),
     body('sku').trim().notEmpty().withMessage('SKU is required'),
@@ -137,6 +138,10 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
+      if (req.file && (!verifyFileNonEmpty(req.file) || !verifyImageSignature(req.file.path))) {
+        cleanupMulterFiles(req);
+        return res.status(400).json({ error: 'Invalid or empty product image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+      }
       const {
         name,
         sku,
@@ -203,9 +208,11 @@ router.post(
         changes: { name, sku, selling_price },
       });
 
+      invalidatePrefix('public:businesses:');
       const created = await queryOne('SELECT * FROM products WHERE id = ?', [productId]);
       res.status(201).json({ product: created });
     } catch (err) {
+      cleanupMulterFiles(req);
       next(err);
     }
   }
@@ -216,14 +223,21 @@ router.put(
   authenticate,
   requireBusiness,
   requirePermission('products.update'),
-  upload.single('image'),
+  imageUpload.single('image'),
   async (req, res, next) => {
     try {
+      if (req.file && (!verifyFileNonEmpty(req.file) || !verifyImageSignature(req.file.path))) {
+        cleanupMulterFiles(req);
+        return res.status(400).json({ error: 'Invalid or empty product image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+      }
       const existing = await queryOne('SELECT * FROM products WHERE id = ? AND business_id = ?', [
         req.params.id,
         req.businessId,
       ]);
-      if (!existing) return res.status(404).json({ error: 'Product not found' });
+      if (!existing) {
+        cleanupMulterFiles(req);
+        return res.status(404).json({ error: 'Product not found' });
+      }
 
       const {
         name,
@@ -274,6 +288,11 @@ router.put(
         ]
       );
 
+      if (req.file && existing.image_url && existing.image_url !== imageUrl) {
+        removeUploadedFile(existing.image_url);
+      }
+      invalidatePrefix('public:businesses:');
+
       await logAudit({
         businessId: req.businessId,
         userId: req.user.id,
@@ -285,6 +304,7 @@ router.put(
       const updated = await queryOne('SELECT * FROM products WHERE id = ?', [req.params.id]);
       res.json({ product: updated });
     } catch (err) {
+      cleanupMulterFiles(req);
       next(err);
     }
   }
@@ -306,6 +326,7 @@ router.delete(
         req.params.id,
         req.businessId,
       ]);
+      invalidatePrefix('public:businesses:');
       res.json({ message: 'Product archived' });
     } catch (err) {
       next(err);

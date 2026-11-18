@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { AFRICAN_COUNTRIES, BUSINESS_CATEGORIES, RWANDA_PROVINCES } from '../../utils/format.js';
 
 export default function BusinessOnboardingPage() {
+  const { t } = useTranslation();
   const { refreshMe, loadWorkspace } = useAuth();
   const navigate = useNavigate();
 
@@ -60,9 +62,9 @@ export default function BusinessOnboardingPage() {
   return (
     <div className="max-w-3xl mx-auto py-4 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B192C] dark:text-slate-100">Create Business Workspace</h1>
+        <h1 className="text-2xl font-bold text-[#0B192C] dark:text-slate-100">{t('onboarding.title')}</h1>
         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-          Set up an isolated multi-tenant workspace with Rwanda-first or regional African defaults.
+          {t('onboarding.subtitle')}
         </p>
       </div>
 
@@ -75,17 +77,17 @@ export default function BusinessOnboardingPage() {
       <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Name</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.businessName')}</label>
             <input
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Kigali Hardware Supplies"
+              placeholder={t('onboarding.businessNamePlaceholder')}
               className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Category</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.businessCategory')}</label>
             <select
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
@@ -99,7 +101,7 @@ export default function BusinessOnboardingPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Description</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.description')}</label>
           <textarea
             rows={2}
             value={form.description}
@@ -110,7 +112,7 @@ export default function BusinessOnboardingPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Email</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.businessEmail')}</label>
             <input
               required
               type="email"
@@ -120,7 +122,7 @@ export default function BusinessOnboardingPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.phoneNumber')}</label>
             <input
               required
               value={form.phone}
@@ -132,7 +134,7 @@ export default function BusinessOnboardingPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Country</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.country')}</label>
             <select
               value={form.country}
               onChange={(e) => handleCountryChange(e.target.value)}
@@ -144,7 +146,7 @@ export default function BusinessOnboardingPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Province / Region</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.provinceRegion')}</label>
             {form.country === 'Rwanda' ? (
               <select
                 value={form.province}
@@ -164,7 +166,7 @@ export default function BusinessOnboardingPage() {
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">District / City</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.districtCity')}</label>
             <input
               required
               value={form.district}
@@ -176,17 +178,17 @@ export default function BusinessOnboardingPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Physical Address</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.physicalAddress')}</label>
             <input
               required
               value={form.physical_address}
               onChange={(e) => setForm({ ...form, physical_address: e.target.value })}
-              placeholder="Street / Building / Market"
+              placeholder={t('onboarding.addressPlaceholder')}
               className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Main Branch Name</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.mainBranchName')}</label>
             <input
               required
               value={form.branch_name}
@@ -198,7 +200,7 @@ export default function BusinessOnboardingPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.currency')}</label>
             <input
               value={form.currency_code}
               onChange={(e) => setForm({ ...form, currency_code: e.target.value.toUpperCase() })}
@@ -206,7 +208,7 @@ export default function BusinessOnboardingPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tax Rate (%)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.taxRate')}</label>
             <input
               type="number"
               step="0.01"
@@ -216,7 +218,7 @@ export default function BusinessOnboardingPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">TIN (Optional)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('onboarding.tinOptional')}</label>
             <input
               value={form.tax_identification_number}
               onChange={(e) => setForm({ ...form, tax_identification_number: e.target.value })}
@@ -231,7 +233,7 @@ export default function BusinessOnboardingPage() {
             disabled={submitting}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60 transition-colors"
           >
-            {submitting ? 'Provisioning Workspace...' : 'Create Workspace'}
+            {submitting ? t('onboarding.provisioning') : t('onboarding.createWorkspace')}
           </button>
         </div>
       </form>

@@ -1,22 +1,24 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bot, Send } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
-const SUGGESTIONS = [
-  'How much did I sell today and this month?',
-  'Which products need restocking urgently?',
-  'Which branch is performing best?',
-  'What are my biggest expenses and how much do customers owe?',
-  'How can I improve business performance based on my actual numbers?',
-];
-
 export default function AiAssistantPage() {
+  const { t } = useTranslation();
   const { workspace } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const suggestions = [
+    t('ai.s1'),
+    t('ai.s2'),
+    t('ai.s3'),
+    t('ai.s4'),
+    t('ai.s5'),
+  ];
 
   const handleAsk = async (questionText) => {
     const q = (questionText ?? prompt).trim();
@@ -46,14 +48,14 @@ export default function AiAssistantPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">AI Business Assistant</h1>
+        <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('ai.title')}</h1>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Grounded strictly in authorized database metrics for {workspace?.business?.name}. Never accesses other tenants.
+          {t('ai.subtitle', { business: workspace?.business?.name || 'BizTrade Africa' })}
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {SUGGESTIONS.map((s) => (
+        {suggestions.map((s) => (
           <button
             key={s}
             type="button"
@@ -72,9 +74,9 @@ export default function AiAssistantPage() {
           {messages.length === 0 ? (
             <div className="py-16 text-center space-y-2">
               <Bot className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto" />
-              <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Ask a question about your business</div>
+              <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t('ai.emptyTitle')}</div>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                Questions are answered using live sales, inventory, branch, expense, and receivables queries scoped to your role.
+                {t('ai.emptyDesc')}
               </p>
             </div>
           ) : (
@@ -91,7 +93,7 @@ export default function AiAssistantPage() {
               </div>
             ))
           )}
-          {loading && <div className="text-xs text-slate-500 dark:text-slate-400">Analyzing authorized business records...</div>}
+          {loading && <div className="text-xs text-slate-500 dark:text-slate-400">{t('ai.analyzing')}</div>}
         </div>
 
         <form
@@ -104,7 +106,7 @@ export default function AiAssistantPage() {
           <input
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Ask about sales, restocking, branch performance, or cash flow..."
+            placeholder={t('ai.placeholder')}
             className="flex-1 px-3.5 py-2.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
           <button
@@ -113,7 +115,7 @@ export default function AiAssistantPage() {
             className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50"
           >
             <Send className="w-4 h-4" />
-            Ask
+            {t('ai.askBtn')}
           </button>
         </form>
       </div>

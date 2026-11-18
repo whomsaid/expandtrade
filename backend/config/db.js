@@ -570,7 +570,9 @@ CREATE TABLE IF NOT EXISTS orders (
   business_id INTEGER NOT NULL,
   branch_id INTEGER NOT NULL,
   customer_id INTEGER NULL,
+  customer_user_id INTEGER NULL,
   order_number TEXT NOT NULL UNIQUE,
+  idempotency_key TEXT NULL,
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
   delivery_address TEXT NULL,
@@ -1152,18 +1154,6 @@ CREATE TABLE IF NOT EXISTS payroll_due_alerts (
   FOREIGN KEY (employee_user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE(payroll_config_id, due_period)
 );
-
-CREATE INDEX IF NOT EXISTS idx_sessions_jti ON user_sessions(token_jti, user_id);
-CREATE INDEX IF NOT EXISTS idx_bm_biz_status ON business_members(business_id, status);
-CREATE INDEX IF NOT EXISTS idx_bm_user_status ON business_members(user_id, status);
-CREATE INDEX IF NOT EXISTS idx_orders_biz_created ON orders(business_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_orders_cust_user ON orders(customer_user_id);
-CREATE INDEX IF NOT EXISTS idx_expenses_biz_status ON expenses(business_id, approval_status);
-CREATE INDEX IF NOT EXISTS idx_payroll_cfg_biz_due ON employee_payroll_configs(business_id, payroll_status, next_payment_date);
-CREATE INDEX IF NOT EXISTS idx_payroll_cfg_user ON employee_payroll_configs(user_id);
-CREATE INDEX IF NOT EXISTS idx_payroll_tx_biz_status ON payroll_transactions(business_id, status, created_at);
-CREATE INDEX IF NOT EXISTS idx_payroll_tx_emp ON payroll_transactions(employee_user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_payroll_alerts_biz ON payroll_due_alerts(business_id, status);
 `;
 
 export async function initDatabase() {
@@ -1209,6 +1199,7 @@ export async function initDatabase() {
     }
   };
   ensureColumn('users', 'must_change_password', 'must_change_password INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('users', 'preferred_language', "preferred_language TEXT NOT NULL DEFAULT 'en'");
   ensureColumn('users', 'theme_preference', "theme_preference TEXT NOT NULL DEFAULT 'system'");
   ensureColumn('users', 'bio', 'bio TEXT NULL');
   ensureColumn('users', 'location', 'location TEXT NULL');
@@ -1219,8 +1210,29 @@ export async function initDatabase() {
   ensureColumn('businesses', 'is_public_listed', 'is_public_listed INTEGER NOT NULL DEFAULT 1');
   ensureColumn('businesses', 'deleted_at', 'deleted_at TEXT NULL');
   ensureColumn('orders', 'customer_user_id', 'customer_user_id INTEGER NULL');
+  ensureColumn('orders', 'idempotency_key', 'idempotency_key TEXT NULL');
   ensureColumn('contact_inquiries', 'business_id', 'business_id INTEGER NULL');
   ensureColumn('contact_inquiries', 'user_id', 'user_id INTEGER NULL');
+  sqliteDb.exec(`
+    CREATE INDEX IF NOT EXISTS idx_businesses_public ON businesses(status, is_public_listed, deleted_at, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_businesses_category ON businesses(category);
+    CREATE INDEX IF NOT EXISTS idx_businesses_district ON businesses(district);
+    CREATE INDEX IF NOT EXISTS idx_branches_biz_active ON branches(business_id, is_active);
+    CREATE INDEX IF NOT EXISTS idx_reviews_biz ON product_reviews(business_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_biz_status_date ON sales(business_id, sale_status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_jti ON user_sessions(token_jti, user_id);
+    CREATE INDEX IF NOT EXISTS idx_bm_biz_status ON business_members(business_id, status);
+    CREATE INDEX IF NOT EXISTS idx_bm_user_status ON business_members(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_orders_biz_created ON orders(business_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_orders_cust_user ON orders(customer_user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_idempotency ON orders(business_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_expenses_biz_status ON expenses(business_id, approval_status);
+    CREATE INDEX IF NOT EXISTS idx_payroll_cfg_biz_due ON employee_payroll_configs(business_id, payroll_status, next_payment_date);
+    CREATE INDEX IF NOT EXISTS idx_payroll_cfg_user ON employee_payroll_configs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_payroll_tx_biz_status ON payroll_transactions(business_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_payroll_tx_emp ON payroll_transactions(employee_user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_payroll_alerts_biz ON payroll_due_alerts(business_id, status);
+  `);
   activeDialect = 'sqlite';
   console.log('[DB] Connected to persistent SQLite database at', dbPath);
   return { dialect: activeDialect };
@@ -1320,10 +1332,10 @@ export async function transaction(callback) {
   sqliteDb.exec('BEGIN IMMEDIATE');
   try {
     const tx = {
-      query: async (sql, params = []) => sqliteDb.prepare(sql).all(...normalizeParams(params)),
-      queryOne: async (sql, params = []) => sqliteDb.prepare(sql).get(...normalizeParams(params)) || null,
+      query: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).all(...normalizeParams(params)),
+      queryOne: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).get(...normalizeParams(params)) || null,
       execute: async (sql, params = []) => {
-        const res = sqliteDb.prepare(sql).run(...normalizeParams(params));
+        const res = sqliteDb.prepare(adaptSqlForDialect(sql)).run(...normalizeParams(params));
         return {
           insertId: Number(res.lastInsertRowid || 0),
           affectedRows: Number(res.changes || 0),

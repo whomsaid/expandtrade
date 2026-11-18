@@ -3,7 +3,7 @@ import { body } from 'express-validator';
 import { execute, query, queryOne, roundMoney, transaction } from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireBusiness, requirePermission } from '../middleware/tenant.js';
-import { upload } from '../middleware/upload.js';
+import { cleanupMulterFiles, upload, verifyFileNonEmpty, verifyReceiptSignature } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { emitToBusiness, logAudit, notifyBusinessManagers } from '../services/auditService.js';
 
@@ -105,11 +105,13 @@ router.get('/customers/:id/history', authenticate, requireBusiness, requirePermi
 
 router.post('/customers/:id/notes', authenticate, requireBusiness, requirePermission('customers.manage'), async (req, res, next) => {
   try {
+    const customer = await queryOne('SELECT id FROM customers WHERE id = ? AND business_id = ?', [req.params.id, req.businessId]);
+    if (!customer) return res.status(404).json({ error: 'Customer not found for this business' });
     const { note_type = 'general', content } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: 'Note content required' });
     await execute(
       'INSERT INTO customer_notes (business_id, customer_id, author_user_id, note_type, content) VALUES (?, ?, ?, ?, ?)',
-      [req.businessId, req.params.id, req.user.id, note_type, content.trim()]
+      [req.businessId, customer.id, req.user.id, note_type, content.trim()]
     );
     res.status(201).json({ message: 'Customer note added' });
   } catch (err) {
@@ -622,6 +624,10 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
+      if (req.file && (!verifyFileNonEmpty(req.file) || !verifyReceiptSignature(req.file.path, req.file.mimetype))) {
+        cleanupMulterFiles(req);
+        return res.status(400).json({ error: 'Invalid or empty receipt file. Allowed: JPG, JPEG, PNG, WEBP, or PDF (max 5MB).' });
+      }
       const { title, category_name, description = '', amount, payment_method = 'cash', expense_date } = req.body;
       const dateStr = expense_date || new Date().toISOString().slice(0, 10);
       const receiptUrl = req.file ? `/uploads/${req.file.filename}` : null;
@@ -661,6 +667,7 @@ router.post(
 
       res.status(201).json({ id: r.insertId, approval_status: status });
     } catch (err) {
+      cleanupMulterFiles(req);
       next(err);
     }
   }

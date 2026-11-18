@@ -12,6 +12,7 @@ import {
   adVideoUpload,
   cleanupMulterFiles,
   removeUploadedFile,
+  verifyFileNonEmpty,
   verifyImageSignature,
   verifyVideoSignature,
   VIDEO_STORAGE_DIR,
@@ -270,15 +271,15 @@ router.post(
         return res.status(400).json({ error: 'Promotional video file is required (MP4 or WEBM, max 50MB).' });
       }
 
-      if (!verifyVideoSignature(videoFile.path, videoFile.mimetype)) {
+      if (!verifyFileNonEmpty(videoFile) || !verifyVideoSignature(videoFile.path, videoFile.mimetype)) {
         cleanupMulterFiles(req);
-        return res.status(400).json({ error: 'Invalid or unsafe video file. Only valid MP4 and WEBM files are allowed.' });
+        return res.status(400).json({ error: 'Invalid or empty video file. Only valid MP4 and WEBM files are allowed.' });
       }
 
       if (thumbFile) {
-        if (thumbFile.size > 5 * 1024 * 1024 || !verifyImageSignature(thumbFile.path)) {
+        if (!verifyFileNonEmpty(thumbFile) || thumbFile.size > 5 * 1024 * 1024 || !verifyImageSignature(thumbFile.path)) {
           cleanupMulterFiles(req);
-          return res.status(400).json({ error: 'Invalid video thumbnail. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+          return res.status(400).json({ error: 'Invalid or empty video thumbnail. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
         }
       }
 
@@ -380,13 +381,13 @@ router.put(
       const videoFile = req.files?.video?.[0] || null;
       const thumbFile = req.files?.thumbnail?.[0] || null;
 
-      if (videoFile && !verifyVideoSignature(videoFile.path, videoFile.mimetype)) {
+      if (videoFile && (!verifyFileNonEmpty(videoFile) || !verifyVideoSignature(videoFile.path, videoFile.mimetype))) {
         cleanupMulterFiles(req);
-        return res.status(400).json({ error: 'Invalid or unsafe video file. Only valid MP4 and WEBM files are allowed.' });
+        return res.status(400).json({ error: 'Invalid or empty video file. Only valid MP4 and WEBM files are allowed.' });
       }
-      if (thumbFile && (thumbFile.size > 5 * 1024 * 1024 || !verifyImageSignature(thumbFile.path))) {
+      if (thumbFile && (!verifyFileNonEmpty(thumbFile) || thumbFile.size > 5 * 1024 * 1024 || !verifyImageSignature(thumbFile.path))) {
         cleanupMulterFiles(req);
-        return res.status(400).json({ error: 'Invalid video thumbnail. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+        return res.status(400).json({ error: 'Invalid or empty video thumbnail. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
       }
 
       let productId = null;

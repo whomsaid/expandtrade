@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Banknote,
   BarChart3,
@@ -29,13 +30,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import BrandLogo from '../components/BrandLogo.jsx';
+import LanguageSelector from '../components/LanguageSelector.jsx';
 import LogoutConfirmModal from '../components/LogoutConfirmModal.jsx';
 import ThemeSelector from '../components/ThemeSelector.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 import { api } from '../services/api.js';
-import { t } from '../utils/i18n.js';
 
 export default function AppLayout() {
+  const { t } = useTranslation();
   const {
     user,
     memberships,
@@ -43,11 +45,9 @@ export default function AppLayout() {
     activeBranchId,
     workspace,
     notifications,
-    language,
     logout,
     switchBusiness,
     switchBranch,
-    changeLanguage,
     hasPermission,
     refreshNotifications,
   } = useAuth();
@@ -60,27 +60,27 @@ export default function AppLayout() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const navItems = [
-    { to: '/app/dashboard', label: t(language, 'dashboard'), icon: LayoutDashboard, perm: 'dashboard.view' },
-    { to: '/app/pos', label: t(language, 'pos'), icon: ShoppingCart, perm: 'pos.sell' },
-    { to: '/app/products', label: t(language, 'products'), icon: Package, perm: 'products.view' },
-    { to: '/app/inventory', label: t(language, 'inventory'), icon: Boxes, perm: 'inventory.view' },
-    { to: '/app/sales', label: t(language, 'sales'), icon: Receipt, perm: 'sales.view' },
-    { to: '/app/orders', label: t(language, 'orders'), icon: ShoppingBag, perm: 'orders.view' },
-    { to: '/app/customers', label: t(language, 'customers'), icon: Users, perm: 'customers.view' },
-    { to: '/app/suppliers', label: t(language, 'suppliers'), icon: Truck, perm: 'suppliers.view' },
-    { to: '/app/purchases', label: t(language, 'purchases'), icon: CreditCard, perm: 'purchases.view' },
-    { to: '/app/finance', label: t(language, 'finance'), icon: Wallet, perm: 'finance.view' },
-    { to: '/app/payroll', label: t(language, 'payroll'), icon: Banknote, perm: 'payroll.view' },
-    { to: '/app/my-payroll', label: t(language, 'myPayroll'), icon: BarChart3, perm: null, requiresMember: true },
-    { to: '/app/employees', label: t(language, 'employees'), icon: Users, perm: 'employees.view' },
-    { to: '/app/recruitment', label: t(language, 'recruitment'), icon: Briefcase, perm: 'recruitment.view' },
-    { to: '/app/branches', label: t(language, 'branches'), icon: GitBranch, perm: 'branches.view' },
-    { to: '/app/ads', label: t(language, 'ads'), icon: Video, perm: 'ads.view' },
-    { to: '/app/tasks', label: t(language, 'tasks'), icon: ClipboardList, perm: 'tasks.view' },
-    { to: '/app/reports', label: t(language, 'reports'), icon: FileSpreadsheet, perm: 'reports.view' },
-    { to: '/app/ai', label: t(language, 'ai'), icon: Bot, perm: 'ai.use' },
-    { to: '/app/notifications', label: t(language, 'notifications'), icon: Bell, perm: null },
-    { to: '/app/settings', label: t(language, 'settings'), icon: Settings, perm: null },
+    { to: '/app/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, perm: 'dashboard.view' },
+    { to: '/app/pos', label: t('nav.pos'), icon: ShoppingCart, perm: 'pos.sell' },
+    { to: '/app/products', label: t('nav.products'), icon: Package, perm: 'products.view' },
+    { to: '/app/inventory', label: t('nav.inventory'), icon: Boxes, perm: 'inventory.view' },
+    { to: '/app/sales', label: t('nav.sales'), icon: Receipt, perm: 'sales.view' },
+    { to: '/app/orders', label: t('nav.orders'), icon: ShoppingBag, perm: 'orders.view' },
+    { to: '/app/customers', label: t('nav.customers'), icon: Users, perm: 'customers.view' },
+    { to: '/app/suppliers', label: t('nav.suppliers'), icon: Truck, perm: 'suppliers.view' },
+    { to: '/app/purchases', label: t('nav.purchases'), icon: CreditCard, perm: 'purchases.view' },
+    { to: '/app/finance', label: t('nav.finance'), icon: Wallet, perm: 'finance.view' },
+    { to: '/app/payroll', label: t('nav.payroll'), icon: Banknote, perm: 'payroll.view' },
+    { to: '/app/my-payroll', label: t('nav.myPayroll'), icon: BarChart3, perm: null, requiresMember: true },
+    { to: '/app/employees', label: t('nav.employees'), icon: Users, perm: 'employees.view' },
+    { to: '/app/recruitment', label: t('nav.recruitment'), icon: Briefcase, perm: 'recruitment.view' },
+    { to: '/app/branches', label: t('nav.branches'), icon: GitBranch, perm: 'branches.view' },
+    { to: '/app/ads', label: t('nav.ads'), icon: Video, perm: 'ads.view' },
+    { to: '/app/tasks', label: t('nav.tasks'), icon: ClipboardList, perm: 'tasks.view' },
+    { to: '/app/reports', label: t('nav.reports'), icon: FileSpreadsheet, perm: 'reports.view' },
+    { to: '/app/ai', label: t('nav.ai'), icon: Bot, perm: 'ai.use' },
+    { to: '/app/notifications', label: t('nav.notifications'), icon: Bell, perm: null },
+    { to: '/app/settings', label: t('nav.settings'), icon: Settings, perm: null },
   ];
 
   const visibleNav = navItems.filter((item) => {
@@ -127,6 +127,7 @@ export default function AppLayout() {
             type="button"
             className="lg:hidden p-1 text-slate-400 hover:text-white"
             onClick={() => setSidebarOpen(false)}
+            aria-label={t('nav.closeNav')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -168,7 +169,7 @@ export default function AppLayout() {
                 }
               >
                 <ShieldCheck className="w-4 h-4 shrink-0" />
-                <span>{t(language, 'admin')}</span>
+                <span>{t('nav.admin')}</span>
               </NavLink>
             </div>
           )}
@@ -181,10 +182,10 @@ export default function AppLayout() {
             className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span>{t(language, 'signOut')}</span>
+            <span>{t('nav.signOut')}</span>
           </button>
           <div className="px-3 text-[11px] text-slate-500">
-            Developed by <span className="font-semibold text-slate-400">softworld</span>
+            {t('common.developedBy')} <span className="font-semibold text-slate-400">softworld</span>
           </div>
         </div>
       </aside>
@@ -198,7 +199,7 @@ export default function AppLayout() {
               type="button"
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg border border-slate-200 dark:border-slate-700"
-              aria-label="Open menu"
+              aria-label={t('nav.openMenu')}
             >
               <Menu className="w-4 h-4" />
             </button>
@@ -208,7 +209,7 @@ export default function AppLayout() {
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-slate-400 shrink-0 hidden sm:block" />
                 <select
-                  aria-label="Switch Business"
+                  aria-label={t('nav.switchBusiness')}
                   value={activeBusinessId || ''}
                   onChange={(e) => switchBusiness(e.target.value)}
                   className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 max-w-[200px] truncate"
@@ -225,7 +226,7 @@ export default function AppLayout() {
             {/* Branch Selector */}
             {workspace?.branches?.length > 0 && (
               <select
-                aria-label="Select Branch"
+                aria-label={t('nav.selectBranch')}
                 value={activeBranchId || ''}
                 onChange={(e) => switchBranch(e.target.value)}
                 className="text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 max-w-[160px] truncate"
@@ -239,19 +240,9 @@ export default function AppLayout() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <LanguageSelector compact />
             <ThemeSelector compact />
-
-            <select
-              aria-label="Language"
-              value={language}
-              onChange={(e) => changeLanguage(e.target.value)}
-              className="text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5"
-            >
-              <option value="en">EN</option>
-              <option value="rw">RW</option>
-              <option value="fr">FR</option>
-            </select>
 
             {/* Notifications */}
             <div className="relative">
@@ -259,7 +250,7 @@ export default function AppLayout() {
                 type="button"
                 onClick={() => setNotifOpen((prev) => !prev)}
                 className="relative p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700"
-                aria-label="Notifications"
+                aria-label={t('nav.notifications')}
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
@@ -272,18 +263,18 @@ export default function AppLayout() {
               {notifOpen && (
                 <div className="animate-slide-down absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
                   <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/70">
-                    <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">Notifications</span>
+                    <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{t('nav.notifications')}</span>
                     <button
                       type="button"
                       onClick={handleMarkAllRead}
                       className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline"
                     >
-                      Mark all read
+                      {t('nav.markAllRead')}
                     </button>
                   </div>
                   <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                     {notifications.length === 0 ? (
-                      <div className="p-4 text-xs text-slate-500 dark:text-slate-400 text-center">No notifications yet.</div>
+                      <div className="p-4 text-xs text-slate-500 dark:text-slate-400 text-center">{t('nav.noNotifications')}</div>
                     ) : (
                       notifications.slice(0, 8).map((n) => (
                         <div key={n.id} className={`p-3 text-xs ${n.is_read ? 'bg-white dark:bg-slate-900' : 'bg-sky-50/50 dark:bg-sky-950/40'}`}>
@@ -295,7 +286,7 @@ export default function AppLayout() {
                               onClick={() => setNotifOpen(false)}
                               className="inline-block mt-1 text-[11px] font-semibold text-sky-700 dark:text-sky-400 hover:underline"
                             >
-                              Open →
+                              {t('common.open')} →
                             </Link>
                           )}
                         </div>
@@ -307,7 +298,7 @@ export default function AppLayout() {
                     onClick={() => setNotifOpen(false)}
                     className="block text-center py-2 text-xs font-medium text-sky-700 dark:text-sky-400 bg-slate-50 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
-                    View all notifications
+                    {t('nav.viewAllNotifications')}
                   </Link>
                 </div>
               )}
@@ -317,7 +308,7 @@ export default function AppLayout() {
               <div className="text-right">
                 <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">{user?.full_name}</div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
-                  {workspace?.membership?.role_name || (user?.is_platform_admin ? 'Platform Super Admin' : 'Member')}
+                  {workspace?.membership?.role_name || (user?.is_platform_admin ? t('nav.superAdminRole') : t('nav.member'))}
                 </div>
               </div>
               <UserAvatar src={user?.avatar_url} name={user?.full_name} size="sm" />

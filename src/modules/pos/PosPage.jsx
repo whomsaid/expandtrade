@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Minus, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ReceiptModal from '../../components/ReceiptModal.jsx';
-import { formatMoney, PAYMENT_METHOD_LABELS } from '../../utils/format.js';
+import { formatMoney, getPaymentMethodLabel } from '../../utils/format.js';
 
 export default function PosPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, activeBranchId, workspace, hasPermission } = useAuth();
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -61,14 +63,14 @@ export default function PosPage() {
   const addToCart = (product) => {
     setError('');
     if (product.quantity <= 0) {
-      setError(`${product.name} is out of stock in the active branch.`);
+      setError(t('pos.outOfStockErr', { name: product.name }));
       return;
     }
     setCart((prev) => {
       const existing = prev.find((i) => i.product_id === product.id);
       if (existing) {
         if (existing.quantity >= product.quantity) {
-          setError(`Only ${product.quantity} units of ${product.name} available.`);
+          setError(t('pos.maxUnitsErr', { qty: product.quantity, name: product.name }));
           return prev;
         }
         return prev.map((i) => (i.product_id === product.id ? { ...i, quantity: i.quantity + 1 } : i));
@@ -114,7 +116,7 @@ export default function PosPage() {
 
   const handleCheckout = async (e) => {
     e.preventDefault();
-    if (cart.length === 0) return setError('Add at least one product to the cart.');
+    if (cart.length === 0) return setError(t('pos.cartEmptyErr'));
     setError('');
     setSubmitting(true);
     try {
@@ -155,7 +157,7 @@ export default function PosPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            placeholder="Search product name or scan barcode / SKU (press Enter)..."
+            placeholder={t('pos.searchPlaceholder')}
             className="w-full text-sm outline-none bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
@@ -176,7 +178,7 @@ export default function PosPage() {
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
                 <span className="text-xs font-bold text-[#0B192C] dark:text-sky-400 tabular-nums">{formatMoney(p.selling_price, currency)}</span>
                 <span className={`text-[11px] tabular-nums ${p.quantity <= 0 ? 'text-rose-600 dark:text-rose-400' : p.quantity <= p.min_stock ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {p.quantity} left
+                  {t('pos.leftUnit', { qty: p.quantity })}
                 </span>
               </div>
             </button>
@@ -190,11 +192,11 @@ export default function PosPage() {
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-sm font-bold text-[#0B192C] dark:text-slate-100 flex items-center gap-2">
               <ShoppingCart className="w-4 h-4" />
-              Current Sale Cart ({cart.length})
+              {t('pos.cartTitle', { count: cart.length })}
             </h2>
             {cart.length > 0 && (
               <button type="button" onClick={() => setCart([])} className="text-xs text-rose-600 dark:text-rose-400 hover:underline">
-                Clear
+                {t('pos.clearCart')}
               </button>
             )}
           </div>
@@ -207,7 +209,7 @@ export default function PosPage() {
 
           <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
             {cart.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400 dark:text-slate-500">Select products on the left to start checkout.</div>
+              <div className="py-8 text-center text-xs text-slate-400 dark:text-slate-500">{t('pos.cartPrompt')}</div>
             ) : (
               cart.map((item) => (
                 <div key={item.product_id} className="py-2.5 flex items-center justify-between gap-2 text-xs">
@@ -261,13 +263,13 @@ export default function PosPage() {
           <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Customer</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('pos.customer')}</label>
                 <select
                   value={selectedCustomerId}
                   onChange={(e) => setSelectedCustomerId(e.target.value)}
                   className="w-full px-2.5 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                 >
-                  <option value="">Walk-in Customer</option>
+                  <option value="">{t('pos.walkIn')}</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>{c.full_name}</option>
                   ))}
@@ -275,7 +277,7 @@ export default function PosPage() {
               </div>
               {hasPermission('pos.discount') && (
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Discount ({currency})</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('pos.discount', { currency })}</label>
                   <input
                     type="number"
                     min="0"
@@ -290,21 +292,21 @@ export default function PosPage() {
             {/* Totals */}
             <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-lg space-y-1.5 tabular-nums border border-slate-200/70 dark:border-slate-700">
               <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                <span>Subtotal</span>
+                <span>{t('pos.subtotal')}</span>
                 <span>{formatMoney(subtotal, currency)}</span>
               </div>
               {discount > 0 && (
                 <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
-                  <span>Discount</span>
+                  <span>{t('pos.discountLine')}</span>
                   <span>-{formatMoney(discount, currency)}</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                <span>Tax ({taxRate}%)</span>
+                <span>{t('pos.taxLine', { rate: taxRate })}</span>
                 <span>{formatMoney(taxAmount, currency)}</span>
               </div>
               <div className="flex justify-between text-sm font-bold text-[#0B192C] dark:text-slate-100 border-t border-slate-200 dark:border-slate-700 pt-1.5">
-                <span>Total Due</span>
+                <span>{t('pos.totalDue')}</span>
                 <span>{formatMoney(total, currency)}</span>
               </div>
             </div>
@@ -312,17 +314,17 @@ export default function PosPage() {
             {/* Payments (Split / Partial / Mobile Money) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">Payment Methods</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{t('pos.paymentMethods')}</span>
                 <div className="space-x-2">
                   <button type="button" onClick={fillExactTotal} className="text-sky-700 dark:text-sky-400 hover:underline font-medium">
-                    Fill Exact Total
+                    {t('pos.fillExactTotal')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setPayments((p) => [...p, { payment_method: 'mtn_momo', amount: '', external_reference: '' }])}
                     className="text-slate-600 dark:text-slate-400 hover:underline"
                   >
-                    + Split Payment
+                    {t('pos.splitPayment')}
                   </button>
                 </div>
               </div>
@@ -337,13 +339,13 @@ export default function PosPage() {
                     className="col-span-5 px-2 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                   >
                     {enabledMethods.map((m) => (
-                      <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m] || m}</option>
+                      <option key={m} value={m}>{getPaymentMethodLabel(m)}</option>
                     ))}
                   </select>
                   <input
                     type="number"
                     min="0"
-                    placeholder="Amount"
+                    placeholder={t('pos.amountPlaceholder')}
                     value={pay.amount}
                     onChange={(e) =>
                       setPayments((prev) => prev.map((x, i) => (i === idx ? { ...x, amount: e.target.value } : x)))
@@ -351,7 +353,7 @@ export default function PosPage() {
                     className="col-span-4 px-2 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums"
                   />
                   <input
-                    placeholder="Ref / MoMo ID"
+                    placeholder={t('pos.refPlaceholder')}
                     value={pay.external_reference}
                     onChange={(e) =>
                       setPayments((prev) => prev.map((x, i) => (i === idx ? { ...x, external_reference: e.target.value } : x)))
@@ -363,7 +365,7 @@ export default function PosPage() {
 
               {balanceDue > 0 && cart.length > 0 && (
                 <div className="text-[11px] text-amber-700 dark:text-amber-400 font-medium tabular-nums">
-                  Remaining balance of {formatMoney(balanceDue, currency)} will be recorded as customer receivable.
+                  {t('pos.receivableNotice', { amount: formatMoney(balanceDue, currency) })}
                 </div>
               )}
             </div>
@@ -373,7 +375,7 @@ export default function PosPage() {
               disabled={submitting || cart.length === 0}
               className="w-full py-3 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50 transition-colors"
             >
-              {submitting ? 'Processing Sale...' : `Complete Sale · ${formatMoney(total, currency)}`}
+              {submitting ? t('pos.processingSale') : t('pos.completeSale', { amount: formatMoney(total, currency) })}
             </button>
           </div>
         </form>

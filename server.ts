@@ -75,7 +75,7 @@ async function startServer() {
   }
 
   httpServer.listen(env.port, '0.0.0.0', () => {
-    console.log(`[BizFlow Africa] Server running at http://localhost:${env.port}`);
+    console.log(`[BizTrade Africa] Server running at http://localhost:${env.port}`);
   });
 }
 

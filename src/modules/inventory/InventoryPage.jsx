@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeftRight, SlidersHorizontal } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDateTime, formatMoney } from '../../utils/format.js';
 
 export default function InventoryPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, activeBranchId, workspace, hasPermission } = useAuth();
   const [items, setItems] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -50,7 +52,7 @@ export default function InventoryPage() {
     try {
       await api.post('/inventory/adjust', adjForm);
       setShowAdjust(false);
-      setMessage('Stock adjusted and movement recorded.');
+      setMessage(t('inventory.adjustedSuccess'));
       await loadInventory();
     } catch (err) {
       setError(err.message);
@@ -64,7 +66,7 @@ export default function InventoryPage() {
     try {
       const { data } = await api.post('/inventory/transfer', trfForm);
       setShowTransfer(false);
-      setMessage(`Transfer ${data.reference_number} completed across branches.`);
+      setMessage(t('inventory.transferSuccess', { ref: data.reference_number }));
       await loadInventory();
     } catch (err) {
       setError(err.message);
@@ -75,8 +77,8 @@ export default function InventoryPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">Inventory & Stock Movements</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Every quantity change creates a permanent stock movement audit entry.</p>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('inventory.title')}</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('inventory.subtitle')}</p>
         </div>
 
         {hasPermission('inventory.manage') && (
@@ -90,7 +92,7 @@ export default function InventoryPage() {
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              Adjust Stock
+              {t('inventory.adjustStock')}
             </button>
             {branches.length > 1 && (
               <button
@@ -108,7 +110,7 @@ export default function InventoryPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
-                Transfer Between Branches
+                {t('inventory.transferBranches')}
               </button>
             )}
           </div>
@@ -128,15 +130,15 @@ export default function InventoryPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-          <div className="text-xs text-slate-500 dark:text-slate-400">Branch Stock Valuation (Cost)</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">{t('inventory.valuationLabel')}</div>
           <div className="text-xl font-bold text-slate-900 dark:text-slate-100 tabular-nums mt-1">{formatMoney(summary.valuation, currency)}</div>
         </div>
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-          <div className="text-xs text-slate-500 dark:text-slate-400">Low Stock Items</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">{t('inventory.lowStockLabel')}</div>
           <div className="text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums mt-1">{summary.lowStockCount}</div>
         </div>
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-          <div className="text-xs text-slate-500 dark:text-slate-400">Out of Stock Items</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">{t('inventory.outOfStockLabel')}</div>
           <div className="text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums mt-1">{summary.outOfStockCount}</div>
         </div>
       </div>
@@ -149,7 +151,7 @@ export default function InventoryPage() {
             tab === 'stock' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
-          Current Stock ({items.length})
+          {t('inventory.tabStock', { count: items.length })}
         </button>
         <button
           type="button"
@@ -158,7 +160,7 @@ export default function InventoryPage() {
             tab === 'movements' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
-          Movement Ledger ({movements.length})
+          {t('inventory.tabMovements', { count: movements.length })}
         </button>
       </div>
 
@@ -167,18 +169,18 @@ export default function InventoryPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
-                <th className="py-3 px-4 font-semibold">Product</th>
-                <th className="py-3 px-4 font-semibold">SKU</th>
-                <th className="py-3 px-4 font-semibold">Branch</th>
-                <th className="py-3 px-4 font-semibold text-right">On Hand</th>
-                <th className="py-3 px-4 font-semibold text-right">Min Alert</th>
-                <th className="py-3 px-4 font-semibold text-right">Stock Value</th>
-                <th className="py-3 px-4 font-semibold">Health</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colProduct')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colSku')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colBranch')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('inventory.colOnHand')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('inventory.colMinAlert')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('inventory.colStockValue')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colHealth')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {items.map((item) => {
-                const health = item.quantity <= 0 ? 'Out of Stock' : item.quantity <= item.min_stock ? 'Low Stock' : 'Healthy';
+                const health = item.quantity <= 0 ? t('inventory.healthOut') : item.quantity <= item.min_stock ? t('inventory.healthLow') : t('inventory.healthHealthy');
                 const healthCls =
                   item.quantity <= 0
                     ? 'text-rose-700 dark:text-rose-400 font-semibold'
@@ -205,14 +207,14 @@ export default function InventoryPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
-                <th className="py-3 px-4 font-semibold">Date</th>
-                <th className="py-3 px-4 font-semibold">Product</th>
-                <th className="py-3 px-4 font-semibold">Branch</th>
-                <th className="py-3 px-4 font-semibold">Type</th>
-                <th className="py-3 px-4 font-semibold text-right">Change</th>
-                <th className="py-3 px-4 font-semibold text-right">Prev → New</th>
-                <th className="py-3 px-4 font-semibold">Reason</th>
-                <th className="py-3 px-4 font-semibold">User</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colDate')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colProduct')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colBranch')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colType')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('inventory.colChange')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('inventory.colPrevNew')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colReason')}</th>
+                <th className="py-3 px-4 font-semibold">{t('inventory.colUser')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -241,36 +243,36 @@ export default function InventoryPage() {
       {showAdjust && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
-            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">Adjust Branch Stock</h2>
+            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('inventory.adjustModalTitle')}</h2>
             <form onSubmit={handleAdjust} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Product</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.productLabel')}</label>
                 <select value={adjForm.product_id} onChange={(e) => setAdjForm({ ...adjForm, product_id: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                  {items.map((i) => <option key={i.product_id} value={i.product_id}>{i.name} (On hand: {i.quantity})</option>)}
+                  {items.map((i) => <option key={i.product_id} value={i.product_id}>{t('inventory.onHandOption', { name: i.name, qty: i.quantity })}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Adjustment Type</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.adjustmentType')}</label>
                   <select value={adjForm.adjustment_type} onChange={(e) => setAdjForm({ ...adjForm, adjustment_type: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                    <option value="add">Add Stock (+)</option>
-                    <option value="reduce">Reduce Stock (-)</option>
-                    <option value="damaged">Damaged Goods (-)</option>
-                    <option value="returned">Customer Return (+)</option>
+                    <option value="add">{t('inventory.adjAdd')}</option>
+                    <option value="reduce">{t('inventory.adjReduce')}</option>
+                    <option value="damaged">{t('inventory.adjDamaged')}</option>
+                    <option value="returned">{t('inventory.adjReturned')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Quantity</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.quantity')}</label>
                   <input required type="number" min="1" value={adjForm.quantity} onChange={(e) => setAdjForm({ ...adjForm, quantity: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                 </div>
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Audit Reason</label>
-                <input required value={adjForm.reason} onChange={(e) => setAdjForm({ ...adjForm, reason: e.target.value })} placeholder="e.g. Physical count variance" className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.auditReason')}</label>
+                <input required value={adjForm.reason} onChange={(e) => setAdjForm({ ...adjForm, reason: e.target.value })} placeholder={t('inventory.reasonPlaceholder')} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowAdjust(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Apply Adjustment</button>
+                <button type="button" onClick={() => setShowAdjust(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
+                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('inventory.applyAdjustment')}</button>
               </div>
             </form>
           </div>
@@ -281,17 +283,17 @@ export default function InventoryPage() {
       {showTransfer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
-            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">Inter-Branch Stock Transfer</h2>
+            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('inventory.transferModalTitle')}</h2>
             <form onSubmit={handleTransfer} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">From Branch</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.fromBranch')}</label>
                   <select value={trfForm.from_branch_id} onChange={(e) => setTrfForm({ ...trfForm, from_branch_id: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
                     {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">To Branch</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.toBranch')}</label>
                   <select value={trfForm.to_branch_id} onChange={(e) => setTrfForm({ ...trfForm, to_branch_id: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
                     {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
@@ -299,23 +301,23 @@ export default function InventoryPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Product</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.productLabel')}</label>
                   <select value={trfForm.product_id} onChange={(e) => setTrfForm({ ...trfForm, product_id: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
                     {items.map((i) => <option key={i.product_id} value={i.product_id}>{i.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Quantity</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.quantity')}</label>
                   <input required type="number" min="1" value={trfForm.quantity} onChange={(e) => setTrfForm({ ...trfForm, quantity: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                 </div>
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Transfer Notes</label>
-                <input value={trfForm.notes} onChange={(e) => setTrfForm({ ...trfForm, notes: e.target.value })} placeholder="Courier / Dispatch reference" className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.transferNotes')}</label>
+                <input value={trfForm.notes} onChange={(e) => setTrfForm({ ...trfForm, notes: e.target.value })} placeholder={t('inventory.notesPlaceholder')} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowTransfer(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Complete Transfer</button>
+                <button type="button" onClick={() => setShowTransfer(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
+                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('inventory.completeTransfer')}</button>
               </div>
             </form>
           </div>

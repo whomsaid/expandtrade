@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Bar,
   BarChart,
@@ -17,6 +18,7 @@ import UserAvatar from '../../components/UserAvatar.jsx';
 import { formatDateTime, formatMoney } from '../../utils/format.js';
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const { user, activeBusinessId, activeBranchId, workspace, socket, hasPermission, savePreferences } = useAuth();
   const { resolvedTheme } = useTheme();
   const [data, setData] = useState(null);
@@ -95,15 +97,15 @@ export default function DashboardPage() {
   if (!activeBusinessId) {
     return (
       <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-center space-y-4">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">No Active Business Workspace Selected</h2>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{t('dashboard.noWorkspaceTitle')}</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Business workspaces are registered and assigned by the Platform Super Admin.
+          {t('dashboard.noWorkspaceDesc')}
         </p>
         <Link
           to="/app/admin"
           className="inline-flex px-4 py-2 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
         >
-          Open Platform Super Admin
+          {t('dashboard.openSuperAdmin')}
         </Link>
       </div>
     );
@@ -115,13 +117,13 @@ export default function DashboardPage() {
   const gridGap = isCompact ? 'gap-3' : 'gap-4';
 
   const quickWidgetControls = [
-    ['sales_kpis', 'Sales KPIs'],
-    ...(kpis.total_expenses !== null ? [['finance_summary', 'Finance Summary']] : []),
-    ...(kpis.payroll ? [['payroll_summary', 'Payroll Summary']] : []),
-    ['daily_chart', 'Daily Revenue Chart'],
-    ['top_products', 'Top Products'],
-    ['branch_performance', 'Branch Sales'],
-    ['audit_activity', 'Audit Stream'],
+    ['sales_kpis', t('dashboard.widgetSales')],
+    ...(kpis.total_expenses !== null ? [['finance_summary', t('dashboard.widgetFinance')]] : []),
+    ...(kpis.payroll ? [['payroll_summary', t('dashboard.widgetPayroll')]] : []),
+    ['daily_chart', t('dashboard.widgetDailyChart')],
+    ['top_products', t('dashboard.widgetTopProducts')],
+    ['branch_performance', t('dashboard.widgetBranchSales')],
+    ['audit_activity', t('dashboard.widgetAuditStream')],
   ];
 
   return (
@@ -129,14 +131,14 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">
-            {workspace?.business?.name || 'Business Dashboard'}
+            {workspace?.business?.name || t('dashboard.fallbackTitle')}
           </h1>
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
             <span>{workspace?.business?.category}</span>
             <span aria-hidden="true">·</span>
             <span>{workspace?.business?.country}</span>
             <span aria-hidden="true">·</span>
-            <span>Live Database Metrics</span>
+            <span>{t('dashboard.liveMetrics')}</span>
           </div>
         </div>
 
@@ -147,7 +149,7 @@ export default function DashboardPage() {
               onChange={(e) => setBranchFilter(e.target.value)}
               className="text-xs font-medium bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
             >
-              <option value="">All Branches Combined</option>
+              <option value="">{t('dashboard.allBranches')}</option>
               {(workspace?.branches || []).map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
@@ -159,7 +161,7 @@ export default function DashboardPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            Customize
+            {t('dashboard.customize')}
           </button>
           <button
             type="button"
@@ -167,14 +169,14 @@ export default function DashboardPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            Refresh
+            {t('dashboard.refresh')}
           </button>
           {hasPermission('pos.sell') && (
             <Link
               to="/app/pos"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 whitespace-nowrap transition-colors"
             >
-              Open POS
+              {t('dashboard.openPos')}
               <ArrowUpRight className="w-3.5 h-3.5" />
             </Link>
           )}
@@ -184,7 +186,7 @@ export default function DashboardPage() {
       {customizeOpen && (
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-semibold text-slate-900 dark:text-white">Visible Widgets:</span>
+            <span className="font-semibold text-slate-900 dark:text-white">{t('dashboard.visibleWidgets')}</span>
             {quickWidgetControls.map(([k, label]) => (
               <label key={k} className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300 cursor-pointer">
                 <input
@@ -202,10 +204,10 @@ export default function DashboardPage() {
               onClick={toggleDensity}
               className="px-2.5 py-1 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200"
             >
-              Density: {isCompact ? 'Compact' : 'Comfortable'}
+              {t('dashboard.densityLabel', { mode: isCompact ? t('dashboard.densityCompact') : t('dashboard.densityComfortable') })}
             </button>
             <Link to="/app/settings" className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">
-              Full Preferences →
+              {t('dashboard.fullPreferences')}
             </Link>
           </div>
         </div>
@@ -229,42 +231,46 @@ export default function DashboardPage() {
           {widgets.sales_kpis !== false && (
             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 ${gridGap} animate-fade-up`}>
               <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800`}>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Sales Today</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.salesToday')}</div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tabular-nums">
                   {formatMoney(kpis.sales_today, currency)}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">{kpis.sales_today_count || 0} completed sales</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
+                  {t('dashboard.completedSalesCount', { count: kpis.sales_today_count || 0 })}
+                </div>
               </div>
               <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800`}>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Sales This Month</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.salesThisMonth')}</div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tabular-nums">
                   {formatMoney(kpis.sales_month, currency)}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">YTD: {formatMoney(kpis.sales_year, currency)}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
+                  {t('dashboard.ytdLabel', { amount: formatMoney(kpis.sales_year, currency) })}
+                </div>
               </div>
               <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800`}>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {kpis.gross_profit !== null ? 'Net Operating Profit' : 'Active Catalog'}
+                  {kpis.gross_profit !== null ? t('dashboard.netOperatingProfit') : t('dashboard.activeCatalog')}
                 </div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tabular-nums">
                   {kpis.gross_profit !== null
                     ? formatMoney(kpis.net_operating_profit, currency)
-                    : `${kpis.total_products || 0} SKUs`}
+                    : t('dashboard.skusCount', { count: kpis.total_products || 0 })}
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
                   {kpis.gross_profit !== null
-                    ? `Gross Profit: ${formatMoney(kpis.gross_profit, currency)}`
-                    : `${kpis.total_customers || 0} registered customers`}
+                    ? t('dashboard.grossProfitLabel', { amount: formatMoney(kpis.gross_profit, currency) })
+                    : t('dashboard.registeredCustomersCount', { count: kpis.total_customers || 0 })}
                 </div>
               </div>
               <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800`}>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Inventory &amp; Orders Alerts</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.inventoryOrdersAlerts')}</div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1 tabular-nums">
-                  {(kpis.low_stock_products || 0) + (kpis.out_of_stock_products || 0)} Alerts
+                  {t('dashboard.alertsCount', { count: (kpis.low_stock_products || 0) + (kpis.out_of_stock_products || 0) })}
                 </div>
                 <div className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-center gap-1 tabular-nums">
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  {kpis.out_of_stock_products || 0} out of stock · {kpis.pending_orders || 0} pending orders
+                  {t('dashboard.outAndPending', { out: kpis.out_of_stock_products || 0, pending: kpis.pending_orders || 0 })}
                 </div>
               </div>
             </div>
@@ -278,15 +284,20 @@ export default function DashboardPage() {
                   <Banknote className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Employee Payroll Overview</div>
+                  <div className="font-bold text-slate-900 dark:text-white">{t('dashboard.payrollOverview')}</div>
                   <div className="text-slate-500 dark:text-slate-400 tabular-nums">
-                    {kpis.payroll.configured_employees} configured staff · {kpis.payroll.due_count} due · {kpis.payroll.pending_count} pending · {kpis.payroll.paid_count} paid
+                    {t('dashboard.payrollStats', {
+                      employees: kpis.payroll.configured_employees,
+                      due: kpis.payroll.due_count,
+                      pending: kpis.payroll.pending_count,
+                      paid: kpis.payroll.paid_count,
+                    })}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Available Balance</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('dashboard.availableBalance')}</div>
                   <div className="font-bold text-slate-900 dark:text-white tabular-nums">
                     {formatMoney(kpis.payroll.available_balance, currency)}
                   </div>
@@ -295,7 +306,7 @@ export default function DashboardPage() {
                   to="/app/payroll"
                   className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                 >
-                  Open Payroll →
+                  {t('dashboard.openPayroll')}
                 </Link>
               </div>
             </div>
@@ -305,19 +316,19 @@ export default function DashboardPage() {
           {kpis.total_expenses !== null && widgets.finance_summary !== false && (
             <div className={`grid grid-cols-2 lg:grid-cols-4 ${gridGap}`}>
               <div className="bg-white dark:bg-slate-900 px-5 py-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Approved Expenses</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.approvedExpenses')}</div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums mt-0.5">{formatMoney(kpis.total_expenses, currency)}</div>
               </div>
               <div className="bg-white dark:bg-slate-900 px-5 py-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Customer Receivables</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.customerReceivables')}</div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums mt-0.5">{formatMoney(kpis.outstanding_customer_balances, currency)}</div>
               </div>
               <div className="bg-white dark:bg-slate-900 px-5 py-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Supplier Balances</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.supplierBalances')}</div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums mt-0.5">{formatMoney(kpis.supplier_balances, currency)}</div>
               </div>
               <div className="bg-white dark:bg-slate-900 px-5 py-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Total Customers</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.totalCustomers')}</div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100 tabular-nums mt-0.5">{kpis.total_customers || 0}</div>
               </div>
             </div>
@@ -329,13 +340,13 @@ export default function DashboardPage() {
               {widgets.daily_chart !== false && (
                 <div className={`${widgets.top_products !== false ? 'lg:col-span-8' : 'lg:col-span-12'} bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-4`}>
                   <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Daily Sales Revenue</h2>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">Last 14 active days</span>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('dashboard.dailySalesRevenue')}</h2>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.last14Days')}</span>
                   </div>
                   <div className="h-64">
                     {(charts.daily_sales || []).length === 0 ? (
                       <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">
-                        Complete a POS sale to populate daily sales analytics.
+                        {t('dashboard.completeSaleToPopulate')}
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
@@ -363,16 +374,16 @@ export default function DashboardPage() {
 
               {widgets.top_products !== false && (
                 <div className={`${widgets.daily_chart !== false ? 'lg:col-span-4' : 'lg:col-span-12'} bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-4`}>
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Best-Selling Products</h2>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('dashboard.bestSellingProducts')}</h2>
                   {(charts.top_products || []).length === 0 ? (
-                    <div className="text-xs text-slate-500 dark:text-slate-400 py-8 text-center">No sales recorded yet.</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 py-8 text-center">{t('dashboard.noSalesRecorded')}</div>
                   ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
                       {charts.top_products.map((p, idx) => (
                         <div key={idx} className="py-2.5 flex items-center justify-between gap-2 text-xs">
                           <div className="min-w-0">
                             <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{p.product_name}</div>
-                            <div className="text-slate-500 dark:text-slate-400 tabular-nums">{p.qty} units sold</div>
+                            <div className="text-slate-500 dark:text-slate-400 tabular-nums">{t('dashboard.unitsSold', { count: p.qty })}</div>
                           </div>
                           <div className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums shrink-0">
                             {formatMoney(p.revenue, currency)}
@@ -391,7 +402,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {widgets.branch_performance !== false && (
                 <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-3`}>
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Sales by Branch</h2>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('dashboard.salesByBranch')}</h2>
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
                     {(charts.sales_by_branch || []).map((b, idx) => (
                       <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
@@ -405,15 +416,15 @@ export default function DashboardPage() {
 
               {widgets.audit_activity !== false && (
                 <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-3`}>
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Recent Audit Activity</h2>
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('dashboard.recentAuditActivity')}</h2>
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
                     {(data?.recentActivities || []).slice(0, 6).map((act) => (
                       <div key={act.id} className="py-2 flex items-center justify-between gap-2 text-xs">
                         <div className="min-w-0 flex items-center gap-2">
-                          <UserAvatar src={act.user_avatar} name={act.user_name || 'System'} size="xs" />
+                          <UserAvatar src={act.user_avatar} name={act.user_name || t('dashboard.systemUser')} size="xs" />
                           <div className="min-w-0 truncate">
                             <span className="font-medium text-slate-900 dark:text-slate-100">{act.action}</span>
-                            <span className="text-slate-500 dark:text-slate-400"> · {act.user_name || 'System'}</span>
+                            <span className="text-slate-500 dark:text-slate-400"> · {act.user_name || t('dashboard.systemUser')}</span>
                           </div>
                         </div>
                         <span className="text-slate-400 dark:text-slate-500 tabular-nums shrink-0">{formatDateTime(act.created_at)}</span>

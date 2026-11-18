@@ -12,6 +12,7 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import PrivateDocumentPreviewModal, { downloadPrivateDocument } from '../../components/PrivateDocumentPreviewModal.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
@@ -68,6 +69,7 @@ const EMPTY_VACANCY = {
 };
 
 export default function RecruitmentPage() {
+  const { t } = useTranslation();
   const { workspace, activeBusinessId, hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const canManage = hasPermission('recruitment.manage');
@@ -365,9 +367,9 @@ export default function RecruitmentPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Recruitment & Job Applications</h1>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('recruitment.title')}</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Publish job vacancies, screen candidate qualifications & CVs, schedule interviews, and manage hiring stages inside your isolated business workspace.
+            {t('recruitment.subtitle')}
           </p>
         </div>
         {canManage && (
@@ -377,7 +379,7 @@ export default function RecruitmentPage() {
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 shrink-0"
           >
             <Plus className="w-4 h-4" />
-            Post New Job Vacancy
+            {t('recruitment.postNewVacancy')}
           </button>
         )}
       </div>
@@ -388,13 +390,13 @@ export default function RecruitmentPage() {
       {/* Summary Statistics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-xs">
         {[
-          ['Total Applied', stats.total || 0],
-          ['Submitted', stats.submitted || 0],
-          ['Under Review', stats.under_review || 0],
-          ['Shortlisted', stats.shortlisted || 0],
-          ['Interviews', stats.interview_scheduled || 0],
-          ['Accepted', stats.accepted || 0],
-          ['Rejected', stats.rejected || 0],
+          [t('recruitment.statTotal'), stats.total || 0],
+          [t('recruitment.statSubmitted'), stats.submitted || 0],
+          [t('recruitment.statUnderReview'), stats.under_review || 0],
+          [t('recruitment.statShortlisted'), stats.shortlisted || 0],
+          [t('recruitment.statInterviews'), stats.interview_scheduled || 0],
+          [t('recruitment.statAccepted'), stats.accepted || 0],
+          [t('recruitment.statRejected'), stats.rejected || 0],
         ].map(([label, val]) => (
           <div key={label} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
             <div className="text-slate-500 dark:text-slate-400">{label}</div>
@@ -415,7 +417,7 @@ export default function RecruitmentPage() {
           }`}
         >
           <UserCheck className="w-3.5 h-3.5" />
-          Job Applications ({applications.length})
+          {t('recruitment.tabApplications', { count: applications.length })}
         </button>
         <button
           type="button"
@@ -427,7 +429,7 @@ export default function RecruitmentPage() {
           }`}
         >
           <Briefcase className="w-3.5 h-3.5" />
-          Vacancies & Custom Questions ({vacancies.length})
+          {t('recruitment.tabVacancies', { count: vacancies.length })}
         </button>
       </div>
 
@@ -440,7 +442,7 @@ export default function RecruitmentPage() {
               <input
                 value={filters.q}
                 onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-                placeholder="Search name, ref#, email..."
+                placeholder={t('recruitment.searchPlaceholder')}
                 className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
               />
             </div>
@@ -449,7 +451,7 @@ export default function RecruitmentPage() {
               onChange={(e) => setFilters({ ...filters, vacancy_id: e.target.value })}
               className="px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             >
-              <option value="">All Vacancies</option>
+              <option value="">{t('recruitment.allVacancies')}</option>
               {vacancies.map((v) => (
                 <option key={v.id} value={v.id}>{v.title}</option>
               ))}
@@ -459,22 +461,22 @@ export default function RecruitmentPage() {
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
               className="px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             >
-              <option value="">All Statuses</option>
-              <option value="submitted">Submitted</option>
-              <option value="under_review">Under Review</option>
-              <option value="shortlisted">Shortlisted</option>
-              <option value="interview_scheduled">Interview Scheduled</option>
-              <option value="interview_completed">Interview Completed</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="withdrawn">Withdrawn</option>
+              <option value="">{t('recruitment.allStatuses')}</option>
+              <option value="submitted">{t('status.submitted')}</option>
+              <option value="under_review">{t('status.under_review')}</option>
+              <option value="shortlisted">{t('status.shortlisted')}</option>
+              <option value="interview_scheduled">{t('status.interview_scheduled')}</option>
+              <option value="interview_completed">{t('status.interview_completed')}</option>
+              <option value="accepted">{t('status.accepted')}</option>
+              <option value="rejected">{t('status.rejected')}</option>
+              <option value="withdrawn">{t('status.withdrawn')}</option>
             </select>
             <select
               value={filters.education_level}
               onChange={(e) => setFilters({ ...filters, education_level: e.target.value })}
               className="px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             >
-              <option value="">All Education Levels</option>
+              <option value="">{t('recruitment.allEduLevels')}</option>
               {EDUCATION_LEVELS.map((lvl) => (
                 <option key={lvl} value={lvl}>{lvl}</option>
               ))}
@@ -484,9 +486,9 @@ export default function RecruitmentPage() {
               onChange={(e) => setFilters({ ...filters, has_work_experience: e.target.value })}
               className="px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             >
-              <option value="">Experience: All</option>
-              <option value="1">With Prior Experience</option>
-              <option value="0">No Prior Experience</option>
+              <option value="">{t('recruitment.expAll')}</option>
+              <option value="1">{t('recruitment.expWith')}</option>
+              <option value="0">{t('recruitment.expWithout')}</option>
             </select>
           </div>
 
@@ -494,25 +496,25 @@ export default function RecruitmentPage() {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                 <tr>
-                  <th className="py-3 px-4 font-semibold">Ref #</th>
-                  <th className="py-3 px-4 font-semibold">Applicant</th>
-                  <th className="py-3 px-4 font-semibold">Vacancy</th>
-                  <th className="py-3 px-4 font-semibold">Education</th>
-                  <th className="py-3 px-4 font-semibold">Experience</th>
-                  <th className="py-3 px-4 font-semibold">Status</th>
-                  <th className="py-3 px-4 font-semibold">Submitted</th>
-                  <th className="py-3 px-4 font-semibold text-right">Action</th>
+                  <th className="py-3 px-4 font-semibold">{t('recruitment.colRef')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('recruitment.colApplicant')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('recruitment.colVacancy')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('recruitment.colEducation')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('recruitment.colExperience')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('recruitment.colStatus')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('recruitment.colSubmitted')}</th>
+                  <th className="py-3 px-4 font-semibold text-right">{t('recruitment.colAction')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">Loading applications...</td>
+                    <td colSpan={8} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">{t('recruitment.loadingApps')}</td>
                   </tr>
                 ) : applications.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">
-                      No submitted job applications match your filters yet.
+                      {t('recruitment.emptyApps')}
                     </td>
                   </tr>
                 ) : (
@@ -531,9 +533,9 @@ export default function RecruitmentPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{app.vacancy_title}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{app.highest_education || 'Recorded'}</td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{app.highest_education || t('recruitment.eduRecorded')}</td>
                       <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
-                        {app.has_work_experience ? `${app.years_of_experience || 0} yr(s)` : 'None'}
+                        {app.has_work_experience ? t('recruitment.expYears', { count: app.years_of_experience || 0 }) : t('recruitment.expNone')}
                       </td>
                       <td className="py-3 px-4">
                         <StatusBadge status={app.status} />
@@ -553,7 +555,7 @@ export default function RecruitmentPage() {
                           className="inline-flex items-center gap-1 px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          Inspect
+                          {t('recruitment.inspectBtn')}
                         </button>
                       </td>
                     </tr>
@@ -570,7 +572,7 @@ export default function RecruitmentPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {vacancies.length === 0 ? (
             <div className="md:col-span-2 bg-white dark:bg-slate-900 p-10 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
-              No job vacancies created yet. Click "Post New Job Vacancy" to start hiring.
+              {t('recruitment.emptyVacancies')}
             </div>
           ) : (
             vacancies.map((v) => (
@@ -580,17 +582,17 @@ export default function RecruitmentPage() {
                     <div>
                       <h3 className="text-sm font-bold text-slate-900 dark:text-white">{v.title}</h3>
                       <div className="text-slate-500 dark:text-slate-400">
-                        {v.department || 'General'} · {v.location} {v.branch_name ? `(${v.branch_name})` : ''}
+                        {v.department || t('recruitment.generalDept')} · {v.location} {v.branch_name ? `(${v.branch_name})` : ''}
                       </div>
                     </div>
                     <StatusBadge status={v.status} />
                   </div>
                   <p className="text-slate-600 dark:text-slate-300 line-clamp-2">{v.summary || v.description}</p>
                   <div className="flex flex-wrap gap-3 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                    <span>Applicants: <strong className="text-slate-900 dark:text-white">{v.applicant_count || 0}</strong></span>
-                    <span>Positions: <strong className="text-slate-900 dark:text-white">{v.positions_count || 1}</strong></span>
-                    <span>Deadline: <strong className="text-slate-900 dark:text-white">{v.application_deadline ? formatDate(v.application_deadline) : 'Open'}</strong></span>
-                    <span>Custom Qs: <strong className="text-slate-900 dark:text-white">{v.custom_questions?.length || 0}</strong></span>
+                    <span>{t('recruitment.applicantsCount')} <strong className="text-slate-900 dark:text-white">{v.applicant_count || 0}</strong></span>
+                    <span>{t('recruitment.positionsCount')} <strong className="text-slate-900 dark:text-white">{v.positions_count || 1}</strong></span>
+                    <span>{t('recruitment.deadlineLabel')} <strong className="text-slate-900 dark:text-white">{v.application_deadline ? formatDate(v.application_deadline) : t('recruitment.openStatus')}</strong></span>
+                    <span>{t('recruitment.customQsCount')} <strong className="text-slate-900 dark:text-white">{v.custom_questions?.length || 0}</strong></span>
                   </div>
                 </div>
                 {canManage && (
@@ -600,7 +602,7 @@ export default function RecruitmentPage() {
                       onClick={() => openEditVacancy(v)}
                       className="px-3 py-1.5 font-semibold border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
-                      Edit Vacancy & Questions
+                      {t('recruitment.editVacancyQs')}
                     </button>
                     <div className="flex items-center gap-1.5">
                       {v.status !== 'published' && (
@@ -609,7 +611,7 @@ export default function RecruitmentPage() {
                           onClick={() => handleVacancyStatus(v.id, 'published')}
                           className="px-2.5 py-1.5 font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500"
                         >
-                          Publish
+                          {t('recruitment.publishBtn')}
                         </button>
                       )}
                       {v.status === 'published' && (
@@ -618,7 +620,7 @@ export default function RecruitmentPage() {
                           onClick={() => handleVacancyStatus(v.id, 'closed')}
                           className="px-2.5 py-1.5 font-semibold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-lg"
                         >
-                          Close
+                          {t('recruitment.closeBtn')}
                         </button>
                       )}
                       {v.status !== 'archived' && (
@@ -627,7 +629,7 @@ export default function RecruitmentPage() {
                           onClick={() => handleVacancyStatus(v.id, 'archived')}
                           className="px-2.5 py-1.5 font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg"
                         >
-                          Archive
+                          {t('recruitment.archiveBtn')}
                         </button>
                       )}
                     </div>
@@ -663,12 +665,12 @@ export default function RecruitmentPage() {
                   </div>
                 </div>
               ) : (
-                <div className="text-sm font-bold">Loading Application Profile...</div>
+                <div className="text-sm font-bold">{t('recruitment.loadingAppProfile')}</div>
               )}
               <button
                 type="button"
                 onClick={closeDetail}
-                aria-label="Close application modal"
+                aria-label={t('recruitment.closeModalAria')}
                 className="p-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg border border-slate-200 dark:border-slate-700"
               >
                 <X className="w-4 h-4" />
@@ -676,7 +678,7 @@ export default function RecruitmentPage() {
             </div>
 
             {loadingDetail ? (
-              <div className="p-10 text-center text-xs text-slate-500">Loading applicant profile, CV, and history...</div>
+              <div className="p-10 text-center text-xs text-slate-500">{t('recruitment.loadingProfileDetail')}</div>
             ) : selectedDetail && (
               <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -684,21 +686,21 @@ export default function RecruitmentPage() {
                   <div className="lg:col-span-7 space-y-5">
                     {/* Personal Summary */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <h3 className="font-bold text-slate-900 dark:text-white">Personal & Availability Details</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.personalAvailTitle')}</h3>
                       <div className="grid grid-cols-2 gap-2 text-slate-600 dark:text-slate-300">
-                        <div>Location: <strong>{selectedDetail.application.district || selectedDetail.application.country || 'N/A'}</strong></div>
-                        <div>Nationality: <strong>{selectedDetail.application.nationality || 'N/A'}</strong></div>
-                        <div>Availability: <strong>{selectedDetail.application.availability || 'N/A'}</strong></div>
-                        <div>Expected Salary: <strong>{selectedDetail.application.expected_salary ? formatMoney(selectedDetail.application.expected_salary, 'RWF') : 'Not specified'}</strong></div>
+                        <div>{t('recruitment.locLabel')} <strong>{selectedDetail.application.district || selectedDetail.application.country || 'N/A'}</strong></div>
+                        <div>{t('recruitment.natLabel')} <strong>{selectedDetail.application.nationality || 'N/A'}</strong></div>
+                        <div>{t('recruitment.availLabel')} <strong>{selectedDetail.application.availability || 'N/A'}</strong></div>
+                        <div>{t('recruitment.expSalaryLabel')} <strong>{selectedDetail.application.expected_salary ? formatMoney(selectedDetail.application.expected_salary, 'RWF') : t('recruitment.notSpecified')}</strong></div>
                       </div>
                       {selectedDetail.application.residential_address && (
-                        <div className="text-slate-500 dark:text-slate-400">Address: {selectedDetail.application.residential_address}</div>
+                        <div className="text-slate-500 dark:text-slate-400">{t('recruitment.addrLabel', { address: selectedDetail.application.residential_address })}</div>
                       )}
                     </div>
 
                     {/* Documents (CV + Certificates) */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2.5">
-                      <h3 className="font-bold text-slate-900 dark:text-white">CV & Supporting Documents ({selectedDetail.documents.length})</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.docsTitle', { count: selectedDetail.documents.length })}</h3>
                       <div className="divide-y divide-slate-200 dark:divide-slate-800">
                         {selectedDetail.documents.map((doc) => (
                           <div key={doc.id} className="py-2 flex flex-wrap items-center justify-between gap-2">
@@ -718,7 +720,7 @@ export default function RecruitmentPage() {
                                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-100"
                               >
                                 <Eye className="w-3 h-3" />
-                                Preview
+                                {t('recruitment.previewBtn')}
                               </button>
                               <button
                                 type="button"
@@ -726,7 +728,7 @@ export default function RecruitmentPage() {
                                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-100"
                               >
                                 <Download className="w-3 h-3" />
-                                Download
+                                {t('recruitment.downloadBtn')}
                               </button>
                             </div>
                           </div>
@@ -736,14 +738,14 @@ export default function RecruitmentPage() {
 
                     {/* Education */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <h3 className="font-bold text-slate-900 dark:text-white">Educational Background</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.eduBgTitle')}</h3>
                       {selectedDetail.education.map((edu) => (
                         <div key={edu.id} className="py-1.5 border-b last:border-0 border-slate-200 dark:border-slate-800">
                           <div className="font-semibold text-slate-900 dark:text-white">
                             {edu.education_level} — {edu.institution_name}
                           </div>
                           <div className="text-slate-600 dark:text-slate-300">
-                            {edu.qualification_obtained || edu.field_of_study || 'Qualification'} · {edu.education_status}
+                            {edu.qualification_obtained || edu.field_of_study || t('recruitment.qualificationFallback')} · {edu.education_status}
                             {edu.graduation_year ? ` (${edu.start_year || '?'}–${edu.graduation_year})` : ''}
                           </div>
                         </div>
@@ -752,17 +754,17 @@ export default function RecruitmentPage() {
 
                     {/* Work Experience */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <h3 className="font-bold text-slate-900 dark:text-white">Work Experience</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.workExpTitle')}</h3>
                       {!selectedDetail.application.has_work_experience ? (
-                        <div className="text-slate-600 dark:text-slate-300 italic">No prior experience indicated by applicant.</div>
+                        <div className="text-slate-600 dark:text-slate-300 italic">{t('recruitment.noExpIndicated')}</div>
                       ) : (
                         selectedDetail.experiences.map((ex) => (
                           <div key={ex.id} className="py-1.5 border-b last:border-0 border-slate-200 dark:border-slate-800 space-y-0.5">
                             <div className="font-semibold text-slate-900 dark:text-white">
-                              {ex.job_title} at {ex.company_name}
+                              {t('recruitment.atCompany', { title: ex.job_title, company: ex.company_name })}
                             </div>
                             <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                              {ex.start_date} – {ex.is_current ? 'Present' : ex.end_date || 'N/A'} {ex.work_location ? `· ${ex.work_location}` : ''}
+                              {ex.start_date} – {ex.is_current ? t('recruitment.present') : ex.end_date || 'N/A'} {ex.work_location ? `· ${ex.work_location}` : ''}
                             </div>
                             {ex.responsibilities && <div className="text-slate-600 dark:text-slate-300">{ex.responsibilities}</div>}
                           </div>
@@ -772,7 +774,7 @@ export default function RecruitmentPage() {
 
                     {/* Skills & Job Questions */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                      <h3 className="font-bold text-slate-900 dark:text-white">Skills & Job-Specific Answers</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.skillsAnswersTitle')}</h3>
                       {selectedDetail.skills.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {selectedDetail.skills.map((s) => (
@@ -783,16 +785,16 @@ export default function RecruitmentPage() {
                         </div>
                       )}
                       <div>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">Why do you want this position?</div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">{t('recruitment.whyWantQ')}</div>
                         <p className="text-slate-600 dark:text-slate-300 mt-0.5 whitespace-pre-line">{selectedDetail.application.why_want_position}</p>
                       </div>
                       <div>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">Why should we select you?</div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">{t('recruitment.whySelectQ')}</div>
                         <p className="text-slate-600 dark:text-slate-300 mt-0.5 whitespace-pre-line">{selectedDetail.application.why_select_you}</p>
                       </div>
                       {selectedDetail.application.cover_letter && (
                         <div>
-                          <div className="font-semibold text-slate-800 dark:text-slate-200">Cover Letter</div>
+                          <div className="font-semibold text-slate-800 dark:text-slate-200">{t('recruitment.coverLetterLabel')}</div>
                           <p className="text-slate-600 dark:text-slate-300 mt-0.5 whitespace-pre-line">{selectedDetail.application.cover_letter}</p>
                         </div>
                       )}
@@ -809,28 +811,28 @@ export default function RecruitmentPage() {
                   <div className="lg:col-span-5 space-y-5">
                     {canManage && selectedDetail.application.status !== 'withdrawn' && (
                       <form onSubmit={handleStatusUpdate} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                        <h3 className="font-bold text-slate-900 dark:text-white">Update Application Status</h3>
+                        <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.updateStatusTitle')}</h3>
                         <select
                           value={statusUpdate.status}
                           onChange={(e) => setStatusUpdate({ ...statusUpdate, status: e.target.value })}
                           className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                         >
-                          <option value="submitted">Submitted</option>
-                          <option value="under_review">Under Review</option>
-                          <option value="shortlisted">Shortlisted</option>
-                          <option value="interview_scheduled">Interview Scheduled</option>
-                          <option value="interview_completed">Interview Completed</option>
-                          <option value="accepted">Accepted / Hired</option>
-                          <option value="rejected">Rejected</option>
+                          <option value="submitted">{t('status.submitted')}</option>
+                          <option value="under_review">{t('status.under_review')}</option>
+                          <option value="shortlisted">{t('status.shortlisted')}</option>
+                          <option value="interview_scheduled">{t('status.interview_scheduled')}</option>
+                          <option value="interview_completed">{t('status.interview_completed')}</option>
+                          <option value="accepted">{t('recruitment.statusAcceptedHired')}</option>
+                          <option value="rejected">{t('status.rejected')}</option>
                         </select>
                         <input
                           value={statusUpdate.note}
                           onChange={(e) => setStatusUpdate({ ...statusUpdate, note: e.target.value })}
-                          placeholder="Applicant-visible status note (optional)"
+                          placeholder={t('recruitment.applicantNotePlaceholder')}
                           className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                         />
                         <button type="submit" className="w-full py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                          Save Status & Notify Applicant
+                          {t('recruitment.saveStatusNotify')}
                         </button>
                       </form>
                     )}
@@ -839,21 +841,21 @@ export default function RecruitmentPage() {
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
                       <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
                         <Calendar className="w-4 h-4 text-sky-600" />
-                        <span>Interviews ({selectedDetail.interviews.length})</span>
+                        <span>{t('recruitment.interviewsTitle', { count: selectedDetail.interviews.length })}</span>
                       </div>
 
                       {selectedDetail.interviews.map((iv) => (
                         <div key={iv.id} className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                              {iv.interview_date} at {iv.interview_time}
+                              {iv.interview_date} {t('recruitment.atTime')} {iv.interview_time}
                             </span>
                             <StatusBadge status={iv.status === 'scheduled' ? 'interview_scheduled' : iv.status} />
                           </div>
                           <div className="text-slate-600 dark:text-slate-300">
                             {iv.interview_mode}{iv.location_or_link ? ` · ${iv.location_or_link}` : ''}
                           </div>
-                          {iv.interviewer_name && <div className="text-[11px] text-slate-500">Interviewer: {iv.interviewer_name}</div>}
+                          {iv.interviewer_name && <div className="text-[11px] text-slate-500">{t('recruitment.interviewerPrefix', { name: iv.interviewer_name })}</div>}
                           {canManage && iv.status === 'scheduled' && (
                             <div className="flex flex-wrap gap-1.5 pt-1">
                               <button
@@ -861,21 +863,21 @@ export default function RecruitmentPage() {
                                 onClick={() => handleUpdateInterview(iv.id, { status: 'completed', outcome: 'passed' })}
                                 className="px-2 py-1 text-[11px] font-semibold text-white bg-emerald-600 rounded"
                               >
-                                Complete (Pass)
+                                {t('recruitment.completePass')}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleUpdateInterview(iv.id, { status: 'completed', outcome: 'hold' })}
                                 className="px-2 py-1 text-[11px] font-semibold text-amber-800 bg-amber-100 rounded"
                               >
-                                Complete (Hold)
+                                {t('recruitment.completeHold')}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleUpdateInterview(iv.id, { status: 'cancelled' })}
                                 className="px-2 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200 rounded"
                               >
-                                Cancel
+                                {t('common.cancel')}
                               </button>
                             </div>
                           )}
@@ -884,7 +886,7 @@ export default function RecruitmentPage() {
 
                       {canManage && selectedDetail.application.status !== 'withdrawn' && (
                         <form onSubmit={handleScheduleInterview} className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                          <div className="font-semibold text-slate-800 dark:text-slate-200">Schedule New Interview</div>
+                          <div className="font-semibold text-slate-800 dark:text-slate-200">{t('recruitment.scheduleNewTitle')}</div>
                           <div className="grid grid-cols-2 gap-2">
                             <input
                               required
@@ -906,24 +908,24 @@ export default function RecruitmentPage() {
                             onChange={(e) => setInterviewForm({ ...interviewForm, interview_mode: e.target.value })}
                             className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                           >
-                            <option value="In-person">In-person</option>
-                            <option value="Phone">Phone</option>
-                            <option value="Online Video">Online Video</option>
+                            <option value="In-person">{t('recruitment.modeInPerson')}</option>
+                            <option value="Phone">{t('recruitment.modePhone')}</option>
+                            <option value="Online Video">{t('recruitment.modeOnline')}</option>
                           </select>
                           <input
                             value={interviewForm.location_or_link}
                             onChange={(e) => setInterviewForm({ ...interviewForm, location_or_link: e.target.value })}
-                            placeholder="Office branch / Google Meet / Zoom link"
+                            placeholder={t('recruitment.locOrLinkPlaceholder')}
                             className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                           />
                           <input
                             value={interviewForm.interviewer_name}
                             onChange={(e) => setInterviewForm({ ...interviewForm, interviewer_name: e.target.value })}
-                            placeholder="Interviewer / Panel name"
+                            placeholder={t('recruitment.interviewerPlaceholder')}
                             className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                           />
                           <button type="submit" className="w-full py-1.5 font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-500">
-                            Schedule Interview & Notify
+                            {t('recruitment.scheduleNotifyBtn')}
                           </button>
                         </form>
                       )}
@@ -933,24 +935,24 @@ export default function RecruitmentPage() {
                     <div className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 space-y-2.5">
                       <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
                         <Lock className="w-3.5 h-3.5" />
-                        <span>Private Internal HR Notes (Hidden from Applicant)</span>
+                        <span>{t('recruitment.privateNotesTitle')}</span>
                       </div>
                       {canManage && (
                         <form onSubmit={handleAddInternalNote} className="flex gap-2">
                           <input
                             value={noteInput}
                             onChange={(e) => setNoteInput(e.target.value)}
-                            placeholder="Add private evaluation note..."
+                            placeholder={t('recruitment.addNotePlaceholder')}
                             className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-lg"
                           />
                           <button type="submit" className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
-                            Add
+                            {t('recruitment.addBtn')}
                           </button>
                         </form>
                       )}
                       <div className="space-y-1.5 max-h-36 overflow-y-auto">
                         {selectedDetail.notes.length === 0 ? (
-                          <div className="text-[11px] text-amber-800/70 dark:text-amber-300/70">No internal HR notes recorded.</div>
+                          <div className="text-[11px] text-amber-800/70 dark:text-amber-300/70">{t('recruitment.noNotes')}</div>
                         ) : (
                           selectedDetail.notes.map((n) => (
                             <div key={n.id} className="p-2 rounded bg-white dark:bg-slate-900 border border-amber-200/70 dark:border-amber-900">
@@ -964,12 +966,12 @@ export default function RecruitmentPage() {
 
                     {/* Status History */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <h3 className="font-bold text-slate-900 dark:text-white">Immutable Audit Status History</h3>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.auditHistoryTitle')}</h3>
                       <div className="space-y-1.5 max-h-40 overflow-y-auto">
                         {selectedDetail.status_history.map((h) => (
                           <div key={h.id} className="flex justify-between gap-2 text-[11px] border-b last:border-0 border-slate-200 dark:border-slate-800 pb-1">
                             <div>
-                              <span className="font-semibold text-slate-800 dark:text-slate-200">{h.new_status.replace(/_/g, ' ')}</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })}</span>
                               {h.note ? ` — ${h.note}` : ''}
                             </div>
                             <span className="text-slate-400 tabular-nums shrink-0">{formatDateTime(h.changed_at)}</span>
@@ -994,7 +996,7 @@ export default function RecruitmentPage() {
           >
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-base font-bold text-[#0B192C] dark:text-white">
-                {vacancyForm.id ? 'Edit Job Vacancy' : 'Post New Job Vacancy'}
+                {vacancyForm.id ? t('recruitment.editVacancyTitle') : t('recruitment.postVacancyTitle')}
               </h2>
               <button
                 type="button"
@@ -1008,75 +1010,75 @@ export default function RecruitmentPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Job Title *</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.jobTitleLabel')}</label>
                   <input
                     required
                     value={vacancyForm.title}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, title: e.target.value })}
-                    placeholder="e.g. Store Accountant / Sales Cashier"
+                    placeholder={t('recruitment.jobTitlePlaceholder')}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Location *</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.locationLabel')}</label>
                   <input
                     required
                     value={vacancyForm.location}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, location: e.target.value })}
-                    placeholder="Kigali, Rwanda"
+                    placeholder={t('recruitment.locationPlaceholder')}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Branch (Optional)</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.branchOptLabel')}</label>
                   <select
                     value={vacancyForm.branch_id}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, branch_id: e.target.value })}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                   >
-                    <option value="">All Branches / HQ</option>
+                    <option value="">{t('recruitment.allBranchesHq')}</option>
                     {(workspace?.branches || []).map((br) => (
                       <option key={br.id} value={br.id}>{br.name}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Department</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.deptLabel')}</label>
                   <input
                     value={vacancyForm.department}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, department: e.target.value })}
-                    placeholder="Sales, Finance, Operations..."
+                    placeholder={t('recruitment.deptPlaceholder')}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Employment Type</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.empTypeLabel')}</label>
                   <select
                     value={vacancyForm.employment_type}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, employment_type: e.target.value })}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                   >
-                    <option value="full_time">Full-Time</option>
-                    <option value="part_time">Part-Time</option>
-                    <option value="contract">Contract</option>
-                    <option value="internship">Internship</option>
-                    <option value="temporary">Temporary</option>
+                    <option value="full_time">{t('employmentTypes.full_time')}</option>
+                    <option value="part_time">{t('employmentTypes.part_time')}</option>
+                    <option value="contract">{t('employmentTypes.contract')}</option>
+                    <option value="internship">{t('employmentTypes.internship')}</option>
+                    <option value="temporary">{t('employmentTypes.temporary')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Work Mode</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.workModeLabel')}</label>
                   <select
                     value={vacancyForm.work_mode}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, work_mode: e.target.value })}
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                   >
-                    <option value="on_site">On-Site</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="remote">Remote</option>
+                    <option value="on_site">{t('workModes.on_site')}</option>
+                    <option value="hybrid">{t('workModes.hybrid')}</option>
+                    <option value="remote">{t('workModes.remote')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Application Deadline</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.deadlineFieldLabel')}</label>
                   <input
                     type="date"
                     value={vacancyForm.application_deadline}
@@ -1085,7 +1087,7 @@ export default function RecruitmentPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Number of Openings</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.openingsLabel')}</label>
                   <input
                     type="number"
                     min="1"
@@ -1095,7 +1097,7 @@ export default function RecruitmentPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Salary Min</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.salaryMinLabel')}</label>
                   <input
                     type="number"
                     min="0"
@@ -1105,7 +1107,7 @@ export default function RecruitmentPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Salary Max</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.salaryMaxLabel')}</label>
                   <input
                     type="number"
                     min="0"
@@ -1117,7 +1119,7 @@ export default function RecruitmentPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Role Description *</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.roleDescLabel')}</label>
                 <textarea
                   required
                   rows={3}
@@ -1129,7 +1131,7 @@ export default function RecruitmentPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Responsibilities</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.respLabel')}</label>
                   <textarea
                     rows={3}
                     value={vacancyForm.responsibilities}
@@ -1138,7 +1140,7 @@ export default function RecruitmentPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Requirements</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.reqLabel')}</label>
                   <textarea
                     rows={3}
                     value={vacancyForm.requirements}
@@ -1150,7 +1152,7 @@ export default function RecruitmentPage() {
 
               {/* Required Documents Checklist */}
               <div className="space-y-2">
-                <div className="font-semibold text-slate-700 dark:text-slate-200">Required Supporting Certificates / Documents</div>
+                <div className="font-semibold text-slate-700 dark:text-slate-200">{t('recruitment.reqDocsLabel')}</div>
                 <div className="flex flex-wrap gap-2">
                   {DOCUMENT_PRESET_TYPES.map((dt) => {
                     const checked = vacancyForm.required_document_types.includes(dt);
@@ -1174,12 +1176,12 @@ export default function RecruitmentPage() {
 
               {/* Custom Questions Builder */}
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                <div className="font-bold text-slate-800 dark:text-slate-200">Custom Screening Questions</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">{t('recruitment.customQuestionsTitle')}</div>
                 <div className="flex flex-wrap gap-2 items-center">
                   <input
                     value={newQuestionLabel}
                     onChange={(e) => setNewQuestionLabel(e.target.value)}
-                    placeholder="e.g. Describe your experience handling daily cash reconciliation"
+                    placeholder={t('recruitment.questionPlaceholder')}
                     className="flex-1 min-w-[200px] px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                   />
                   <label className="inline-flex items-center gap-1">
@@ -1188,21 +1190,21 @@ export default function RecruitmentPage() {
                       checked={newQuestionReq}
                       onChange={(e) => setNewQuestionReq(e.target.checked)}
                     />
-                    Required
+                    {t('recruitment.requiredLabel')}
                   </label>
                   <button
                     type="button"
                     onClick={addCustomQuestion}
                     className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg"
                   >
-                    Add Question
+                    {t('recruitment.addQuestionBtn')}
                   </button>
                 </div>
                 {vacancyForm.custom_questions.length > 0 && (
                   <div className="space-y-1.5">
                     {vacancyForm.custom_questions.map((q, idx) => (
                       <div key={q.key || idx} className="flex items-center justify-between gap-2 p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                        <span>{q.label} {q.required ? '(Required)' : '(Optional)'}</span>
+                        <span>{q.label} {q.required ? t('recruitment.requiredTag') : t('recruitment.optionalTag')}</span>
                         <button
                           type="button"
                           onClick={() =>
@@ -1213,7 +1215,7 @@ export default function RecruitmentPage() {
                           }
                           className="text-rose-600 hover:underline"
                         >
-                          Remove
+                          {t('common.remove')}
                         </button>
                       </div>
                     ))}
@@ -1228,7 +1230,7 @@ export default function RecruitmentPage() {
                     checked={vacancyForm.show_salary}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, show_salary: e.target.checked })}
                   />
-                  Display salary range publicly
+                  {t('recruitment.showSalaryLabel')}
                 </label>
                 <label className="inline-flex items-center gap-2">
                   <input
@@ -1236,7 +1238,7 @@ export default function RecruitmentPage() {
                     checked={vacancyForm.allow_reapplication}
                     onChange={(e) => setVacancyForm({ ...vacancyForm, allow_reapplication: e.target.checked })}
                   />
-                  Allow re-application if previously rejected/withdrawn
+                  {t('recruitment.allowReapplyLabel')}
                 </label>
                 {!vacancyForm.id && (
                   <label className="inline-flex items-center gap-2">
@@ -1245,7 +1247,7 @@ export default function RecruitmentPage() {
                       checked={vacancyForm.publish_now}
                       onChange={(e) => setVacancyForm({ ...vacancyForm, publish_now: e.target.checked })}
                     />
-                    Publish immediately to public job board
+                    {t('recruitment.publishNowLabel')}
                   </label>
                 )}
               </div>
@@ -1257,14 +1259,14 @@ export default function RecruitmentPage() {
                 onClick={() => setVacancyModalOpen(false)}
                 className="px-4 py-2 font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={savingVacancy}
                 className="px-5 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50"
               >
-                {savingVacancy ? 'Saving...' : vacancyForm.id ? 'Update Vacancy' : 'Save Vacancy'}
+                {savingVacancy ? t('common.saving') : vacancyForm.id ? t('recruitment.updateVacancyBtn') : t('recruitment.saveVacancyBtn')}
               </button>
             </div>
           </form>

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import BrandLogo from './BrandLogo.jsx';
+import LanguageSelector from './LanguageSelector.jsx';
 import ThemeSelector from './ThemeSelector.jsx';
 
 const HOMEPAGE_SECTION_IDS = ['about', 'features', 'how-it-works', 'benefits', 'contact'];
@@ -13,6 +15,7 @@ function resolveNavSection(sectionId) {
 }
 
 export default function PublicHeader() {
+  const { t } = useTranslation();
   const { user, memberships } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -21,12 +24,10 @@ export default function PublicHeader() {
 
   const isHome = location.pathname === '/';
 
-  // Close mobile menu on route/hash navigation
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname, location.hash]);
 
-  // Sync homepage active section from hash and scroll position
   useEffect(() => {
     if (!isHome) return undefined;
 
@@ -92,13 +93,13 @@ export default function PublicHeader() {
   }, [location.pathname, isHome, activeSection]);
 
   const navItems = [
-    { key: 'home', label: 'Home', to: '/', sectionId: 'top' },
-    { key: 'about', label: 'About', to: '/about' },
-    { key: 'features', label: 'Features', to: '/#features', sectionId: 'features' },
-    { key: 'businesses', label: 'Businesses', to: '/businesses' },
-    { key: 'jobs', label: 'Jobs', to: '/jobs' },
-    { key: 'pricing', label: 'Pricing', to: '/pricing' },
-    { key: 'contact', label: 'Contact', to: '/#contact', sectionId: 'contact' },
+    { key: 'home', label: t('nav.home'), to: '/', sectionId: 'top' },
+    { key: 'about', label: t('nav.about'), to: '/about' },
+    { key: 'features', label: t('nav.features'), to: '/#features', sectionId: 'features' },
+    { key: 'businesses', label: t('nav.businesses'), to: '/businesses' },
+    { key: 'jobs', label: t('nav.jobs'), to: '/jobs' },
+    { key: 'pricing', label: t('nav.pricing'), to: '/pricing' },
+    { key: 'contact', label: t('nav.contact'), to: '/#contact', sectionId: 'contact' },
   ];
 
   const handleNavClick = (e, item) => {
@@ -136,14 +137,14 @@ export default function PublicHeader() {
       : '/customer';
 
   const portalLabel = user?.is_platform_admin
-    ? 'Platform Admin'
+    ? t('nav.platformAdmin')
     : memberships?.length > 0
-      ? 'Open Workspace'
-      : 'Customer Portal';
+      ? t('nav.openWorkspace')
+      : t('nav.customerPortal');
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
         <Link
           to="/"
           onClick={(e) => handleNavClick(e, navItems[0])}
@@ -156,7 +157,7 @@ export default function PublicHeader() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav aria-label="Primary navigation" className="hidden lg:flex items-center gap-6 text-sm font-medium">
+        <nav aria-label={t('nav.primaryNav')} className="hidden lg:flex items-center gap-5 text-sm font-medium">
           {navItems.map((item) => {
             const isActive = activeKey === item.key;
             return (
@@ -178,6 +179,7 @@ export default function PublicHeader() {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <LanguageSelector compact />
           <ThemeSelector compact />
           {user ? (
             <Link
@@ -191,13 +193,13 @@ export default function PublicHeader() {
               to="/login"
               className="inline-flex items-center px-3.5 sm:px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors whitespace-nowrap shrink-0"
             >
-              Sign In
+              {t('nav.signIn')}
             </Link>
           )}
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
-            aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-label={menuOpen ? t('nav.closeNav') : t('nav.openNav')}
             aria-expanded={menuOpen}
             className="lg:hidden p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
@@ -208,8 +210,8 @@ export default function PublicHeader() {
 
       {/* Responsive Mobile & Tablet Navigation Drawer */}
       {menuOpen && (
-        <div className="lg:hidden animate-slide-down border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 space-y-1">
-          <nav aria-label="Mobile navigation" className="flex flex-col space-y-1">
+        <div className="lg:hidden animate-slide-down border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 space-y-2">
+          <nav aria-label={t('nav.mobileNav')} className="flex flex-col space-y-1">
             {navItems.map((item) => {
               const isActive = activeKey === item.key;
               return (
@@ -238,9 +240,13 @@ export default function PublicHeader() {
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70'
               }`}
             >
-              Track Order
+              {t('nav.trackOrder')}
             </Link>
           </nav>
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('language.label')}</span>
+            <LanguageSelector compact />
+          </div>
         </div>
       )}
     </header>

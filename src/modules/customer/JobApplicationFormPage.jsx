@@ -21,6 +21,7 @@ import {
   Upload,
   User,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import PublicHeader from '../../components/PublicHeader.jsx';
 import PublicFooter from '../../components/PublicFooter.jsx';
 import PrivateDocumentPreviewModal, { downloadPrivateDocument } from '../../components/PrivateDocumentPreviewModal.jsx';
@@ -58,14 +59,14 @@ const CERTIFICATE_TYPES = [
 const QUICK_LANGUAGES = ['English', 'Kinyarwanda', 'French', 'Swahili'];
 
 const STEPS = [
-  { id: 1, title: 'Personal Info', icon: User },
-  { id: 2, title: 'Education', icon: GraduationCap },
-  { id: 3, title: 'Certificates', icon: Award },
-  { id: 4, title: 'Work Experience', icon: Briefcase },
-  { id: 5, title: 'Mandatory CV', icon: FileText },
-  { id: 6, title: 'Skills & Extra', icon: Layers },
-  { id: 7, title: 'Job Questions', icon: MessageSquareText },
-  { id: 8, title: 'Review & Submit', icon: CheckCircle2 },
+  { id: 1, titleKey: 'jobApply.step1', icon: User },
+  { id: 2, titleKey: 'jobApply.step2', icon: GraduationCap },
+  { id: 3, titleKey: 'jobApply.step3', icon: Award },
+  { id: 4, titleKey: 'jobApply.step4', icon: Briefcase },
+  { id: 5, titleKey: 'jobApply.step5', icon: FileText },
+  { id: 6, titleKey: 'jobApply.step6', icon: Layers },
+  { id: 7, titleKey: 'jobApply.step7', icon: MessageSquareText },
+  { id: 8, titleKey: 'jobApply.step8', icon: CheckCircle2 },
 ];
 
 const EMPTY_EDU = {
@@ -95,6 +96,7 @@ const EMPTY_EXP = {
 };
 
 export default function JobApplicationFormPage() {
+  const { t } = useTranslation();
   const { id: vacancyId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -293,7 +295,7 @@ export default function JobApplicationFormPage() {
     try {
       const { data } = await api.put(`/customer/applications/${application.id}`, buildSavePayload());
       setApplication(data.application);
-      if (!silent) setNotice('Draft saved cleanly.');
+      if (!silent) setNotice(t('jobApply.draftSavedMsg'));
       return true;
     } catch (err) {
       setError(err.message);
@@ -328,7 +330,7 @@ export default function JobApplicationFormPage() {
         },
       });
       setDocuments((prev) => [data.document, ...prev.filter((d) => d.document_category !== 'cv')]);
-      setNotice('Curriculum Vitae (CV) uploaded securely.');
+      setNotice(t('jobApply.cvUploadedMsg'));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -364,7 +366,7 @@ export default function JobApplicationFormPage() {
         setDocuments((prev) => [...prev, data.document]);
       }
       setCertMeta((prev) => ({ ...prev, document_name: '' }));
-      setNotice(`${files.length} document(s) uploaded cleanly.`);
+      setNotice(t('jobApply.docsUploadedMsg', { count: files.length }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -379,7 +381,7 @@ export default function JobApplicationFormPage() {
     try {
       await api.delete(`/customer/applications/${application.id}/documents/${docId}`);
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
-      setNotice('Document removed.');
+      setNotice(t('jobApply.docRemovedMsg'));
     } catch (err) {
       setError(err.message);
     }
@@ -463,20 +465,20 @@ export default function JobApplicationFormPage() {
         <main className="flex-1 max-w-2xl mx-auto px-6 py-16 w-full">
           <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-center">
             <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
-            <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Application Already Submitted</h1>
+            <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('jobApply.dupTitle')}</h1>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{duplicateInfo.message}</p>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <Link
                 to="/customer?tab=applications"
                 className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
               >
-                Track My Applications
+                {t('jobApply.trackMyApps')}
               </Link>
               <Link
                 to="/jobs"
                 className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
               >
-                Browse Other Vacancies
+                {t('jobApply.browseOtherVacancies')}
               </Link>
             </div>
           </div>
@@ -496,32 +498,32 @@ export default function JobApplicationFormPage() {
               <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div className="space-y-1.5">
-              <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">Application Submitted Successfully</h1>
+              <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">{t('jobApply.submittedTitle')}</h1>
               <p className="text-xs text-slate-600 dark:text-slate-300">
-                Your application for <strong>{vacancy?.title}</strong> at <strong>{vacancy?.business_name}</strong> has been received.
+                {t('jobApply.submittedFor')} <strong>{vacancy?.title}</strong> {t('jobApply.submittedAt')} <strong>{vacancy?.business_name}</strong> {t('jobApply.submittedReceived')}
               </p>
             </div>
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">Unique Application Reference Number</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('jobApply.refNumLabel')}</div>
               <div className="text-xl font-bold font-mono text-[#0B192C] dark:text-sky-400 mt-1">
                 {submittedResult.reference_number}
               </div>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              You will receive updates and interview invitations directly inside your Customer Portal.
+              {t('jobApply.submittedPortalHint')}
             </p>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <Link
                 to={`/customer?tab=applications&applicationId=${submittedResult.application?.id || application?.id}`}
                 className="px-5 py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
               >
-                View Application & Track Status
+                {t('jobApply.viewTrackStatus')}
               </Link>
               <Link
                 to="/jobs"
                 className="px-5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
               >
-                Explore More Vacancies
+                {t('jobApply.exploreMore')}
               </Link>
             </div>
           </div>
@@ -538,7 +540,7 @@ export default function JobApplicationFormPage() {
       <main className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 py-8 w-full space-y-6 animate-fade-up">
         {!vacancy ? (
           <div className="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-rose-700 dark:text-rose-300">
-            {error || 'Unable to start job application.'}
+            {error || t('jobApply.unableStart')}
           </div>
         ) : (
           <>
@@ -547,7 +549,7 @@ export default function JobApplicationFormPage() {
               <div className="space-y-1">
                 <Link to={`/jobs/${vacancy.id}`} className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  Vacancy Details
+                  {t('jobApply.vacancyDetails')}
                 </Link>
                 <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{vacancy.title}</h1>
                 <div className="text-xs text-slate-600 dark:text-slate-300">
@@ -562,20 +564,20 @@ export default function JobApplicationFormPage() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  {saving ? 'Saving...' : 'Save as Draft'}
+                  {saving ? t('common.saving') : t('jobApply.saveDraftBtn')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setCancelConfirmOpen(true)}
                   className="px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
                 >
-                  Discard Draft
+                  {t('jobApply.discardDraftBtn')}
                 </button>
               </div>
             </div>
 
             {/* Stepper */}
-            <nav aria-label="Application steps" className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+            <nav aria-label={t('jobApply.stepsAria')} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
               <div className="flex items-center gap-1.5 min-w-max">
                 {STEPS.map((s) => {
                   const Icon = s.icon;
@@ -595,7 +597,7 @@ export default function JobApplicationFormPage() {
                       }`}
                     >
                       {completed ? <Check className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
-                      <span>{s.id}. {s.title}</span>
+                      <span>{s.id}. {t(s.titleKey)}</span>
                     </button>
                   );
                 })}
@@ -612,23 +614,23 @@ export default function JobApplicationFormPage() {
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
                     <div>
-                      <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 1: Applicant Personal Information</h2>
+                      <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step1Title')}</h2>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Auto-filled from your account. Edits made here update this job application only without changing your login credentials.
+                        {t('jobApply.step1Desc')}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800">
                       <UserAvatar src={application?.profile_photo_url || user?.avatar_url} name={personalForm.full_name} size="md" />
                       <div>
-                        <div className="font-semibold text-slate-800 dark:text-slate-100">Verified Profile Photo</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">Included automatically</div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-100">{t('jobApply.verifiedPhoto')}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('jobApply.includedAuto')}</div>
                       </div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Full Name *</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.fullName')}</label>
                       <input
                         required
                         value={personalForm.full_name}
@@ -637,7 +639,7 @@ export default function JobApplicationFormPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Phone Number *</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.phone')}</label>
                       <input
                         required
                         value={personalForm.phone}
@@ -646,7 +648,7 @@ export default function JobApplicationFormPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Email Address *</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.email')}</label>
                       <input
                         required
                         type="email"
@@ -656,7 +658,7 @@ export default function JobApplicationFormPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Date of Birth</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.dob')}</label>
                       <input
                         type="date"
                         value={personalForm.date_of_birth}
@@ -665,20 +667,20 @@ export default function JobApplicationFormPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Gender</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.gender')}</label>
                       <select
                         value={personalForm.gender}
                         onChange={(e) => setPersonalForm({ ...personalForm, gender: e.target.value })}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       >
-                        <option value="">Select (Optional)</option>
-                        <option value="Female">Female</option>
-                        <option value="Male">Male</option>
-                        <option value="Prefer not to say">Prefer not to say</option>
+                        <option value="">{t('jobApply.selectOptional')}</option>
+                        <option value="Female">{t('jobApply.female')}</option>
+                        <option value="Male">{t('jobApply.male')}</option>
+                        <option value="Prefer not to say">{t('jobApply.preferNotSay')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Nationality</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.nationality')}</label>
                       <input
                         value={personalForm.nationality}
                         onChange={(e) => setPersonalForm({ ...personalForm, nationality: e.target.value })}
@@ -686,7 +688,7 @@ export default function JobApplicationFormPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Country</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.country')}</label>
                       <input
                         value={personalForm.country}
                         onChange={(e) => setPersonalForm({ ...personalForm, country: e.target.value })}
@@ -694,38 +696,38 @@ export default function JobApplicationFormPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Province / Region</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.province')}</label>
                       <input
                         value={personalForm.province}
                         onChange={(e) => setPersonalForm({ ...personalForm, province: e.target.value })}
-                        placeholder="e.g. Kigali City"
+                        placeholder={t('jobApply.provincePlaceholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">District / City</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.district')}</label>
                       <input
                         value={personalForm.district}
                         onChange={(e) => setPersonalForm({ ...personalForm, district: e.target.value })}
-                        placeholder="e.g. Gasabo"
+                        placeholder={t('jobApply.districtPlaceholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Sector</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.sector')}</label>
                       <input
                         value={personalForm.sector}
                         onChange={(e) => setPersonalForm({ ...personalForm, sector: e.target.value })}
-                        placeholder="e.g. Kacyiru"
+                        placeholder={t('jobApply.sectorPlaceholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Residential Address</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.residentialAddress')}</label>
                       <input
                         value={personalForm.residential_address}
                         onChange={(e) => setPersonalForm({ ...personalForm, residential_address: e.target.value })}
-                        placeholder="Street, cell, village, or landmark"
+                        placeholder={t('jobApply.addressPlaceholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
@@ -738,9 +740,9 @@ export default function JobApplicationFormPage() {
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                     <div>
-                      <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 2: Educational Background</h2>
+                      <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step2Title')}</h2>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Add at least one academic or vocational record. You can include multiple qualifications.
+                        {t('jobApply.step2Desc')}
                       </p>
                     </div>
                     <button
@@ -749,14 +751,14 @@ export default function JobApplicationFormPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      Add Education Record
+                      {t('jobApply.addEduBtn')}
                     </button>
                   </div>
 
                   {educationList.map((edu, idx) => (
                     <div key={idx} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800 dark:text-slate-200">Education Record #{idx + 1}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{t('jobApply.eduRecordTitle', { num: idx + 1 })}</span>
                         {educationList.length > 1 && (
                           <button
                             type="button"
@@ -764,13 +766,13 @@ export default function JobApplicationFormPage() {
                             className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:underline"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
-                            Remove
+                            {t('common.remove')}
                           </button>
                         )}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Education Level *</label>
+                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.eduLevelLabel')}</label>
                           <select
                             value={edu.education_level}
                             onChange={(e) =>
@@ -784,41 +786,41 @@ export default function JobApplicationFormPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">School / University / Institution *</label>
+                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.institutionLabel')}</label>
                           <input
                             value={edu.institution_name}
                             onChange={(e) =>
                               setEducationList((prev) => prev.map((it, i) => (i === idx ? { ...it, institution_name: e.target.value } : it)))
                             }
-                            placeholder="e.g. University of Rwanda"
+                            placeholder={t('jobApply.institutionPlaceholder')}
                             className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                           />
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Field of Study / Major</label>
+                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.fieldLabel')}</label>
                           <input
                             value={edu.field_of_study}
                             onChange={(e) =>
                               setEducationList((prev) => prev.map((it, i) => (i === idx ? { ...it, field_of_study: e.target.value } : it)))
                             }
-                            placeholder="e.g. Accounting & Finance"
+                            placeholder={t('jobApply.fieldPlaceholder')}
                             className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                           />
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Degree / Diploma / Certificate Title</label>
+                          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.qualLabel')}</label>
                           <input
                             value={edu.qualification_obtained}
                             onChange={(e) =>
                               setEducationList((prev) => prev.map((it, i) => (i === idx ? { ...it, qualification_obtained: e.target.value } : it)))
                             }
-                            placeholder="e.g. BSc in Business Administration"
+                            placeholder={t('jobApply.qualPlaceholder')}
                             className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Start Year</label>
+                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.startYear')}</label>
                             <input
                               type="number"
                               min="1960"
@@ -832,7 +834,7 @@ export default function JobApplicationFormPage() {
                             />
                           </div>
                           <div>
-                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Graduation Year</label>
+                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.gradYear')}</label>
                             <input
                               type="number"
                               min="1960"
@@ -848,7 +850,7 @@ export default function JobApplicationFormPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Country</label>
+                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.country')}</label>
                             <input
                               value={edu.country}
                               onChange={(e) =>
@@ -858,7 +860,7 @@ export default function JobApplicationFormPage() {
                             />
                           </div>
                           <div>
-                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Status</label>
+                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('common.status')}</label>
                             <select
                               value={edu.education_status}
                               onChange={(e) =>
@@ -882,15 +884,15 @@ export default function JobApplicationFormPage() {
               {step === 3 && (
                 <div className="space-y-5">
                   <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 3: Academic Certificates, Diplomas & Supporting Documents</h2>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step3Title')}</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Upload scanned academic certificates, transcripts, licenses, or IDs (PDF, JPG, JPEG, or PNG, max 10MB each).
+                      {t('jobApply.step3Desc')}
                     </p>
                   </div>
 
                   {requiredDocTypes.length > 0 && (
                     <div className="p-3.5 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 space-y-1.5">
-                      <div className="font-semibold text-amber-900 dark:text-amber-200">Required Supporting Documents for This Vacancy:</div>
+                      <div className="font-semibold text-amber-900 dark:text-amber-200">{t('jobApply.reqDocsVacancyTitle')}</div>
                       <div className="flex flex-wrap gap-2">
                         {requiredDocTypes.map((reqType) => {
                           const hasIt = certificates.some((c) => c.document_type.toLowerCase() === reqType.toLowerCase());
@@ -914,7 +916,7 @@ export default function JobApplicationFormPage() {
 
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Document Category / Type</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.docCategoryLabel')}</label>
                       <select
                         value={certMeta.document_type}
                         onChange={(e) => setCertMeta({ ...certMeta, document_type: e.target.value })}
@@ -926,18 +928,18 @@ export default function JobApplicationFormPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Document Label (Optional)</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.docNameLabel')}</label>
                       <input
                         value={certMeta.document_name}
                         onChange={(e) => setCertMeta({ ...certMeta, document_name: e.target.value })}
-                        placeholder="e.g. BSc Degree Certificate"
+                        placeholder={t('jobApply.docNamePlaceholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
                     <div>
                       <label className="inline-flex items-center justify-center gap-2 w-full px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 cursor-pointer">
                         <Upload className="w-3.5 h-3.5" />
-                        <span>{uploadingCert ? `Uploading ${certProgress}%...` : 'Select File(s) to Upload'}</span>
+                        <span>{uploadingCert ? t('jobApply.uploadingProgress', { pct: certProgress }) : t('jobApply.selectFilesBtn')}</span>
                         <input
                           type="file"
                           multiple
@@ -952,7 +954,7 @@ export default function JobApplicationFormPage() {
 
                   {certificates.length === 0 ? (
                     <div className="p-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400">
-                      No supporting certificates or diplomas uploaded yet.
+                      {t('jobApply.noCertsUploaded')}
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
@@ -971,7 +973,7 @@ export default function JobApplicationFormPage() {
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                              Preview
+                              {t('customerPortal.preview')}
                             </button>
                             <button
                               type="button"
@@ -979,7 +981,7 @@ export default function JobApplicationFormPage() {
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
                             >
                               <Download className="w-3.5 h-3.5" />
-                              Download
+                              {t('common.download')}
                             </button>
                             <button
                               type="button"
@@ -987,7 +989,7 @@ export default function JobApplicationFormPage() {
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              Remove
+                              {t('common.remove')}
                             </button>
                           </div>
                         </div>
@@ -1001,9 +1003,9 @@ export default function JobApplicationFormPage() {
               {step === 4 && (
                 <div className="space-y-5">
                   <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 4: Work Experience</h2>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step4Title')}</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Do you have prior professional or internship work experience? Choosing "No" is valid and does not disqualify your application.
+                      {t('jobApply.step4Desc')}
                     </p>
                   </div>
 
@@ -1020,9 +1022,9 @@ export default function JobApplicationFormPage() {
                           : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
                       }`}
                     >
-                      <div className="font-bold text-slate-900 dark:text-white">Yes — I have prior work experience</div>
+                      <div className="font-bold text-slate-900 dark:text-white">{t('jobApply.expYesTitle')}</div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        Add your previous or current roles, achievements, and references.
+                        {t('jobApply.expYesDesc')}
                       </div>
                     </button>
                     <button
@@ -1034,16 +1036,16 @@ export default function JobApplicationFormPage() {
                           : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
                       }`}
                     >
-                      <div className="font-bold text-slate-900 dark:text-white">No — No prior work experience</div>
+                      <div className="font-bold text-slate-900 dark:text-white">{t('jobApply.expNoTitle')}</div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        Continue cleanly without work history (0 years recorded).
+                        {t('jobApply.expNoDesc')}
                       </div>
                     </button>
                   </div>
 
                   {!hasWorkExperience ? (
                     <div className="p-4 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200">
-                      Work experience marked as <strong>No prior work experience</strong>. You may proceed to Step 5 (Mandatory CV Upload).
+                      {t('jobApply.expNoConfirmed')}
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1054,14 +1056,14 @@ export default function JobApplicationFormPage() {
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          Add Experience Record
+                          {t('jobApply.addExpBtn')}
                         </button>
                       </div>
 
                       {experienceList.map((exp, idx) => (
                         <div key={idx} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-800 dark:text-slate-200">Experience #{idx + 1}</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{t('jobApply.expRecordTitle', { num: idx + 1 })}</span>
                             {experienceList.length > 1 && (
                               <button
                                 type="button"
@@ -1069,13 +1071,13 @@ export default function JobApplicationFormPage() {
                                 className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:underline"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
-                                Remove
+                                {t('common.remove')}
                               </button>
                             )}
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Company / Organization *</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.companyLabel')}</label>
                               <input
                                 value={exp.company_name}
                                 onChange={(e) =>
@@ -1085,7 +1087,7 @@ export default function JobApplicationFormPage() {
                               />
                             </div>
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Job Title / Position *</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.jobTitleLabel')}</label>
                               <input
                                 value={exp.job_title}
                                 onChange={(e) =>
@@ -1095,18 +1097,18 @@ export default function JobApplicationFormPage() {
                               />
                             </div>
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Employment Type</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.empTypeLabel')}</label>
                               <input
                                 value={exp.employment_type}
                                 onChange={(e) =>
                                   setExperienceList((prev) => prev.map((it, i) => (i === idx ? { ...it, employment_type: e.target.value } : it)))
                                 }
-                                placeholder="Full-Time, Internship..."
+                                placeholder={t('jobApply.empTypePlaceholder')}
                                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                               />
                             </div>
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Work Location</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.workLocLabel')}</label>
                               <input
                                 value={exp.work_location}
                                 onChange={(e) =>
@@ -1116,7 +1118,7 @@ export default function JobApplicationFormPage() {
                               />
                             </div>
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Start Date *</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.startDateLabel')}</label>
                               <input
                                 type="date"
                                 value={exp.start_date}
@@ -1128,7 +1130,7 @@ export default function JobApplicationFormPage() {
                             </div>
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <label className="font-semibold text-slate-700 dark:text-slate-300">End Date</label>
+                                <label className="font-semibold text-slate-700 dark:text-slate-300">{t('jobApply.endDateLabel')}</label>
                                 <label className="inline-flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400">
                                   <input
                                     type="checkbox"
@@ -1139,7 +1141,7 @@ export default function JobApplicationFormPage() {
                                       )
                                     }
                                   />
-                                  Current Role
+                                  {t('jobApply.currentRoleLabel')}
                                 </label>
                               </div>
                               <input
@@ -1153,7 +1155,7 @@ export default function JobApplicationFormPage() {
                               />
                             </div>
                             <div className="sm:col-span-2 lg:col-span-3">
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Key Responsibilities</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.keyRespLabel')}</label>
                               <textarea
                                 rows={2}
                                 value={exp.responsibilities}
@@ -1164,7 +1166,7 @@ export default function JobApplicationFormPage() {
                               />
                             </div>
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Reason for Leaving</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.reasonLeavingLabel')}</label>
                               <input
                                 value={exp.reason_for_leaving}
                                 onChange={(e) =>
@@ -1174,7 +1176,7 @@ export default function JobApplicationFormPage() {
                               />
                             </div>
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Reference Person</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.refPersonLabel')}</label>
                               <input
                                 value={exp.reference_person}
                                 onChange={(e) =>
@@ -1184,7 +1186,7 @@ export default function JobApplicationFormPage() {
                               />
                             </div>
                             <div>
-                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Reference Phone</label>
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.refPhoneLabel')}</label>
                               <input
                                 value={exp.reference_phone}
                                 onChange={(e) =>
@@ -1205,23 +1207,23 @@ export default function JobApplicationFormPage() {
               {step === 5 && (
                 <div className="space-y-5">
                   <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 5: Mandatory Curriculum Vitae (CV) Upload</h2>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step5Title')}</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Uploading a valid CV (PDF or DOCX, max 10MB) is strictly mandatory before you can submit your application.
+                      {t('jobApply.step5Desc')}
                     </p>
                   </div>
 
                   <div className="p-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-center space-y-3">
                     <FileText className="w-9 h-9 text-sky-600 dark:text-sky-400 mx-auto" />
                     <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                      {activeCv ? 'Replace Active Curriculum Vitae' : 'Upload Your Curriculum Vitae (Required)'}
+                      {activeCv ? t('jobApply.replaceCvHeading') : t('jobApply.uploadCvHeading')}
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Accepted formats: PDF (.pdf) or Microsoft Word (.docx). Maximum size 10 MB.
+                      {t('jobApply.cvFormatsHint')}
                     </p>
                     <label className="inline-flex items-center gap-2 px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 cursor-pointer">
                       <Upload className="w-3.5 h-3.5" />
-                      <span>{uploadingCv ? `Uploading CV ${cvProgress}%...` : activeCv ? 'Upload Replacement CV' : 'Choose CV File'}</span>
+                      <span>{uploadingCv ? t('jobApply.uploadingCvProgress', { pct: cvProgress }) : activeCv ? t('jobApply.uploadReplacementCv') : t('jobApply.chooseCvFile')}</span>
                       <input
                         type="file"
                         accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -1235,7 +1237,7 @@ export default function JobApplicationFormPage() {
                   {activeCv && (
                     <div className="p-4 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="font-bold text-emerald-900 dark:text-emerald-200">Active CV Ready: {activeCv.original_filename}</div>
+                        <div className="font-bold text-emerald-900 dark:text-emerald-200">{t('jobApply.activeCvReady', { name: activeCv.original_filename })}</div>
                         <div className="text-[11px] text-emerald-700 dark:text-emerald-300">
                           {Math.max(1, Math.round((activeCv.file_size_bytes || 0) / 1024))} KB · {activeCv.mime_type}
                         </div>
@@ -1247,7 +1249,7 @@ export default function JobApplicationFormPage() {
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          Preview
+                          {t('customerPortal.preview')}
                         </button>
                         <button
                           type="button"
@@ -1255,7 +1257,7 @@ export default function JobApplicationFormPage() {
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
                         >
                           <Download className="w-3.5 h-3.5" />
-                          Download
+                          {t('common.download')}
                         </button>
                         <button
                           type="button"
@@ -1263,7 +1265,7 @@ export default function JobApplicationFormPage() {
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-lg"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          Remove
+                          {t('common.remove')}
                         </button>
                       </div>
                     </div>
@@ -1275,15 +1277,15 @@ export default function JobApplicationFormPage() {
               {step === 6 && (
                 <div className="space-y-5">
                   <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 6: Skills, Languages & Additional Details</h2>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step6Title')}</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Highlight your technical, professional, computer, language skills, and availability.
+                      {t('jobApply.step6Desc')}
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Total Years Experience</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.totalYearsLabel')}</label>
                       <input
                         type="number"
                         min="0"
@@ -1295,54 +1297,54 @@ export default function JobApplicationFormPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Availability</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.availabilityLabel')}</label>
                       <input
                         value={skillsSummaryForm.availability}
                         onChange={(e) => setSkillsSummaryForm({ ...skillsSummaryForm, availability: e.target.value })}
-                        placeholder="Immediate / 2 weeks notice"
+                        placeholder={t('jobApply.availabilityPlaceholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Preferred Employment</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.preferredEmpLabel')}</label>
                       <select
                         value={skillsSummaryForm.preferred_employment_type}
                         onChange={(e) => setSkillsSummaryForm({ ...skillsSummaryForm, preferred_employment_type: e.target.value })}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       >
-                        <option value="Full-Time">Full-Time</option>
-                        <option value="Part-Time">Part-Time</option>
-                        <option value="Contract">Contract</option>
-                        <option value="Internship">Internship</option>
+                        <option value="Full-Time">{t('employmentTypes.full_time')}</option>
+                        <option value="Part-Time">{t('employmentTypes.part_time')}</option>
+                        <option value="Contract">{t('employmentTypes.contract')}</option>
+                        <option value="Internship">{t('employmentTypes.internship')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Expected Monthly Salary ({vacancy.currency_code || 'RWF'})</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.expectedSalaryLabel', { currency: vacancy.currency_code || 'RWF' })}</label>
                       <input
                         type="number"
                         min="0"
                         value={skillsSummaryForm.expected_salary}
                         onChange={(e) => setSkillsSummaryForm({ ...skillsSummaryForm, expected_salary: e.target.value })}
-                        placeholder="Optional"
+                        placeholder={t('common.optional')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Skills & Competencies Summary</label>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('jobApply.skillsSummaryLabel')}</label>
                     <textarea
                       rows={3}
                       value={skillsSummaryForm.skills_summary}
                       onChange={(e) => setSkillsSummaryForm({ ...skillsSummaryForm, skills_summary: e.target.value })}
-                      placeholder="Summarize your technical tools, leadership strengths, and certifications..."
+                      placeholder={t('jobApply.skillsSummaryPlaceholder')}
                       className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                     />
                   </div>
 
                   {/* Quick Language Chips */}
                   <div className="space-y-2">
-                    <div className="font-semibold text-slate-700 dark:text-slate-200">Quick-Add Languages</div>
+                    <div className="font-semibold text-slate-700 dark:text-slate-200">{t('jobApply.quickLanguagesTitle')}</div>
                     <div className="flex flex-wrap gap-2">
                       {QUICK_LANGUAGES.map((lang) => (
                         <button
@@ -1361,41 +1363,41 @@ export default function JobApplicationFormPage() {
                   {/* Add Custom Skill/Language */}
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Category</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.categoryLabel')}</label>
                       <select
                         value={skillDraft.skill_category}
                         onChange={(e) => setSkillDraft({ ...skillDraft, skill_category: e.target.value })}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       >
-                        <option value="technical">Technical</option>
-                        <option value="professional">Professional</option>
-                        <option value="computer">Computer / Software</option>
-                        <option value="training">Training / Certification</option>
-                        <option value="language">Language</option>
-                        <option value="other">Other</option>
+                        <option value="technical">{t('jobApply.catTechnical')}</option>
+                        <option value="professional">{t('jobApply.catProfessional')}</option>
+                        <option value="computer">{t('jobApply.catComputer')}</option>
+                        <option value="training">{t('jobApply.catTraining')}</option>
+                        <option value="language">{t('jobApply.catLanguage')}</option>
+                        <option value="other">{t('jobApply.catOther')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Skill or Language Name</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.skillNameLabel')}</label>
                       <input
                         value={skillDraft.skill_name}
                         onChange={(e) => setSkillDraft({ ...skillDraft, skill_name: e.target.value })}
-                        placeholder="e.g. Excel, POS Operations..."
+                        placeholder={t('jobApply.skillNamePlaceholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Proficiency</label>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('jobApply.proficiencyLabel')}</label>
                       <select
                         value={skillDraft.proficiency_level}
                         onChange={(e) => setSkillDraft({ ...skillDraft, proficiency_level: e.target.value })}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                       >
-                        <option value="Beginner">Beginner / Basic</option>
-                        <option value="Intermediate">Intermediate</option>
-                        <option value="Advanced">Advanced</option>
-                        <option value="Fluent">Fluent / Expert</option>
-                        <option value="Native">Native</option>
+                        <option value="Beginner">{t('jobApply.profBeginner')}</option>
+                        <option value="Intermediate">{t('jobApply.profIntermediate')}</option>
+                        <option value="Advanced">{t('jobApply.profAdvanced')}</option>
+                        <option value="Fluent">{t('jobApply.profFluent')}</option>
+                        <option value="Native">{t('jobApply.profNative')}</option>
                       </select>
                     </div>
                     <button
@@ -1404,7 +1406,7 @@ export default function JobApplicationFormPage() {
                       className="inline-flex items-center justify-center gap-1.5 px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      Add Skill
+                      {t('jobApply.addSkillBtn')}
                     </button>
                   </div>
 
@@ -1423,7 +1425,7 @@ export default function JobApplicationFormPage() {
                             type="button"
                             onClick={() => setSkillsList((prev) => prev.filter((_, i) => i !== idx))}
                             className="text-rose-500 hover:text-rose-700"
-                            aria-label={`Remove ${s.skill_name}`}
+                            aria-label={`${t('common.remove')} ${s.skill_name}`}
                           >
                             ×
                           </button>
@@ -1438,16 +1440,16 @@ export default function JobApplicationFormPage() {
               {step === 7 && (
                 <div className="space-y-5">
                   <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 7: Job-Specific Questions & Cover Note</h2>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step7Title')}</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Tell {vacancy.business_name} why you are a strong fit for <strong>{vacancy.title}</strong>.
+                      {t('jobApply.step7Prompt', { business: vacancy.business_name, title: vacancy.title })}
                     </p>
                   </div>
 
                   <div className="space-y-4">
                     <div>
                       <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">
-                        Why do you want this position? *
+                        {t('jobApply.whyWantQ')}
                       </label>
                       <textarea
                         rows={3}
@@ -1459,7 +1461,7 @@ export default function JobApplicationFormPage() {
                     </div>
                     <div>
                       <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">
-                        Why should we select you for this role? *
+                        {t('jobApply.whySelectQ')}
                       </label>
                       <textarea
                         rows={3}
@@ -1471,7 +1473,7 @@ export default function JobApplicationFormPage() {
                     </div>
                     <div>
                       <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">
-                        Cover Letter / Additional Statement (Optional)
+                        {t('jobApply.coverLetterLabel')}
                       </label>
                       <textarea
                         rows={4}
@@ -1484,7 +1486,7 @@ export default function JobApplicationFormPage() {
                     {(vacancy.custom_questions || []).map((q) => (
                       <div key={q.key}>
                         <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">
-                          {q.label} {q.required ? '*' : '(Optional)'}
+                          {q.label} {q.required ? '*' : `(${t('common.optional')})`}
                         </label>
                         <textarea
                           rows={2}
@@ -1503,17 +1505,17 @@ export default function JobApplicationFormPage() {
               {step === 8 && (
                 <div className="space-y-5">
                   <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Step 8: Review & Submit Your Application</h2>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.step8Title')}</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Review every section carefully. Once submitted, application answers and uploaded files cannot be edited.
+                      {t('jobApply.step8Desc')}
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-white">1. Personal Information</span>
-                        <button type="button" onClick={() => setStep(1)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">Edit</button>
+                        <span className="font-bold text-slate-900 dark:text-white">{t('jobApply.reviewPersonal')}</span>
+                        <button type="button" onClick={() => setStep(1)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">{t('common.edit')}</button>
                       </div>
                       <div className="text-slate-700 dark:text-slate-300">{personalForm.full_name} · {personalForm.phone}</div>
                       <div className="text-slate-500 dark:text-slate-400">{personalForm.email} · {personalForm.district || personalForm.country}</div>
@@ -1521,8 +1523,8 @@ export default function JobApplicationFormPage() {
 
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-white">2. Education ({educationList.filter((e) => e.institution_name.trim()).length})</span>
-                        <button type="button" onClick={() => setStep(2)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">Edit</button>
+                        <span className="font-bold text-slate-900 dark:text-white">{t('jobApply.reviewEducation', { count: educationList.filter((e) => e.institution_name.trim()).length })}</span>
+                        <button type="button" onClick={() => setStep(2)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">{t('common.edit')}</button>
                       </div>
                       {educationList.filter((e) => e.institution_name.trim()).map((e, i) => (
                         <div key={i} className="text-slate-600 dark:text-slate-300">
@@ -1533,43 +1535,43 @@ export default function JobApplicationFormPage() {
 
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-white">3 & 5. CV & Certificates</span>
-                        <button type="button" onClick={() => setStep(5)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">Edit</button>
+                        <span className="font-bold text-slate-900 dark:text-white">{t('jobApply.reviewDocs')}</span>
+                        <button type="button" onClick={() => setStep(5)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">{t('common.edit')}</button>
                       </div>
                       <div className={activeCv ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : 'text-rose-600 dark:text-rose-400 font-semibold'}>
-                        {activeCv ? `CV Uploaded: ${activeCv.original_filename}` : 'Missing Mandatory CV!'}
+                        {activeCv ? t('jobApply.cvUploadedPrefix', { name: activeCv.original_filename }) : t('jobApply.missingMandatoryCv')}
                       </div>
                       <div className="text-slate-500 dark:text-slate-400">
-                        Supporting certificates uploaded: {certificates.length}
+                        {t('jobApply.certsUploadedCount', { count: certificates.length })}
                       </div>
                     </div>
 
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-white">4 & 6. Experience & Skills</span>
-                        <button type="button" onClick={() => setStep(4)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">Edit</button>
+                        <span className="font-bold text-slate-900 dark:text-white">{t('jobApply.reviewExpSkills')}</span>
+                        <button type="button" onClick={() => setStep(4)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">{t('common.edit')}</button>
                       </div>
                       <div className="text-slate-700 dark:text-slate-300">
                         {hasWorkExperience
-                          ? `${experienceList.filter((ex) => ex.company_name.trim()).length} experience record(s) · ${skillsSummaryForm.years_of_experience || 0} yr(s)`
-                          : 'No prior work experience indicated'}
+                          ? t('jobApply.expSummary', { count: experienceList.filter((ex) => ex.company_name.trim()).length, years: skillsSummaryForm.years_of_experience || 0 })
+                          : t('jobApply.noPriorExp')}
                       </div>
                       <div className="text-slate-500 dark:text-slate-400">
-                        {skillsList.length} skill/language tag(s) · Availability: {skillsSummaryForm.availability || 'N/A'}
+                        {t('jobApply.skillsSummaryLine', { count: skillsList.length, avail: skillsSummaryForm.availability || 'N/A' })}
                       </div>
                     </div>
                   </div>
 
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white">7. Job-Specific Responses</span>
-                      <button type="button" onClick={() => setStep(7)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">Edit</button>
+                      <span className="font-bold text-slate-900 dark:text-white">{t('jobApply.reviewJobResponses')}</span>
+                      <button type="button" onClick={() => setStep(7)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">{t('common.edit')}</button>
                     </div>
                     <div className="text-slate-600 dark:text-slate-300 line-clamp-2">
-                      <strong>Motivation:</strong> {jobQuestionsForm.why_want_position || 'Not answered yet'}
+                      <strong>{t('jobApply.motivationLabel')}</strong> {jobQuestionsForm.why_want_position || t('jobApply.notAnsweredYet')}
                     </div>
                     <div className="text-slate-600 dark:text-slate-300 line-clamp-2">
-                      <strong>Why select you:</strong> {jobQuestionsForm.why_select_you || 'Not answered yet'}
+                      <strong>{t('jobApply.whySelectLabel')}</strong> {jobQuestionsForm.why_select_you || t('jobApply.notAnsweredYet')}
                     </div>
                   </div>
 
@@ -1581,7 +1583,7 @@ export default function JobApplicationFormPage() {
                       className="mt-0.5"
                     />
                     <span className="text-slate-800 dark:text-slate-200 leading-relaxed">
-                      I confirm that all information, qualifications, responses, and uploaded documents in this application are truthful, accurate, and complete. I understand that submitting locks edits to this application.
+                      {t('jobApply.accuracyText')}
                     </span>
                   </label>
                 </div>
@@ -1596,7 +1598,7 @@ export default function JobApplicationFormPage() {
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  Back
+                  {t('common.back')}
                 </button>
 
                 <div className="flex items-center gap-2.5">
@@ -1606,7 +1608,7 @@ export default function JobApplicationFormPage() {
                     onClick={() => persistDraft()}
                     className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                   >
-                    {saving ? 'Saving...' : 'Save Progress'}
+                    {saving ? t('common.saving') : t('jobApply.saveProgressBtn')}
                   </button>
 
                   {step < 8 ? (
@@ -1615,7 +1617,7 @@ export default function JobApplicationFormPage() {
                       onClick={() => goToStep(step + 1)}
                       className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                     >
-                      {step === 7 ? 'Review Application' : 'Next Step'}
+                      {step === 7 ? t('jobApply.reviewAppBtn') : t('jobApply.nextStepBtn')}
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   ) : (
@@ -1626,7 +1628,7 @@ export default function JobApplicationFormPage() {
                       className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 disabled:opacity-50"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      {submitting ? 'Submitting...' : 'Submit Application'}
+                      {submitting ? t('jobApply.submittingBtn') : t('jobApply.submitAppBtn')}
                     </button>
                   )}
                 </div>
@@ -1643,9 +1645,9 @@ export default function JobApplicationFormPage() {
       {cancelConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 dark:bg-black/75 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full space-y-4">
-            <h3 className="text-base font-bold text-[#0B192C] dark:text-white">Discard Draft Application?</h3>
+            <h3 className="text-base font-bold text-[#0B192C] dark:text-white">{t('jobApply.discardModalTitle')}</h3>
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              All unsaved or draft progress and temporary files attached to this draft will be permanently removed.
+              {t('jobApply.discardModalDesc')}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -1653,14 +1655,14 @@ export default function JobApplicationFormPage() {
                 onClick={() => setCancelConfirmOpen(false)}
                 className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg"
               >
-                Keep Editing
+                {t('jobApply.keepEditingBtn')}
               </button>
               <button
                 type="button"
                 onClick={handleDiscardDraft}
                 className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 rounded-lg hover:bg-rose-500"
               >
-                Yes, Discard Draft
+                {t('jobApply.confirmDiscardBtn')}
               </button>
             </div>
           </div>

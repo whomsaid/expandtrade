@@ -5,11 +5,11 @@ import { body } from 'express-validator';
 import { execute, query, queryOne, transaction } from '../config/db.js';
 import { authenticate, requirePlatformAdmin, requireProfileImage } from '../middleware/auth.js';
 import { loadMemberPermissions, requireBusiness, requirePermission } from '../middleware/tenant.js';
-import { upload } from '../middleware/upload.js';
+import { imageUpload, removeUploadedFile, verifyFileNonEmpty, verifyImageSignature } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, logAudit } from '../services/auditService.js';
 import { sendMail } from '../services/mailService.js';
-import { getCached, setCached } from '../services/cacheService.js';
+import { getCached, invalidatePrefix, setCached } from '../services/cacheService.js';
 
 const ALLOWED_EMPLOYEE_ROLES = ['manager', 'branch_manager', 'accountant', 'cashier', 'salesperson', 'inventory_manager', 'customer_service'];
 
@@ -160,6 +160,7 @@ router.post(
         ipAddress: req.ip,
       });
 
+      invalidatePrefix('public:businesses:');
       const created = await queryOne('SELECT * FROM businesses WHERE id = ?', [result.businessId]);
       res.status(201).json({ business: created, mainBranchId: result.branchId });
     } catch (err) {
@@ -290,6 +291,7 @@ router.put(
         entityId: req.businessId,
       });
 
+      invalidatePrefix('public:businesses:');
       const updated = await queryOne('SELECT * FROM businesses WHERE id = ?', [req.businessId]);
       res.json({ business: updated, message: 'Business settings saved' });
     } catch (err) {
@@ -303,14 +305,24 @@ router.post(
   authenticate,
   requireBusiness,
   requirePermission('settings.manage'),
-  upload.single('logo'),
+  imageUpload.single('logo'),
   async (req, res, next) => {
     try {
-      if (!req.file) return res.status(400).json({ error: 'Logo image file is required' });
+      if (!req.file) return res.status(400).json({ error: 'Logo image file is required (JPG, PNG, or WEBP, max 5MB).' });
+      if (!verifyFileNonEmpty(req.file) || !verifyImageSignature(req.file.path)) {
+        removeUploadedFile(req.file.path);
+        return res.status(400).json({ error: 'Invalid or empty image file. Please upload a valid JPG, PNG, or WEBP logo.' });
+      }
+      const previousLogo = req.business?.logo_url;
       const logoUrl = `/uploads/${req.file.filename}`;
-      await execute('UPDATE businesses SET logo_url = ? WHERE id = ?', [logoUrl, req.businessId]);
-      res.json({ logo_url: logoUrl });
+      await execute('UPDATE businesses SET logo_url = ?, updated_at = datetime(\'now\') WHERE id = ?', [logoUrl, req.businessId]);
+      if (previousLogo && previousLogo !== logoUrl) {
+        removeUploadedFile(previousLogo);
+      }
+      invalidatePrefix('public:businesses:');
+      res.json({ logo_url: logoUrl, message: 'Business logo updated successfully.' });
     } catch (err) {
+      if (req.file?.path) removeUploadedFile(req.file.path);
       next(err);
     }
   }
@@ -322,7 +334,7 @@ router.get('/branches', authenticate, requireBusiness, async (req, res, next) =>
     const branches = await query(
       `SELECT b.*, u.full_name AS manager_name,
               (SELECT COUNT(*) FROM business_members bm WHERE bm.assigned_branch_id = b.id AND bm.status = 'active') AS staff_count,
-              (SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s WHERE s.branch_id = b.id AND s.sale_status != 'cancelled') AS total_sales
+              (SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s WHERE s.branch_id = b.id AND s.sale_status NOT IN ('cancelled', 'refunded')) AS total_sales
        FROM branches b
        LEFT JOIN users u ON u.id = b.manager_user_id
        WHERE b.business_id = ?
@@ -443,7 +455,7 @@ router.get('/members', authenticate, requireBusiness, requirePermission('employe
       `SELECT bm.*, u.full_name, u.email, u.phone, u.avatar_url, u.last_login_at,
               r.code AS role_code, r.name AS role_name, b.name AS branch_name,
               (SELECT COUNT(*) FROM sales s WHERE s.business_id = bm.business_id AND s.cashier_user_id = bm.user_id) AS sales_count,
-              (SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s WHERE s.business_id = bm.business_id AND s.cashier_user_id = bm.user_id AND s.sale_status != 'cancelled') AS total_sales_amount
+              (SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s WHERE s.business_id = bm.business_id AND s.cashier_user_id = bm.user_id AND s.sale_status NOT IN ('cancelled', 'refunded')) AS total_sales_amount
        FROM business_members bm
        JOIN users u ON u.id = bm.user_id
        JOIN roles r ON r.id = bm.role_id

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,29 +22,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { formatDate, formatMoney } from '../utils/format.js';
 
-const EMPLOYMENT_LABELS = {
-  full_time: 'Full-Time',
-  part_time: 'Part-Time',
-  contract: 'Contract',
-  internship: 'Internship',
-  temporary: 'Temporary',
-};
-
-const WORK_MODE_LABELS = {
-  on_site: 'On-Site',
-  hybrid: 'Hybrid',
-  remote: 'Remote',
-};
-
-function formatEmploymentType(val) {
-  return EMPLOYMENT_LABELS[val] || String(val || 'Full-Time').replace(/_/g, ' ');
-}
-
-function formatWorkMode(val) {
-  return WORK_MODE_LABELS[val] || String(val || 'On-Site').replace(/_/g, ' ');
-}
-
 export function PublicJobsPage() {
+  const { t } = useTranslation();
   const [vacancies, setVacancies] = useState([]);
   const [businesses, setBusinesses] = useState([]);
   const [search, setSearch] = useState('');
@@ -52,6 +32,12 @@ export function PublicJobsPage() {
   const [workMode, setWorkMode] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const formatEmploymentType = (val) =>
+    t(`employmentTypes.${val}`, { defaultValue: String(val || 'full_time').replace(/_/g, ' ') });
+
+  const formatWorkMode = (val) =>
+    t(`workModes.${val}`, { defaultValue: String(val || 'on_site').replace(/_/g, ' ') });
 
   const loadJobs = useCallback(async () => {
     setLoading(true);
@@ -86,13 +72,13 @@ export function PublicJobsPage() {
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div className="space-y-2 max-w-2xl">
             <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">
-              BizTrade Africa Careers
+              {t('jobs.eyebrow')}
             </p>
             <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">
-              Open Job Vacancies
+              {t('jobs.title')}
             </h1>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Explore open positions published by registered businesses across BizTrade Africa. Sign in or register to submit a verified application and track every stage online.
+              {t('jobs.subtitle')}
             </p>
           </div>
 
@@ -102,45 +88,45 @@ export function PublicJobsPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search title, skill, city..."
+                placeholder={t('jobs.searchPlaceholder')}
                 className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
             </div>
             <select
-              aria-label="Filter by Business"
+              aria-label={t('jobs.filterBusiness')}
               value={businessId}
               onChange={(e) => setBusinessId(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             >
-              <option value="">All Businesses</option>
+              <option value="">{t('jobs.allBusinesses')}</option>
               {businesses.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
             <div className="flex gap-2">
               <select
-                aria-label="Filter by Employment Type"
+                aria-label={t('jobs.filterType')}
                 value={employmentType}
                 onChange={(e) => setEmploymentType(e.target.value)}
                 className="flex-1 px-2.5 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
-                <option value="">All Types</option>
-                <option value="full_time">Full-Time</option>
-                <option value="part_time">Part-Time</option>
-                <option value="contract">Contract</option>
-                <option value="internship">Internship</option>
-                <option value="temporary">Temporary</option>
+                <option value="">{t('jobs.allTypes')}</option>
+                <option value="full_time">{t('employmentTypes.full_time')}</option>
+                <option value="part_time">{t('employmentTypes.part_time')}</option>
+                <option value="contract">{t('employmentTypes.contract')}</option>
+                <option value="internship">{t('employmentTypes.internship')}</option>
+                <option value="temporary">{t('employmentTypes.temporary')}</option>
               </select>
               <select
-                aria-label="Filter by Work Mode"
+                aria-label={t('jobs.filterMode')}
                 value={workMode}
                 onChange={(e) => setWorkMode(e.target.value)}
                 className="flex-1 px-2.5 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               >
-                <option value="">All Modes</option>
-                <option value="on_site">On-Site</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="remote">Remote</option>
+                <option value="">{t('jobs.allModes')}</option>
+                <option value="on_site">{t('workModes.on_site')}</option>
+                <option value="hybrid">{t('workModes.hybrid')}</option>
+                <option value="remote">{t('workModes.remote')}</option>
               </select>
             </div>
           </div>
@@ -161,9 +147,9 @@ export function PublicJobsPage() {
         ) : vacancies.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 p-12 rounded-xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
             <Briefcase className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto" />
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">No open job vacancies match right now</h2>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('jobs.noMatchTitle')}</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-              Businesses on BizTrade Africa publish vacancies directly from their HR recruitment dashboard. Try clearing filters or checking back soon.
+              {t('jobs.noMatchDesc')}
             </p>
           </div>
         ) : (
@@ -218,13 +204,15 @@ export function PublicJobsPage() {
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className={v.is_expired ? 'text-rose-600 dark:text-rose-400 font-semibold' : ''}>
-                          {v.is_expired ? `Closed (${formatDate(v.application_deadline)})` : `Deadline: ${formatDate(v.application_deadline)}`}
+                          {v.is_expired
+                            ? t('jobs.closedOn', { date: formatDate(v.application_deadline) })
+                            : t('jobs.deadlineLabel', { date: formatDate(v.application_deadline) })}
                         </span>
                       </div>
                     )}
                     {Boolean(v.show_salary) && (v.salary_min || v.salary_max) && (
                       <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums pt-0.5">
-                        {v.salary_min ? formatMoney(v.salary_min, v.currency_code) : 'Competitive'}
+                        {v.salary_min ? formatMoney(v.salary_min, v.currency_code) : t('jobs.competitive')}
                         {v.salary_max ? ` – ${formatMoney(v.salary_max, v.currency_code)}` : ''}
                       </div>
                     )}
@@ -236,13 +224,13 @@ export function PublicJobsPage() {
                     to={`/jobs/${v.id}`}
                     className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline"
                   >
-                    View Vacancy
+                    {t('jobs.viewVacancy')}
                   </Link>
                   <Link
                     to={`/jobs/${v.id}`}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                   >
-                    {v.is_expired ? 'Details' : 'Apply Now'}
+                    {v.is_expired ? t('common.details') : t('jobs.applyNow')}
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -258,6 +246,7 @@ export function PublicJobsPage() {
 }
 
 export function PublicJobDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -265,6 +254,12 @@ export function PublicJobDetailPage() {
   const [existingApp, setExistingApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const formatEmploymentType = (val) =>
+    t(`employmentTypes.${val}`, { defaultValue: String(val || 'full_time').replace(/_/g, ' ') });
+
+  const formatWorkMode = (val) =>
+    t(`workModes.${val}`, { defaultValue: String(val || 'on_site').replace(/_/g, ' ') });
 
   useEffect(() => {
     setLoading(true);
@@ -306,7 +301,7 @@ export function PublicJobDetailPage() {
         <div className="text-xs text-slate-500 dark:text-slate-400">
           <Link to="/jobs" className="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white">
             <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Open Job Vacancies
+            {t('jobs.backToJobs')}
           </Link>
         </div>
 
@@ -352,41 +347,41 @@ export function PublicJobDetailPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
                   <div>
-                    <div className="text-slate-500 dark:text-slate-400">Location</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t('jobs.location')}</div>
                     <div className="font-semibold text-slate-900 dark:text-white mt-0.5">{vacancy.location}</div>
                   </div>
                   <div>
-                    <div className="text-slate-500 dark:text-slate-400">Employment</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t('jobs.employment')}</div>
                     <div className="font-semibold text-slate-900 dark:text-white mt-0.5">
                       {formatEmploymentType(vacancy.employment_type)} · {formatWorkMode(vacancy.work_mode)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-500 dark:text-slate-400">Openings</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t('jobs.openings')}</div>
                     <div className="font-semibold text-slate-900 dark:text-white mt-0.5 tabular-nums">
-                      {vacancy.positions_count || 1} position(s)
+                      {t('jobs.positionsCount', { count: vacancy.positions_count || 1 })}
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-500 dark:text-slate-400">Deadline</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t('jobs.deadlineField')}</div>
                     <div className="font-semibold text-slate-900 dark:text-white mt-0.5 tabular-nums">
-                      {vacancy.application_deadline ? formatDate(vacancy.application_deadline) : 'Open until filled'}
+                      {vacancy.application_deadline ? formatDate(vacancy.application_deadline) : t('jobs.openUntilFilled')}
                     </div>
                   </div>
                 </div>
 
                 {Boolean(vacancy.show_salary) && (vacancy.salary_min || vacancy.salary_max) && (
                   <div className="p-3.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 text-xs text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
-                    <span className="font-semibold">Indicative Compensation</span>
+                    <span className="font-semibold">{t('jobs.indicativeCompensation')}</span>
                     <span className="font-bold tabular-nums">
-                      {vacancy.salary_min ? formatMoney(vacancy.salary_min, vacancy.currency_code) : 'Competitive'}
+                      {vacancy.salary_min ? formatMoney(vacancy.salary_min, vacancy.currency_code) : t('jobs.competitive')}
                       {vacancy.salary_max ? ` – ${formatMoney(vacancy.salary_max, vacancy.currency_code)}` : ''}
                     </span>
                   </div>
                 )}
 
                 <div className="space-y-2 pt-2">
-                  <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Role Description</h2>
+                  <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">{t('jobs.roleDescription')}</h2>
                   <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
                     {vacancy.description}
                   </p>
@@ -394,7 +389,7 @@ export function PublicJobDetailPage() {
 
                 {vacancy.responsibilities && (
                   <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Key Responsibilities</h2>
+                    <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">{t('jobs.keyResponsibilities')}</h2>
                     <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
                       {vacancy.responsibilities}
                     </p>
@@ -403,7 +398,7 @@ export function PublicJobDetailPage() {
 
                 {vacancy.requirements && (
                   <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Qualifications & Requirements</h2>
+                    <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">{t('jobs.qualifications')}</h2>
                     <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
                       {vacancy.requirements}
                     </p>
@@ -414,34 +409,34 @@ export function PublicJobDetailPage() {
 
             <aside className="lg:col-span-4 space-y-5">
               <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
-                <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Application Checklist</h2>
+                <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">{t('jobs.applicationChecklist')}</h2>
                 <ul className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                    <span>Verified BizTrade Africa account with profile image</span>
+                    <span>{t('jobs.checklistVerifiedAccount')}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <GraduationCap className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                     <span>
-                      Education background
-                      {vacancy.required_education_level ? ` (Target: ${vacancy.required_education_level})` : ''}
+                      {t('jobs.checklistEducation')}
+                      {vacancy.required_education_level ? ` ${t('jobs.checklistTarget', { level: vacancy.required_education_level })}` : ''}
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <FileCheck2 className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-                    <span>Mandatory Curriculum Vitae (CV) in PDF or DOCX</span>
+                    <span>{t('jobs.checklistCv')}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Clock className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                     <span>
                       {Number(vacancy.min_experience_years) > 0
-                        ? `Recommended experience: ${vacancy.min_experience_years}+ year(s) (first-time applicants welcome)`
-                        : 'Open to experienced professionals and fresh graduates'}
+                        ? t('jobs.checklistExpRecommended', { years: vacancy.min_experience_years })
+                        : t('jobs.checklistExpFresh')}
                     </span>
                   </li>
                   {vacancy.required_document_types?.length > 0 && (
                     <li className="pt-1">
-                      <div className="font-semibold text-slate-800 dark:text-slate-200 mb-1">Required Supporting Documents:</div>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200 mb-1">{t('jobs.requiredSupportingDocs')}</div>
                       <div className="flex flex-wrap gap-1.5">
                         {vacancy.required_document_types.map((docType) => (
                           <span
@@ -458,22 +453,22 @@ export function PublicJobDetailPage() {
 
                 {user?.is_platform_admin ? (
                   <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
-                    Platform Super Admin accounts oversee platform governance and cannot submit job applications.
+                    {t('jobs.superAdminBlocked')}
                   </div>
                 ) : vacancy.is_expired ? (
                   <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-200">
-                    The application deadline for this position has passed.
+                    {t('jobs.deadlinePassed')}
                   </div>
                 ) : isBlockedDuplicate ? (
                   <div className="space-y-3">
                     <div className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-xs text-sky-900 dark:text-sky-200">
-                      You have already submitted an application ({existingApp.reference_number}).
+                      {t('jobs.alreadySubmitted', { ref: existingApp.reference_number })}
                     </div>
                     <Link
                       to={`/customer?tab=applications&applicationId=${existingApp.id}`}
                       className="block text-center w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                     >
-                      Track My Application Status
+                      {t('jobs.trackApplicationStatus')}
                     </Link>
                   </div>
                 ) : existingApp?.status === 'draft' ? (
@@ -482,7 +477,7 @@ export function PublicJobDetailPage() {
                     onClick={handleApplyClick}
                     className="w-full py-2.5 text-xs font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-500"
                   >
-                    Resume Draft Application
+                    {t('jobs.resumeDraft')}
                   </button>
                 ) : (
                   <div className="space-y-2.5">
@@ -491,7 +486,7 @@ export function PublicJobDetailPage() {
                       onClick={handleApplyClick}
                       className="w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                     >
-                      {user ? 'Apply Now' : 'Sign In & Apply Now'}
+                      {user ? t('jobs.applyNow') : t('jobs.signInApply')}
                     </button>
                     {!user && (
                       <Link
@@ -499,7 +494,7 @@ export function PublicJobDetailPage() {
                         className="inline-flex items-center justify-center gap-1.5 w-full py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
-                        New Candidate? Create Account
+                        {t('jobs.newCandidateCreate')}
                       </Link>
                     )}
                   </div>
@@ -509,7 +504,7 @@ export function PublicJobDetailPage() {
               <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 text-xs">
                 <div className="flex items-center gap-2 font-bold text-[#0B192C] dark:text-white text-sm">
                   <Building2 className="w-4 h-4 text-sky-700 dark:text-sky-400" />
-                  <span>About {vacancy.business_name}</span>
+                  <span>{t('jobs.aboutBusiness', { name: vacancy.business_name })}</span>
                 </div>
                 <div className="text-slate-500 dark:text-slate-400">
                   {vacancy.business_category} · {vacancy.business_district}, {vacancy.business_country}
@@ -523,7 +518,7 @@ export function PublicJobDetailPage() {
                   to={`/businesses/${vacancy.business_slug}`}
                   className="inline-flex items-center gap-1 text-sky-700 dark:text-sky-400 font-semibold hover:underline pt-1"
                 >
-                  View Business Profile
+                  {t('jobs.viewBusinessProfile')}
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>

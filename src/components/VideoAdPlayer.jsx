@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Film, Loader2, Package } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { formatMoney } from '../utils/format.js';
 
 export default function VideoAdPlayer({
@@ -9,6 +10,7 @@ export default function VideoAdPlayer({
   showBusiness = false,
   compact = false,
 }) {
+  const { t } = useTranslation();
   const [buffering, setBuffering] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
@@ -21,7 +23,7 @@ export default function VideoAdPlayer({
         {loadError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 text-xs p-4 text-center gap-2">
             <Film className="w-6 h-6 text-slate-400" />
-            <span>Unable to play this video stream right now.</span>
+            <span>{t('components.videoUnablePlay')}</span>
           </div>
         ) : (
           <video
@@ -47,7 +49,7 @@ export default function VideoAdPlayer({
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/50">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 text-white text-xs font-medium">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Loading video...</span>
+              <span>{t('components.loadingVideo')}</span>
             </div>
           </div>
         )}

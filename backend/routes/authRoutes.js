@@ -77,7 +77,7 @@ function formatSafeUser(user, memberships = []) {
     must_change_password: Boolean(user.must_change_password),
     is_email_verified: user.is_email_verified,
     is_platform_admin: user.is_platform_admin,
-    preferred_language: user.preferred_language,
+    preferred_language: ['en', 'rw', 'fr'].includes(user.preferred_language) ? user.preferred_language : 'en',
     theme_preference: user.theme_preference || 'system',
     account_category: resolveAccountCategory(user, memberships),
     requires_password_change: Boolean(user.must_change_password),
@@ -168,7 +168,8 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
-      const { full_name, email, phone, password } = req.body;
+      const { full_name, email, phone, password, preferred_language } = req.body;
+      const safeLang = ['en', 'rw', 'fr'].includes(preferred_language) ? preferred_language : 'en';
       const existing = await queryOne('SELECT id FROM users WHERE email = ?', [email]);
       if (existing) {
         if (req.file?.path) removeUploadedFile(req.file.path);
@@ -182,9 +183,9 @@ router.post(
 
       const userId = await transaction(async (tx) => {
         const uRes = await tx.execute(
-          `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, is_platform_admin)
-           VALUES (?, ?, ?, ?, ?, 0, 0)`,
-          [full_name.trim(), email, phone.trim(), avatarUrl, passwordHash]
+          `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, is_platform_admin, preferred_language)
+           VALUES (?, ?, ?, ?, ?, 0, 0, ?)`,
+          [full_name.trim(), email, phone.trim(), avatarUrl, passwordHash, safeLang]
         );
         const newUserId = uRes.insertId;
 
@@ -1065,6 +1066,7 @@ router.get('/preferences', authenticate, async (req, res, next) => {
     res.json({
       dashboard_preferences: formatted.dashboard_preferences,
       theme_preference: formatted.theme_preference,
+      preferred_language: formatted.preferred_language || 'en',
       privacy_settings: formatted.privacy_settings,
       notification_preferences: notifPrefs || {},
     });
@@ -1075,7 +1077,7 @@ router.get('/preferences', authenticate, async (req, res, next) => {
 
 router.put('/preferences', authenticate, async (req, res, next) => {
   try {
-    const { dashboard_preferences, theme_preference } = req.body;
+    const { dashboard_preferences, theme_preference, preferred_language } = req.body;
     const currentPrefs = parseJsonSafe(req.user.dashboard_preferences_json, {
       density: 'comfortable',
       default_tab: 'overview',
@@ -1108,14 +1110,16 @@ router.put('/preferences', authenticate, async (req, res, next) => {
       : currentPrefs;
 
     const validTheme = theme_preference && ['light', 'dark', 'system'].includes(theme_preference) ? theme_preference : null;
+    const validLanguage = preferred_language && ['en', 'rw', 'fr'].includes(preferred_language) ? preferred_language : null;
 
     await execute(
       `UPDATE users
        SET dashboard_preferences_json = ?,
            theme_preference = COALESCE(?, theme_preference),
+           preferred_language = COALESCE(?, preferred_language),
            updated_at = datetime('now')
        WHERE id = ?`,
-      [JSON.stringify(nextPrefs), validTheme, req.user.id]
+      [JSON.stringify(nextPrefs), validTheme, validLanguage, req.user.id]
     );
 
     const updated = await queryOne(
@@ -1185,6 +1189,33 @@ router.patch(
       res.json({
         message: 'Theme preference saved',
         theme_preference,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.patch(
+  '/language',
+  authenticate,
+  [
+    body('preferred_language')
+      .trim()
+      .isIn(['en', 'rw', 'fr'])
+      .withMessage('Language preference must be en, rw, or fr'),
+  ],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const { preferred_language } = req.body;
+      await execute(
+        `UPDATE users SET preferred_language = ?, updated_at = datetime('now') WHERE id = ?`,
+        [preferred_language, req.user.id]
+      );
+      res.json({
+        message: 'Language preference saved',
+        preferred_language,
       });
     } catch (err) {
       next(err);

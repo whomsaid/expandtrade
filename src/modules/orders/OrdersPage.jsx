@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -17,6 +18,7 @@ const ORDER_STATUSES = [
 ];
 
 export default function OrdersPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, workspace, hasPermission } = useAuth();
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
@@ -72,8 +74,8 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">Customer Orders</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Manage delivery and collection orders separately from immediate POS sales.</p>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('orders.title')}</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('orders.subtitle')}</p>
         </div>
         {hasPermission('orders.manage') && (
           <button
@@ -85,7 +87,7 @@ export default function OrdersPage() {
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            New Order
+            {t('orders.newOrder')}
           </button>
         )}
       </div>
@@ -96,18 +98,18 @@ export default function OrdersPage() {
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
             <tr>
-              <th className="py-3 px-4 font-semibold">Order #</th>
-              <th className="py-3 px-4 font-semibold">Date</th>
-              <th className="py-3 px-4 font-semibold">Customer</th>
-              <th className="py-3 px-4 font-semibold">Delivery Address</th>
-              <th className="py-3 px-4 font-semibold text-right">Total</th>
-              <th className="py-3 px-4 font-semibold">Status</th>
-              {hasPermission('orders.manage') && <th className="py-3 px-4 font-semibold">Update Stage</th>}
+              <th className="py-3 px-4 font-semibold">{t('orders.colOrderNum')}</th>
+              <th className="py-3 px-4 font-semibold">{t('orders.colDate')}</th>
+              <th className="py-3 px-4 font-semibold">{t('orders.colCustomer')}</th>
+              <th className="py-3 px-4 font-semibold">{t('orders.colAddress')}</th>
+              <th className="py-3 px-4 font-semibold text-right">{t('orders.colTotal')}</th>
+              <th className="py-3 px-4 font-semibold">{t('orders.colStatus')}</th>
+              {hasPermission('orders.manage') && <th className="py-3 px-4 font-semibold">{t('orders.colUpdateStage')}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {orders.length === 0 ? (
-              <tr><td colSpan={7} className="py-8 text-center text-slate-500 dark:text-slate-400">No customer orders yet.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('orders.empty')}</td></tr>
             ) : (
               orders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
@@ -122,7 +124,7 @@ export default function OrdersPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{o.delivery_address || 'Branch pickup'}</td>
+                  <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{o.delivery_address || t('orders.branchPickup')}</td>
                   <td className="py-3 px-4 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(o.total_amount, currency)}</td>
                   <td className="py-3 px-4"><StatusBadge status={o.order_status} /></td>
                   {hasPermission('orders.manage') && (
@@ -133,7 +135,7 @@ export default function OrdersPage() {
                         className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                       >
                         {ORDER_STATUSES.map((st) => (
-                          <option key={st} value={st}>{st.replace(/_/g, ' ')}</option>
+                          <option key={st} value={st}>{t(`status.${st}`, { defaultValue: st.replace(/_/g, ' ') })}</option>
                         ))}
                       </select>
                     </td>
@@ -148,11 +150,11 @@ export default function OrdersPage() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
-            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">Create Customer Order</h2>
+            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('orders.modalTitle')}</h2>
             <form onSubmit={handleCreate} className="space-y-3 text-xs">
-              <input required placeholder="Customer Full Name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-              <input required placeholder="Customer Phone (+250...)" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-              <input placeholder="Delivery Address (or leave blank for pickup)" value={form.delivery_address} onChange={(e) => setForm({ ...form, delivery_address: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+              <input required placeholder={t('orders.customerNamePlaceholder')} value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+              <input required placeholder={t('orders.customerPhonePlaceholder')} value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+              <input placeholder={t('orders.addressPlaceholder')} value={form.delivery_address} onChange={(e) => setForm({ ...form, delivery_address: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <div className="grid grid-cols-3 gap-2">
                 <select value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })} className="col-span-2 px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
                   {products.map((p) => <option key={p.id} value={p.id}>{p.name} ({formatMoney(p.selling_price, currency)})</option>)}
@@ -160,8 +162,8 @@ export default function OrdersPage() {
                 <input required type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Create Order</button>
+                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
+                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('orders.createOrder')}</button>
               </div>
             </form>
           </div>

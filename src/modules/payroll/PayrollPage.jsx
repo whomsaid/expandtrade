@@ -16,19 +16,20 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
 
-const PROVIDER_LABELS = {
-  mtn_momo: 'MTN Mobile Money Rwanda',
-  airtel_money: 'Airtel Money Rwanda',
-};
-
 export default function PayrollPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, workspace, socket, hasPermission, refreshNotifications } = useAuth();
+  const providerLabels = {
+    mtn_momo: t('payroll.mtnFull'),
+    airtel_money: t('payroll.airtelFull'),
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightConfigId = Number(searchParams.get('payConfigId') || 0);
 
@@ -179,7 +180,7 @@ export default function PayrollPage() {
         momo_phone: configModal.momo_phone,
         notes: configModal.notes,
       });
-      setNotice(data.message || 'Employee payroll configuration saved.');
+      setNotice(data.message || t('payroll.configSavedMsg'));
       setConfigModal(null);
       await loadPayroll();
       await refreshNotifications();
@@ -206,7 +207,7 @@ export default function PayrollPage() {
     setNotice('');
     try {
       const { data } = await api.post('/payroll/monitor/run');
-      setNotice(`Due monitor ran: ${data.alertsCreated || 0} new notification(s) generated for due salaries.`);
+      setNotice(t('payroll.dueMonitorMsg', { count: data.alertsCreated || 0 }));
       await loadPayroll();
       await refreshNotifications();
     } catch (err) {
@@ -322,7 +323,7 @@ export default function PayrollPage() {
     setNotice('');
     try {
       const { data } = await api.get(`/payroll/transactions/${txId}/verify-status`);
-      setNotice(data.message || 'Status refreshed from Mobile Money provider.');
+      setNotice(data.message || t('payroll.statusRefreshedMsg'));
       await loadPayroll();
     } catch (err) {
       setError(err.message);
@@ -349,7 +350,19 @@ export default function PayrollPage() {
   const handleExportCsv = () => {
     const rows = filteredTransactions;
     if (!rows.length) return;
-    const headers = ['Reference', 'Employee', 'Provider', 'MoMo Phone', 'Period', 'Amount', 'Currency', 'Status', 'Authorized By', 'Created At', 'Paid At'];
+    const headers = [
+      t('payroll.csvHeaders.reference'),
+      t('payroll.csvHeaders.employee'),
+      t('payroll.csvHeaders.provider'),
+      t('payroll.csvHeaders.momoPhone'),
+      t('payroll.csvHeaders.period'),
+      t('payroll.csvHeaders.amount'),
+      t('payroll.csvHeaders.currency'),
+      t('payroll.csvHeaders.status'),
+      t('payroll.csvHeaders.authorizedBy'),
+      t('payroll.csvHeaders.createdAt'),
+      t('payroll.csvHeaders.paidAt'),
+    ];
     const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csv = [
       headers.join(','),
@@ -405,9 +418,9 @@ export default function PayrollPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">Automated Employee Payroll</h1>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('payroll.title')}</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Configure employee salaries, monitor payment dates automatically, and authorize real MTN MoMo &amp; Airtel Money disbursements.
+            {t('payroll.subtitle')}
           </p>
         </div>
 
@@ -418,7 +431,7 @@ export default function PayrollPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            Check Due Salaries
+            {t('payroll.checkDueSalaries')}
           </button>
 
           {canManage && (
@@ -428,7 +441,7 @@ export default function PayrollPage() {
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <Settings2 className="w-3.5 h-3.5" />
-              MoMo Gateway Settings
+              {t('payroll.gatewaySettingsBtn')}
             </button>
           )}
 
@@ -439,7 +452,7 @@ export default function PayrollPage() {
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-600 rounded-lg"
             >
               <Plus className="w-3.5 h-3.5" />
-              Fund Payroll Balance
+              {t('payroll.fundBalanceBtn')}
             </button>
           )}
 
@@ -450,7 +463,7 @@ export default function PayrollPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
             >
               <Send className="w-3.5 h-3.5" />
-              Pay Selected ({selectedConfigs.length})
+              {t('payroll.paySelectedBtn', { count: selectedConfigs.length })}
             </button>
           )}
         </div>
@@ -471,54 +484,58 @@ export default function PayrollPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Available Payroll Balance</span>
+            <span>{t('payroll.kpiAvailableBalance')}</span>
             <Wallet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">
             {formatMoney(account.available_balance, account.currency_code || currency)}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-            Reserved pending payouts: {formatMoney(account.reserved_balance, account.currency_code || currency)}
+            {t('payroll.kpiReservedBalance', { amount: formatMoney(account.reserved_balance, account.currency_code || currency) })}
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Due Salary Payments</span>
+            <span>{t('payroll.kpiDuePayments')}</span>
             <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">
-            {stats.due_payments_count || 0} Due ({formatMoney(stats.due_payments_amount, currency)})
+            {t('payroll.kpiDueSummary', { count: stats.due_payments_count || 0, amount: formatMoney(stats.due_payments_amount, currency) })}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-            {stats.configured_employees || 0} of {stats.total_employees || 0} staff configured
+            {t('payroll.kpiConfiguredCount', { configured: stats.configured_employees || 0, total: stats.total_employees || 0 })}
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Monthly Payroll Estimate</span>
+            <span>{t('payroll.kpiMonthlyEstimate')}</span>
             <Banknote className="w-4 h-4 text-sky-600 dark:text-sky-400" />
           </div>
           <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">
             {formatMoney(stats.total_monthly_payroll, currency)}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-            {stats.active_payroll_employees || 0} active payroll schedules
+            {t('payroll.kpiActiveSchedules', { count: stats.active_payroll_employees || 0 })}
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Disbursement Health</span>
+            <span>{t('payroll.kpiDisbursementHealth')}</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="text-sm font-bold text-slate-900 dark:text-white tabular-nums pt-0.5">
-            {stats.successful_payments || 0} Paid · {stats.pending_transactions || 0} Pending · {stats.failed_payments || 0} Failed
+            {t('payroll.kpiHealthCounts', {
+              paid: stats.successful_payments || 0,
+              pending: stats.pending_transactions || 0,
+              failed: stats.failed_payments || 0,
+            })}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400">
-            MTN: {account.mtn_configured ? 'API Ready' : 'Credentials Needed'} · Airtel:{' '}
-            {account.airtel_configured ? 'API Ready' : 'Credentials Needed'}
+            MTN: {account.mtn_configured ? t('payroll.apiReady') : t('payroll.credentialsNeeded')} · Airtel:{' '}
+            {account.airtel_configured ? t('payroll.apiReady') : t('payroll.credentialsNeeded')}
           </div>
         </div>
       </div>
@@ -529,10 +546,10 @@ export default function PayrollPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-sm font-bold text-amber-950 dark:text-amber-200">
-                Salaries Due for Authorization ({dueActiveConfigs.length})
+                {t('payroll.dueBannerTitle', { count: dueActiveConfigs.length })}
               </h2>
               <p className="text-xs text-amber-800 dark:text-amber-300">
-                {dueAlerts.length} automated alert(s) logged. Review details and authorize Mobile Money disbursement when ready.
+                {t('payroll.dueBannerSubtitle', { count: dueAlerts.length })}
               </p>
             </div>
             {canPay && (
@@ -541,7 +558,7 @@ export default function PayrollPage() {
                 onClick={() => openBulkAuth(dueActiveConfigs)}
                 className="px-3.5 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
               >
-                Authorize &amp; Pay All Due ({formatMoney(stats.due_payments_amount, currency)})
+                {t('payroll.authorizeAllDue', { amount: formatMoney(stats.due_payments_amount, currency) })}
               </button>
             )}
           </div>
@@ -558,7 +575,7 @@ export default function PayrollPage() {
                     {formatMoney(cfg.salary_amount, cfg.currency_code)}
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                    {cfg.momo_phone} · Due {formatDate(cfg.next_payment_date)}
+                    {cfg.momo_phone} · {t('payroll.dueTag', { date: formatDate(cfg.next_payment_date) })}
                   </div>
                 </div>
                 {canPay && (
@@ -567,7 +584,7 @@ export default function PayrollPage() {
                     onClick={() => openIndividualAuth(cfg)}
                     className="px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-500 shrink-0"
                   >
-                    Pay Employee
+                    {t('payroll.payEmployeeBtn')}
                   </button>
                 )}
               </div>
@@ -577,11 +594,11 @@ export default function PayrollPage() {
       )}
 
       {/* Navigation Tabs */}
-      <div role="tablist" aria-label="Payroll sections" className="inline-flex flex-wrap p-1 bg-slate-200/70 dark:bg-slate-800 rounded-lg">
+      <div role="tablist" aria-label={t('payroll.tabsAria')} className="inline-flex flex-wrap p-1 bg-slate-200/70 dark:bg-slate-800 rounded-lg">
         {[
-          ['roster', 'Employee Salaries & Schedules'],
-          ['transactions', 'Payroll Transactions & Reports'],
-          ['batches', 'Batch Runs & Balance Ledger'],
+          ['roster', t('payroll.tabRoster')],
+          ['transactions', t('payroll.tabTransactions')],
+          ['batches', t('payroll.tabBatches')],
         ].map(([k, label]) => (
           <button
             key={k}
@@ -610,32 +627,32 @@ export default function PayrollPage() {
                   <th className="py-3 px-3 w-8">
                     <input
                       type="checkbox"
-                      aria-label="Select all active payroll employees"
+                      aria-label={t('payroll.selectAllAria')}
                       checked={activeConfigs.length > 0 && selectedConfigIds.length === activeConfigs.length}
                       onChange={toggleSelectAllActive}
                     />
                   </th>
                 )}
-                <th className="py-3 px-4 font-semibold">Employee</th>
-                <th className="py-3 px-4 font-semibold">Role / Branch</th>
-                <th className="py-3 px-4 font-semibold">Mobile Money Account</th>
-                <th className="py-3 px-4 font-semibold">Frequency &amp; Next Pay Date</th>
-                <th className="py-3 px-4 font-semibold text-right">Salary Amount</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
-                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                <th className="py-3 px-4 font-semibold">{t('payroll.colEmployee')}</th>
+                <th className="py-3 px-4 font-semibold">{t('payroll.colRoleBranch')}</th>
+                <th className="py-3 px-4 font-semibold">{t('payroll.colMomoAccount')}</th>
+                <th className="py-3 px-4 font-semibold">{t('payroll.colFrequencyNext')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('payroll.colSalaryAmount')}</th>
+                <th className="py-3 px-4 font-semibold">{t('payroll.colStatus')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('payroll.colActions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading && !overview ? (
                 <tr>
                   <td colSpan={canPay ? 8 : 7} className="py-8 px-4 text-center text-slate-500">
-                    Loading employee payroll schedules...
+                    {t('payroll.loadingRoster')}
                   </td>
                 </tr>
               ) : (overview?.employees || []).length === 0 ? (
                 <tr>
                   <td colSpan={canPay ? 8 : 7} className="py-8 px-4 text-center text-slate-500">
-                    No active employees found in this business.
+                    {t('payroll.emptyRoster')}
                   </td>
                 </tr>
               ) : (
@@ -648,7 +665,7 @@ export default function PayrollPage() {
                           {cfg && cfg.payroll_status === 'active' ? (
                             <input
                               type="checkbox"
-                              aria-label={`Select ${emp.full_name}`}
+                              aria-label={t('payroll.selectEmployeeAria', { name: emp.full_name })}
                               checked={selectedConfigIds.includes(cfg.id)}
                               onChange={() => toggleSelectConfig(cfg.id)}
                             />
@@ -666,7 +683,7 @@ export default function PayrollPage() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="text-slate-800 dark:text-slate-200 font-medium">{emp.job_title || emp.role_name}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{emp.branch_name || 'All Branches'}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{emp.branch_name || t('payroll.allBranches')}</div>
                       </td>
                       <td className="py-3 px-4">
                         {cfg ? (
@@ -675,24 +692,28 @@ export default function PayrollPage() {
                               {cfg.momo_phone}
                             </div>
                             <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                              {PROVIDER_LABELS[cfg.momo_provider] || cfg.momo_provider}
+                              {providerLabels[cfg.momo_provider] || cfg.momo_provider}
                             </div>
                           </div>
                         ) : (
-                          <span className="text-slate-400">Not configured</span>
+                          <span className="text-slate-400">{t('payroll.notConfigured')}</span>
                         )}
                       </td>
                       <td className="py-3 px-4">
                         {cfg ? (
                           <div>
                             <div className="capitalize font-medium text-slate-800 dark:text-slate-200">
-                              {cfg.payment_frequency}
+                              {cfg.payment_frequency === 'weekly'
+                                ? t('payroll.freqWeekly')
+                                : cfg.payment_frequency === 'custom'
+                                  ? t('payroll.freqCustom')
+                                  : t('payroll.freqMonthly')}
                               {cfg.payment_frequency === 'custom' && cfg.custom_interval_days
-                                ? ` (Every ${cfg.custom_interval_days}d)`
+                                ? ` ${t('payroll.everyDays', { days: cfg.custom_interval_days })}`
                                 : ''}
                             </div>
                             <div className={`text-[11px] tabular-nums ${cfg.is_due ? 'font-semibold text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                              Next: {formatDate(cfg.next_payment_date)} {cfg.is_due ? '· Due' : ''}
+                              {t('payroll.nextPrefix', { date: formatDate(cfg.next_payment_date) })} {cfg.is_due ? t('payroll.dueSuffix') : ''}
                             </div>
                           </div>
                         ) : (
@@ -713,14 +734,14 @@ export default function PayrollPage() {
                               onClick={() => openConfigureEmployee(emp, cfg)}
                               className="px-2.5 py-1.5 text-[11px] font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                             >
-                              {cfg ? 'Edit Salary' : 'Set Salary'}
+                              {cfg ? t('payroll.editSalary') : t('payroll.setSalary')}
                             </button>
                           )}
                           {cfg && canManage && (
                             <button
                               type="button"
                               onClick={() => handleToggleConfigStatus(cfg)}
-                              title={cfg.payroll_status === 'active' ? 'Suspend payroll' : 'Reactivate payroll'}
+                              title={cfg.payroll_status === 'active' ? t('payroll.suspendTitle') : t('payroll.reactivateTitle')}
                               className="p-1.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                             >
                               {cfg.payroll_status === 'active' ? (
@@ -736,7 +757,7 @@ export default function PayrollPage() {
                               onClick={() => openIndividualAuth(cfg)}
                               className="px-2.5 py-1.5 text-[11px] font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                             >
-                              Pay Employee
+                              {t('payroll.payEmployeeBtn')}
                             </button>
                           )}
                         </div>
@@ -758,7 +779,7 @@ export default function PayrollPage() {
               <input
                 value={txSearch}
                 onChange={(e) => setTxSearch(e.target.value)}
-                placeholder="Search employee, reference, MoMo phone..."
+                placeholder={t('payroll.searchTxPlaceholder')}
                 className="px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg w-64"
               />
               <select
@@ -766,11 +787,11 @@ export default function PayrollPage() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
               >
-                <option value="">All Statuses</option>
-                <option value="paid">Paid</option>
-                <option value="processing">Processing</option>
-                <option value="pending">Pending</option>
-                <option value="failed">Failed</option>
+                <option value="">{t('payroll.allStatuses')}</option>
+                <option value="paid">{t('status.paid')}</option>
+                <option value="processing">{t('status.processing')}</option>
+                <option value="pending">{t('status.pending')}</option>
+                <option value="failed">{t('status.failed')}</option>
               </select>
             </div>
 
@@ -781,7 +802,7 @@ export default function PayrollPage() {
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
-              Export Payroll CSV
+              {t('payroll.exportCsv')}
             </button>
           </div>
 
@@ -789,21 +810,21 @@ export default function PayrollPage() {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                 <tr>
-                  <th className="py-3 px-4 font-semibold">Reference</th>
-                  <th className="py-3 px-4 font-semibold">Employee</th>
-                  <th className="py-3 px-4 font-semibold">Mobile Money</th>
-                  <th className="py-3 px-4 font-semibold">Period</th>
-                  <th className="py-3 px-4 font-semibold text-right">Amount</th>
-                  <th className="py-3 px-4 font-semibold">Status &amp; Provider State</th>
-                  <th className="py-3 px-4 font-semibold">Authorized By</th>
-                  <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                  <th className="py-3 px-4 font-semibold">{t('payroll.colReference')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('payroll.colEmployee')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('payroll.colMobileMoney')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('payroll.colPeriod')}</th>
+                  <th className="py-3 px-4 font-semibold text-right">{t('payroll.colAmount')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('payroll.colStatusProvider')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('payroll.colAuthorizedBy')}</th>
+                  <th className="py-3 px-4 font-semibold text-right">{t('payroll.colActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 px-4 text-center text-slate-500">
-                      No payroll transactions match the selected filter.
+                      {t('payroll.emptyTransactions')}
                     </td>
                   </tr>
                 ) : (
@@ -851,7 +872,7 @@ export default function PayrollPage() {
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
                           >
                             <RefreshCw className="w-3 h-3" />
-                            Verify Status
+                            {t('payroll.verifyStatus')}
                           </button>
                         )}
                         {tx.status === 'failed' && canPay && (
@@ -862,7 +883,7 @@ export default function PayrollPage() {
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50"
                           >
                             <RotateCcw className="w-3 h-3" />
-                            Safe Retry
+                            {t('payroll.safeRetry')}
                           </button>
                         )}
                       </td>
@@ -880,21 +901,26 @@ export default function PayrollPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 font-bold text-sm text-[#0B192C] dark:text-white">
-              Bulk Payroll Batch Runs
+              {t('payroll.bulkRunsTitle')}
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
               {(overview?.batches || []).length === 0 ? (
-                <div className="p-6 text-center text-slate-500">No bulk payroll batches authorized yet.</div>
+                <div className="p-6 text-center text-slate-500">{t('payroll.emptyBatches')}</div>
               ) : (
                 overview.batches.map((b) => (
                   <div key={b.id} className="p-4 flex items-center justify-between gap-3">
                     <div>
                       <div className="font-mono font-semibold text-slate-900 dark:text-white">{b.batch_reference}</div>
                       <div className="text-slate-500 dark:text-slate-400 tabular-nums">
-                        {b.total_employees} staff · {b.success_count} paid / {b.pending_count} pending / {b.failed_count} failed
+                        {t('payroll.batchSummary', {
+                          total: b.total_employees,
+                          success: b.success_count,
+                          pending: b.pending_count,
+                          failed: b.failed_count,
+                        })}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
-                        By {b.authorized_by_name || 'Admin'} · {formatDateTime(b.created_at)}
+                        {t('payroll.byAuthor', { name: b.authorized_by_name || 'Admin', date: formatDateTime(b.created_at) })}
                       </div>
                     </div>
                     <div className="text-right space-y-1">
@@ -911,11 +937,11 @@ export default function PayrollPage() {
 
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 font-bold text-sm text-[#0B192C] dark:text-white">
-              Payroll Account Funding &amp; Refund Ledger
+              {t('payroll.ledgerTitle')}
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
               {(overview?.ledger || []).length === 0 ? (
-                <div className="p-6 text-center text-slate-500">No payroll balance ledger entries recorded yet.</div>
+                <div className="p-6 text-center text-slate-500">{t('payroll.emptyLedger')}</div>
               ) : (
                 overview.ledger.map((l) => (
                   <div key={l.id} className="p-4 flex items-center justify-between gap-3">
@@ -932,7 +958,7 @@ export default function PayrollPage() {
                         {formatMoney(l.amount, account.currency_code || currency)}
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                        Bal: {formatMoney(l.balance_after, account.currency_code || currency)}
+                        {t('payroll.balPrefix', { amount: formatMoney(l.balance_after, account.currency_code || currency) })}
                       </div>
                     </div>
                   </div>
@@ -952,7 +978,7 @@ export default function PayrollPage() {
           >
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
-                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Configure Employee Payroll</h2>
+                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('payroll.configModalTitle')}</h2>
                 <p className="text-slate-500 dark:text-slate-400">
                   {configModal.employee_name} · {configModal.role_name}
                 </p>
@@ -965,7 +991,7 @@ export default function PayrollPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">
-                  Salary Amount ({currency})
+                  {t('payroll.salaryAmountLabel', { currency })}
                 </label>
                 <input
                   required
@@ -978,15 +1004,15 @@ export default function PayrollPage() {
                 />
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Payment Frequency</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.frequencyLabel')}</label>
                 <select
                   value={configModal.payment_frequency}
                   onChange={(e) => setConfigModal({ ...configModal, payment_frequency: e.target.value })}
                   className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                 >
-                  <option value="monthly">Monthly</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="custom">Custom Interval (Days)</option>
+                  <option value="monthly">{t('payroll.freqMonthly')}</option>
+                  <option value="weekly">{t('payroll.freqWeekly')}</option>
+                  <option value="custom">{t('payroll.freqCustom')}</option>
                 </select>
               </div>
             </div>
@@ -994,7 +1020,7 @@ export default function PayrollPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {configModal.payment_frequency === 'custom' && (
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Custom Interval (Days)</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.customDaysLabel')}</label>
                   <input
                     required
                     type="number"
@@ -1007,7 +1033,7 @@ export default function PayrollPage() {
                 </div>
               )}
               <div className={configModal.payment_frequency === 'custom' ? '' : 'sm:col-span-2'}>
-                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Next Payment Date</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.nextPayDateLabel')}</label>
                 <input
                   required
                   type="date"
@@ -1020,18 +1046,18 @@ export default function PayrollPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Mobile Money Provider</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.momoProviderLabel')}</label>
                 <select
                   value={configModal.momo_provider}
                   onChange={(e) => setConfigModal({ ...configModal, momo_provider: e.target.value })}
                   className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                 >
-                  <option value="mtn_momo">MTN Mobile Money Rwanda</option>
-                  <option value="airtel_money">Airtel Money Rwanda</option>
+                  <option value="mtn_momo">{t('payroll.mtnFull')}</option>
+                  <option value="airtel_money">{t('payroll.airtelFull')}</option>
                 </select>
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Registered MoMo Number</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.registeredMomoLabel')}</label>
                 <input
                   required
                   value={configModal.momo_phone}
@@ -1043,21 +1069,21 @@ export default function PayrollPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Payroll Notes (Optional)</label>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.payrollNotesLabel')}</label>
               <input
                 value={configModal.notes}
                 onChange={(e) => setConfigModal({ ...configModal, notes: e.target.value })}
-                placeholder="e.g. Base monthly salary + transport allowance"
+                placeholder={t('payroll.payrollNotesPlaceholder')}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setConfigModal(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                Save Payroll Configuration
+                {t('payroll.saveConfigBtn')}
               </button>
             </div>
           </form>
@@ -1077,11 +1103,11 @@ export default function PayrollPage() {
                 <div>
                   <h2 className="text-base font-bold text-[#0B192C] dark:text-white">
                     {authModal.mode === 'bulk'
-                      ? `Authorize Bulk Payroll (${authModal.configs.length} Employees)`
-                      : 'Authorize Salary Payment'}
+                      ? t('payroll.authBulkTitle', { count: authModal.configs.length })
+                      : t('payroll.authSingleTitle')}
                   </h2>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Review recipient Mobile Money details before submitting disbursement to the payment gateway.
+                    {t('payroll.authSubtitle')}
                   </p>
                 </div>
               </div>
@@ -1093,21 +1119,21 @@ export default function PayrollPage() {
             <div className="p-6 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
-                  <div className="text-slate-500 dark:text-slate-400">Available Payroll Balance</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t('payroll.kpiAvailableBalance')}</div>
                   <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-white mt-0.5">
                     {formatMoney(account.available_balance, currency)}
                   </div>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
-                  <div className="text-slate-500 dark:text-slate-400">Total Authorization Amount</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t('payroll.totalAuthAmount')}</div>
                   <div className="text-sm font-bold tabular-nums text-[#0B192C] dark:text-sky-400 mt-0.5">
                     {formatMoney(authTotalAmount, currency)}
                   </div>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
-                  <div className="text-slate-500 dark:text-slate-400">Balance Check</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t('payroll.balanceCheck')}</div>
                   <div className={`text-sm font-bold mt-0.5 ${sufficientBalance ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                    {sufficientBalance ? 'Sufficient Balance' : 'Insufficient Balance'}
+                    {sufficientBalance ? t('payroll.sufficientBalance') : t('payroll.insufficientBalance')}
                   </div>
                 </div>
               </div>
@@ -1118,8 +1144,8 @@ export default function PayrollPage() {
                     <div>
                       <div className="font-semibold text-slate-900 dark:text-white">{cfg.employee_name}</div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {PROVIDER_LABELS[cfg.momo_provider] || cfg.momo_provider} ·{' '}
-                        <span className="font-mono">{cfg.momo_phone}</span> · Period{' '}
+                        {providerLabels[cfg.momo_provider] || cfg.momo_provider} ·{' '}
+                        <span className="font-mono">{cfg.momo_phone}</span> · {t('payroll.periodPrefix')}{' '}
                         <span className="font-mono">{cfg.due_period}</span>
                       </div>
                     </div>
@@ -1127,7 +1153,7 @@ export default function PayrollPage() {
                       <div className="font-bold tabular-nums text-slate-900 dark:text-white">
                         {formatMoney(cfg.salary_amount, cfg.currency_code)}
                       </div>
-                      <div className="text-[10px] font-mono text-slate-400">Ref generated upon authorization</div>
+                      <div className="text-[10px] font-mono text-slate-400">{t('payroll.refGeneratedNote')}</div>
                     </div>
                   </div>
                 ))}
@@ -1135,7 +1161,7 @@ export default function PayrollPage() {
 
               {!sufficientBalance && (
                 <div className="p-3 text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg font-medium">
-                  Available payroll balance is lower than {formatMoney(authTotalAmount, currency)}. Fund the payroll balance before authorizing payment.
+                  {t('payroll.insufficientWarn', { amount: formatMoney(authTotalAmount, currency) })}
                 </div>
               )}
 
@@ -1147,21 +1173,21 @@ export default function PayrollPage() {
                   className="mt-0.5"
                 />
                 <span className="text-slate-700 dark:text-slate-200">
-                  I verify these employee names, registered Mobile Money phone numbers, and salary amounts are accurate, and authorize server-side disbursement via Mobile Money API (no MoMo PIN required or stored).
+                  {t('payroll.authVerifyCheckbox')}
                 </span>
               </label>
             </div>
 
             <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2 bg-slate-50 dark:bg-slate-800/50">
               <button type="button" onClick={() => setAuthModal(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={!authChecked || !sufficientBalance || authSubmitting}
                 className="px-5 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50"
               >
-                {authSubmitting ? 'Submitting to Mobile Money...' : 'Confirm & Pay'}
+                {authSubmitting ? t('payroll.submittingMomo') : t('payroll.confirmAndPay')}
               </button>
             </div>
           </form>
@@ -1176,13 +1202,13 @@ export default function PayrollPage() {
             className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 space-y-4 text-xs shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Fund Business Payroll Balance</h2>
+              <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('payroll.topupModalTitle')}</h2>
               <button type="button" onClick={() => setTopupModal(false)} className="p-1 text-slate-400">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Amount ({currency})</label>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.amountLabel', { currency })}</label>
               <input
                 required
                 type="number"
@@ -1194,29 +1220,29 @@ export default function PayrollPage() {
               />
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Funding Reference (Optional)</label>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.fundingRefLabel')}</label>
               <input
                 value={topupForm.reference}
                 onChange={(e) => setTopupForm({ ...topupForm, reference: e.target.value })}
-                placeholder="e.g. BANK-TRF-2025-05"
+                placeholder={t('payroll.fundingRefPlaceholder')}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
               />
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Note</label>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.noteLabel')}</label>
               <input
                 value={topupForm.note}
                 onChange={(e) => setTopupForm({ ...topupForm, note: e.target.value })}
-                placeholder="Monthly payroll allocation"
+                placeholder={t('payroll.notePlaceholder')}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
               />
             </div>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setTopupModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button type="submit" className="px-4 py-2 font-semibold text-white bg-emerald-700 hover:bg-emerald-600 rounded-lg">
-                Record Funding
+                {t('payroll.recordFunding')}
               </button>
             </div>
           </form>
@@ -1232,9 +1258,9 @@ export default function PayrollPage() {
           >
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
-                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Mobile Money API Gateway Configuration</h2>
+                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('payroll.gatewayModalTitle')}</h2>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Credentials are stored server-side and never displayed back or paired with MoMo PINs.
+                  {t('payroll.gatewayModalSubtitle')}
                 </p>
               </div>
               <button type="button" onClick={() => setGatewayModal(false)} className="p-1 text-slate-400">
@@ -1244,18 +1270,18 @@ export default function PayrollPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Default Provider</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.defaultProviderLabel')}</label>
                 <select
                   value={gatewayForm.default_provider}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, default_provider: e.target.value })}
                   className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                 >
-                  <option value="mtn_momo">MTN Mobile Money Rwanda</option>
-                  <option value="airtel_money">Airtel Money Rwanda</option>
+                  <option value="mtn_momo">{t('payroll.mtnFull')}</option>
+                  <option value="airtel_money">{t('payroll.airtelFull')}</option>
                 </select>
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Business MoMo Number</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.businessMomoLabel')}</label>
                 <input
                   value={gatewayForm.business_momo_number}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, business_momo_number: e.target.value })}
@@ -1267,9 +1293,9 @@ export default function PayrollPage() {
 
             <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 dark:text-white">MTN MoMo Disbursements API</span>
+                <span className="font-bold text-slate-900 dark:text-white">{t('payroll.mtnApiSection')}</span>
                 <span className="text-[11px] text-slate-500">
-                  {account.mtn_configured ? 'Configured' : 'Requires subscription key, API user & API key'}
+                  {account.mtn_configured ? t('payroll.mtnConfigured') : t('payroll.mtnNeedsCreds')}
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1278,28 +1304,28 @@ export default function PayrollPage() {
                   onChange={(e) => setGatewayForm({ ...gatewayForm, mtn_environment: e.target.value })}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                 >
-                  <option value="sandbox">MTN Sandbox</option>
-                  <option value="mtcrwanda">MTN Rwanda Production</option>
-                  <option value="production">Production</option>
+                  <option value="sandbox">{t('payroll.mtnSandbox')}</option>
+                  <option value="mtcrwanda">{t('payroll.mtnRwandaProd')}</option>
+                  <option value="production">{t('payroll.production')}</option>
                 </select>
                 <input
                   value={gatewayForm.mtn_api_user}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, mtn_api_user: e.target.value })}
-                  placeholder={account.has_business_mtn_keys ? 'Update MTN API User UUID (optional)' : 'MTN API User UUID'}
+                  placeholder={account.has_business_mtn_keys ? t('payroll.updateMtnUserPlaceholder') : t('payroll.mtnUserPlaceholder')}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
                 <input
                   type="password"
                   value={gatewayForm.mtn_subscription_key}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, mtn_subscription_key: e.target.value })}
-                  placeholder={account.has_business_mtn_keys ? 'Update Ocp-Apim-Subscription-Key' : 'MTN Disbursement Subscription Key'}
+                  placeholder={account.has_business_mtn_keys ? t('payroll.updateMtnSubKeyPlaceholder') : t('payroll.mtnSubKeyPlaceholder')}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
                 <input
                   type="password"
                   value={gatewayForm.mtn_api_key}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, mtn_api_key: e.target.value })}
-                  placeholder={account.has_business_mtn_keys ? 'Update MTN API Key' : 'MTN API Key'}
+                  placeholder={account.has_business_mtn_keys ? t('payroll.updateMtnKeyPlaceholder') : t('payroll.mtnKeyPlaceholder')}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
               </div>
@@ -1307,9 +1333,9 @@ export default function PayrollPage() {
 
             <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 dark:text-white">Airtel Money Disbursements API</span>
+                <span className="font-bold text-slate-900 dark:text-white">{t('payroll.airtelApiSection')}</span>
                 <span className="text-[11px] text-slate-500">
-                  {account.airtel_configured ? 'Configured' : 'Requires client ID & secret'}
+                  {account.airtel_configured ? t('payroll.mtnConfigured') : t('payroll.airtelNeedsCreds')}
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -1318,20 +1344,20 @@ export default function PayrollPage() {
                   onChange={(e) => setGatewayForm({ ...gatewayForm, airtel_environment: e.target.value })}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                 >
-                  <option value="staging">Airtel Staging</option>
-                  <option value="production">Airtel Production</option>
+                  <option value="staging">{t('payroll.airtelStaging')}</option>
+                  <option value="production">{t('payroll.airtelProd')}</option>
                 </select>
                 <input
                   value={gatewayForm.airtel_client_id}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, airtel_client_id: e.target.value })}
-                  placeholder={account.has_business_airtel_keys ? 'Update Client ID' : 'Airtel Client ID'}
+                  placeholder={account.has_business_airtel_keys ? t('payroll.updateAirtelIdPlaceholder') : t('payroll.airtelIdPlaceholder')}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
                 <input
                   type="password"
                   value={gatewayForm.airtel_client_secret}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, airtel_client_secret: e.target.value })}
-                  placeholder={account.has_business_airtel_keys ? 'Update Client Secret' : 'Airtel Client Secret'}
+                  placeholder={account.has_business_airtel_keys ? t('payroll.updateAirtelSecretPlaceholder') : t('payroll.airtelSecretPlaceholder')}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
               </div>
@@ -1339,10 +1365,10 @@ export default function PayrollPage() {
 
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setGatewayModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
-                Save Gateway Settings
+                {t('payroll.saveGatewaySettings')}
               </button>
             </div>
           </form>

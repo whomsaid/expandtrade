@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Mail, MapPin, Phone } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { usePlatformConfig } from '../context/PlatformConfigContext.jsx';
 import BrandLogo from './BrandLogo.jsx';
 
 export default function PublicFooter() {
+  const { t } = useTranslation();
   const { config } = usePlatformConfig();
 
   const socialLinks = [
@@ -24,8 +26,7 @@ export default function PublicFooter() {
             />
           </Link>
           <p className="text-sm text-slate-400 max-w-sm leading-relaxed">
-            Expand Your Business. Manage Everything. An all-in-one business-management platform
-            designed to help African businesses manage, grow, and expand their operations.
+            {t('footer.tagline')}
           </p>
           <div className="space-y-1.5 text-xs text-slate-400 pt-1">
             {config.platform_location && (
@@ -65,45 +66,45 @@ export default function PublicFooter() {
         </div>
 
         <div className="lg:col-span-2 space-y-3">
-          <div className="text-xs font-semibold text-white">Navigation</div>
+          <div className="text-xs font-semibold text-white">{t('footer.navigation')}</div>
           <ul className="space-y-2 text-sm text-slate-400">
-            <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
-            <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
-            <li><a href="/#features" className="hover:text-white transition-colors">Features</a></li>
-            <li><a href="/#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
-            <li><a href="/#contact" className="hover:text-white transition-colors">Contact</a></li>
+            <li><Link to="/" className="hover:text-white transition-colors">{t('nav.home')}</Link></li>
+            <li><Link to="/about" className="hover:text-white transition-colors">{t('nav.about')}</Link></li>
+            <li><a href="/#features" className="hover:text-white transition-colors">{t('nav.features')}</a></li>
+            <li><a href="/#how-it-works" className="hover:text-white transition-colors">{t('footer.howItWorks')}</a></li>
+            <li><a href="/#contact" className="hover:text-white transition-colors">{t('nav.contact')}</a></li>
           </ul>
         </div>
 
         <div className="lg:col-span-3 space-y-3">
-          <div className="text-xs font-semibold text-white">Platform Modules</div>
+          <div className="text-xs font-semibold text-white">{t('footer.platformModules')}</div>
           <ul className="space-y-2 text-sm text-slate-400">
-            <li><Link to="/businesses" className="hover:text-white transition-colors">Businesses Directory</Link></li>
-            <li><Link to="/jobs" className="hover:text-white transition-colors">Job Vacancies & Careers</Link></li>
-            <li><Link to="/features" className="hover:text-white transition-colors">POS & Inventory Control</Link></li>
-            <li><Link to="/pricing" className="hover:text-white transition-colors">Subscription Plans</Link></li>
-            <li><Link to="/track-order" className="hover:text-white transition-colors">Customer Order Tracking</Link></li>
-            <li><Link to="/register" className="hover:text-white transition-colors">Customer Registration</Link></li>
+            <li><Link to="/businesses" className="hover:text-white transition-colors">{t('footer.businessesDirectory')}</Link></li>
+            <li><Link to="/jobs" className="hover:text-white transition-colors">{t('footer.jobsCareers')}</Link></li>
+            <li><Link to="/features" className="hover:text-white transition-colors">{t('footer.posInventory')}</Link></li>
+            <li><Link to="/pricing" className="hover:text-white transition-colors">{t('footer.subscriptionPlans')}</Link></li>
+            <li><Link to="/track-order" className="hover:text-white transition-colors">{t('footer.orderTracking')}</Link></li>
+            <li><Link to="/register" className="hover:text-white transition-colors">{t('footer.customerRegistration')}</Link></li>
           </ul>
         </div>
 
         <div className="lg:col-span-3 space-y-3">
-          <div className="text-xs font-semibold text-white">Governance & Legal</div>
+          <div className="text-xs font-semibold text-white">{t('footer.governanceLegal')}</div>
           <ul className="space-y-2 text-sm text-slate-400">
-            <li><Link to="/about" className="hover:text-white transition-colors">About BizTrade Africa</Link></li>
-            <li><Link to="/contact" className="hover:text-white transition-colors">Business Onboarding Inquiry</Link></li>
-            <li><Link to="/login" className="hover:text-white transition-colors">Sign In to Account</Link></li>
-            <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-            <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
+            <li><Link to="/about" className="hover:text-white transition-colors">{t('footer.aboutPlatform')}</Link></li>
+            <li><Link to="/contact" className="hover:text-white transition-colors">{t('footer.onboardingInquiry')}</Link></li>
+            <li><Link to="/login" className="hover:text-white transition-colors">{t('footer.signInAccount')}</Link></li>
+            <li><Link to="/privacy" className="hover:text-white transition-colors">{t('footer.privacyPolicy')}</Link></li>
+            <li><Link to="/terms" className="hover:text-white transition-colors">{t('footer.termsOfService')}</Link></li>
           </ul>
         </div>
       </div>
 
       <div className="border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <span>© {new Date().getFullYear()} {config.platform_name || 'BizTrade Africa'}. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} {config.platform_name || 'BizTrade Africa'}. {t('common.allRightsReserved')}</span>
           <span>
-            Developed by <span className="font-semibold text-slate-300">softworld</span> · Multi-Tenant Commercial &amp; Workforce Platform · Africa
+            {t('common.developedBy')} <span className="font-semibold text-slate-300">softworld</span> · {t('footer.bottomRight')}
           </span>
         </div>
       </div>

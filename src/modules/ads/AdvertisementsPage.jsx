@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Edit2, Eye, EyeOff, Film, Plus, Trash2, Upload } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -19,6 +20,7 @@ function formatBytes(bytes) {
 }
 
 export default function AdvertisementsPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, token, hasPermission } = useAuth();
   const canManage = hasPermission('ads.manage');
 
@@ -115,12 +117,12 @@ export default function AdvertisementsPage() {
     }
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (!ALLOWED_VIDEO_TYPES.has(file.type) && !['mp4', 'webm'].includes(ext || '')) {
-      setError('Unsupported video format. Please upload an MP4 or WEBM video.');
+      setError(t('ads.errFormat'));
       e.target.value = '';
       return;
     }
     if (file.size > MAX_VIDEO_BYTES) {
-      setError('Video file exceeds the 50MB maximum limit.');
+      setError(t('ads.errVideoSize'));
       e.target.value = '';
       return;
     }
@@ -136,12 +138,12 @@ export default function AdvertisementsPage() {
     }
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (!ALLOWED_THUMB_TYPES.has(file.type) && !['jpg', 'jpeg', 'png', 'webp'].includes(ext || '')) {
-      setError('Thumbnail must be a JPG, JPEG, PNG, or WEBP image.');
+      setError(t('ads.errThumbFormat'));
       e.target.value = '';
       return;
     }
     if (file.size > MAX_THUMB_BYTES) {
-      setError('Thumbnail image exceeds 5MB.');
+      setError(t('ads.errThumbSize'));
       e.target.value = '';
       return;
     }
@@ -154,7 +156,7 @@ export default function AdvertisementsPage() {
     setMessage('');
 
     if (!editingVideo && !videoFile) {
-      setError('Please select an MP4 or WEBM video file to upload.');
+      setError(t('ads.errMissingVideo'));
       return;
     }
 
@@ -231,9 +233,9 @@ export default function AdvertisementsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">Business Advertising Videos</h1>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('ads.title')}</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Upload promotional MP4 or WEBM videos for your products and services, preview before publishing, and feature them on your public business profile.
+            {t('ads.subtitle')}
           </p>
         </div>
         {canManage && (
@@ -243,7 +245,7 @@ export default function AdvertisementsPage() {
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 whitespace-nowrap transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            Upload Video Ad
+            {t('ads.uploadVideoAd')}
           </button>
         )}
       </div>
@@ -253,9 +255,9 @@ export default function AdvertisementsPage() {
 
       <div className="flex items-center gap-2 text-xs">
         {[
-          ['all', `All (${videos.length})`],
-          ['published', `Published (${videos.filter((v) => v.is_published).length})`],
-          ['draft', `Drafts (${videos.filter((v) => !v.is_published).length})`],
+          ['all', t('ads.filterAll', { count: videos.length })],
+          ['published', t('ads.filterPublished', { count: videos.filter((v) => v.is_published).length })],
+          ['draft', t('ads.filterDraft', { count: videos.filter((v) => !v.is_published).length })],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -281,9 +283,9 @@ export default function AdvertisementsPage() {
       ) : filteredVideos.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 p-12 rounded-xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
           <Film className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">No promotional videos uploaded yet</h2>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('ads.emptyTitle')}</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            Upload short MP4 or WEBM videos showcasing your products or services. You can preview drafts privately before publishing them to customers.
+            {t('ads.emptySubtitle')}
           </p>
           {canManage && (
             <button
@@ -292,7 +294,7 @@ export default function AdvertisementsPage() {
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
             >
               <Upload className="w-3.5 h-3.5" />
-              Upload First Video Ad
+              {t('ads.uploadFirst')}
             </button>
           )}
         </div>
@@ -319,7 +321,7 @@ export default function AdvertisementsPage() {
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <Edit2 className="w-3 h-3" />
-                      Edit
+                      {t('ads.edit')}
                     </button>
                     <button
                       type="button"
@@ -327,7 +329,7 @@ export default function AdvertisementsPage() {
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <Eye className="w-3 h-3" />
-                      Preview
+                      {t('ads.preview')}
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -341,13 +343,13 @@ export default function AdvertisementsPage() {
                       }`}
                     >
                       {vid.is_published ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                      {vid.is_published ? 'Unpublish' : 'Publish'}
+                      {vid.is_published ? t('ads.unpublish') : t('ads.publish')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(vid)}
                       className="p-1.5 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                      aria-label="Delete video advertisement"
+                      aria-label={t('ads.deleteAria')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -366,14 +368,14 @@ export default function AdvertisementsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">
-                  {editingVideo ? 'Edit Promotional Video' : 'Upload Promotional Video'}
+                  {editingVideo ? t('ads.editModalTitle') : t('ads.uploadModalTitle')}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Supported formats: MP4, WEBM (max 50MB). Preview your video before publishing.
+                  {t('ads.modalFormatsHint')}
                 </p>
               </div>
               <button type="button" onClick={() => setModalOpen(false)} className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
-                Close
+                {t('common.close')}
               </button>
             </div>
 
@@ -381,36 +383,36 @@ export default function AdvertisementsPage() {
 
             <form onSubmit={handleSave} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Video Title *</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('ads.videoTitleLabel')}</label>
                 <input
                   required
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="e.g. Kigali Fresh Espresso Machine Showcase"
+                  placeholder={t('ads.videoTitlePlaceholder')}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('ads.descriptionLabel')}</label>
                 <textarea
                   rows={2}
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Describe the promoted product, service, offer, or branch availability..."
+                  placeholder={t('ads.descriptionPlaceholder')}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Related Product / Service</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('ads.relatedProductLabel')}</label>
                   <select
                     value={form.product_id}
                     onChange={(e) => setForm({ ...form, product_id: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                   >
-                    <option value="">General Business Promotion</option>
+                    <option value="">{t('ads.generalPromotion')}</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -419,7 +421,7 @@ export default function AdvertisementsPage() {
 
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Video File ({editingVideo ? 'Optional replacement' : 'Required · MP4 / WEBM'})
+                    {t('ads.videoFileLabel', { req: editingVideo ? t('ads.videoFileOptional') : t('ads.videoFileRequired') })}
                   </label>
                   <input
                     type="file"
@@ -432,13 +434,13 @@ export default function AdvertisementsPage() {
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Video Thumbnail Image (Optional · JPG, JPEG, PNG, WEBP, max 5MB)
+                  {t('ads.thumbLabel')}
                 </label>
                 <div className="flex items-center gap-4">
                   {(thumbPreviewUrl || editingVideo?.thumbnail_url) && (
                     <img
                       src={thumbPreviewUrl || editingVideo.thumbnail_url}
-                      alt="Video thumbnail preview"
+                      alt={t('ads.thumbAlt')}
                       className="w-24 h-14 object-cover rounded-lg border border-slate-200 dark:border-slate-700 shrink-0"
                     />
                   )}
@@ -453,7 +455,7 @@ export default function AdvertisementsPage() {
 
               {(videoPreviewUrl || editingVideo) && (
                 <div className="space-y-1.5">
-                  <div className="font-semibold text-slate-700 dark:text-slate-300">Pre-Publish Video Preview</div>
+                  <div className="font-semibold text-slate-700 dark:text-slate-300">{t('ads.prePublishPreview')}</div>
                   <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-black aspect-video max-h-60">
                     <video
                       src={videoPreviewUrl || getAdminStreamUrl(editingVideo)}
@@ -474,14 +476,14 @@ export default function AdvertisementsPage() {
                     checked={form.is_published}
                     onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
                   />
-                  <span>Publish immediately to public business profile and customer directory</span>
+                  <span>{t('ads.publishImmediately')}</span>
                 </label>
               )}
 
               {saving && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300 tabular-nums">
-                    <span>Uploading video media...</span>
+                    <span>{t('ads.uploadingProgress')}</span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -497,14 +499,14 @@ export default function AdvertisementsPage() {
                   onClick={() => setModalOpen(false)}
                   className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
                 >
-                  {saving ? 'Uploading...' : editingVideo ? 'Save Changes' : 'Save Promotional Video'}
+                  {saving ? t('ads.uploadingBtn') : editingVideo ? t('ads.saveChanges') : t('ads.savePromoVideo')}
                 </button>
               </div>
             </form>
@@ -517,9 +519,9 @@ export default function AdvertisementsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 dark:bg-slate-950/80 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-[#0B192C] dark:text-slate-100">Video Preview — {previewTarget.title}</h2>
+              <h2 className="text-sm font-bold text-[#0B192C] dark:text-slate-100">{t('ads.previewModalTitle', { title: previewTarget.title })}</h2>
               <button type="button" onClick={() => setPreviewTarget(null)} className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
-                Close
+                {t('common.close')}
               </button>
             </div>
             <VideoAdPlayer video={previewTarget} streamSrc={getAdminStreamUrl(previewTarget)} />
@@ -531,16 +533,16 @@ export default function AdvertisementsPage() {
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Delete Promotional Video</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">{t('ads.deleteModalTitle')}</h2>
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Are you sure you want to permanently delete &ldquo;{deleteTarget.title}&rdquo;? Customers will no longer see this advertisement.
+              {t('ads.deleteConfirm', { title: deleteTarget.title })}
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-xs border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button type="button" onClick={handleConfirmDelete} className="px-4 py-2 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg">
-                Delete Video
+                {t('ads.deleteVideo')}
               </button>
             </div>
           </div>

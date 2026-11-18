@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Printer } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { formatMoney, PAYMENT_METHOD_LABELS } from '../../utils/format.js';
+import { formatMoney, getPaymentMethodLabel } from '../../utils/format.js';
 
 export default function ReportsPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, workspace } = useAuth();
   const [analytics, setAnalytics] = useState(null);
   const [error, setError] = useState('');
@@ -29,8 +31,8 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">Reports & Performance Analytics</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Live sales by employee, payment channel breakdown, and top customer rankings.</p>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('reports.title')}</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('reports.subtitle')}</p>
         </div>
         <button
           type="button"
@@ -38,7 +40,7 @@ export default function ReportsPage() {
           className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 no-print transition-colors"
         >
           <Printer className="w-3.5 h-3.5" />
-          Print / Export PDF
+          {t('reports.printExport')}
         </button>
       </div>
 
@@ -51,13 +53,13 @@ export default function ReportsPage() {
       {analytics && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Sales by Employee</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.salesByEmployee')}</h2>
             <table className="w-full text-left text-xs">
               <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
                 <tr>
-                  <th className="py-2">Employee</th>
-                  <th className="py-2 text-right">Transactions</th>
-                  <th className="py-2 text-right">Revenue</th>
+                  <th className="py-2">{t('reports.colEmployee')}</th>
+                  <th className="py-2 text-right">{t('reports.colTransactions')}</th>
+                  <th className="py-2 text-right">{t('reports.colRevenue')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -73,19 +75,19 @@ export default function ReportsPage() {
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Collections by Payment Channel</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.collectionsByChannel')}</h2>
             <table className="w-full text-left text-xs">
               <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
                 <tr>
-                  <th className="py-2">Method</th>
-                  <th className="py-2 text-right">Payments</th>
-                  <th className="py-2 text-right">Collected</th>
+                  <th className="py-2">{t('reports.colMethod')}</th>
+                  <th className="py-2 text-right">{t('reports.colPayments')}</th>
+                  <th className="py-2 text-right">{t('reports.colCollected')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {analytics.paymentBreakdown.map((p, i) => (
                   <tr key={i}>
-                    <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{PAYMENT_METHOD_LABELS[p.payment_method] || p.payment_method}</td>
+                    <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{getPaymentMethodLabel(p.payment_method)}</td>
                     <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{p.tx_count}</td>
                     <td className="py-2.5 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(p.total, currency)}</td>
                   </tr>
@@ -95,16 +97,16 @@ export default function ReportsPage() {
           </div>
 
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-x-auto">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Top Customers by Total Spend</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.topCustomers')}</h2>
             <table className="w-full text-left text-xs">
               <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
                 <tr>
-                  <th className="py-2">Customer</th>
-                  <th className="py-2">Phone</th>
-                  <th className="py-2 text-right">Orders</th>
-                  <th className="py-2 text-right">Loyalty Pts</th>
-                  <th className="py-2 text-right">Outstanding</th>
-                  <th className="py-2 text-right">Total Spent</th>
+                  <th className="py-2">{t('reports.colCustomer')}</th>
+                  <th className="py-2">{t('reports.colPhone')}</th>
+                  <th className="py-2 text-right">{t('reports.colOrders')}</th>
+                  <th className="py-2 text-right">{t('reports.colLoyaltyPts')}</th>
+                  <th className="py-2 text-right">{t('reports.colOutstanding')}</th>
+                  <th className="py-2 text-right">{t('reports.colTotalSpent')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">

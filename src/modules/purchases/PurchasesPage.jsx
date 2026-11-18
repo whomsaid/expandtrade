@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PackageCheck, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import { formatDate, formatMoney } from '../../utils/format.js';
 
 export default function PurchasesPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, workspace, hasPermission } = useAuth();
   const [purchases, setPurchases] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -47,7 +49,7 @@ export default function PurchasesPage() {
         items: [{ product_id: Number(form.product_id), ordered_qty: Number(form.ordered_qty), unit_cost: Number(form.unit_cost) }],
       });
       setShowCreate(false);
-      setMessage('Purchase Order issued (inventory will update upon physical goods receipt).');
+      setMessage(t('purchases.poCreatedMsg'));
       await loadAll();
     } catch (err) {
       setError(err.message);
@@ -63,7 +65,7 @@ export default function PurchasesPage() {
           receive_qty: it.ordered_qty - it.received_qty,
         })),
       });
-      setMessage(`Goods received for ${po.po_number}. Stock and supplier balance updated.`);
+      setMessage(t('purchases.goodsReceivedMsg', { po: po.po_number }));
       await loadAll();
     } catch (err) {
       setError(err.message);
@@ -74,8 +76,8 @@ export default function PurchasesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">Purchase Orders & Goods Receiving</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Inventory increases strictly when ordered goods are physically confirmed received.</p>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('purchases.title')}</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('purchases.subtitle')}</p>
         </div>
         {hasPermission('purchases.manage') && (
           <button
@@ -94,7 +96,7 @@ export default function PurchasesPage() {
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            Create Purchase Order
+            {t('purchases.createPo')}
           </button>
         )}
       </div>
@@ -106,19 +108,19 @@ export default function PurchasesPage() {
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
             <tr>
-              <th className="py-3 px-4 font-semibold">PO Number</th>
-              <th className="py-3 px-4 font-semibold">Supplier</th>
-              <th className="py-3 px-4 font-semibold">Branch</th>
-              <th className="py-3 px-4 font-semibold">Items</th>
-              <th className="py-3 px-4 font-semibold text-right">Total</th>
-              <th className="py-3 px-4 font-semibold">Expected</th>
-              <th className="py-3 px-4 font-semibold">Status</th>
-              {hasPermission('purchases.manage') && <th className="py-3 px-4 font-semibold text-right">Receiving</th>}
+              <th className="py-3 px-4 font-semibold">{t('purchases.colPoNum')}</th>
+              <th className="py-3 px-4 font-semibold">{t('purchases.colSupplier')}</th>
+              <th className="py-3 px-4 font-semibold">{t('purchases.colBranch')}</th>
+              <th className="py-3 px-4 font-semibold">{t('purchases.colItems')}</th>
+              <th className="py-3 px-4 font-semibold text-right">{t('purchases.colTotal')}</th>
+              <th className="py-3 px-4 font-semibold">{t('purchases.colExpected')}</th>
+              <th className="py-3 px-4 font-semibold">{t('purchases.colStatus')}</th>
+              {hasPermission('purchases.manage') && <th className="py-3 px-4 font-semibold text-right">{t('purchases.colReceiving')}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {purchases.length === 0 ? (
-              <tr><td colSpan={8} className="py-8 text-center text-slate-500 dark:text-slate-400">No purchase orders created yet.</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('purchases.empty')}</td></tr>
             ) : (
               purchases.map((po) => (
                 <tr key={po.id}>
@@ -144,7 +146,7 @@ export default function PurchasesPage() {
                           className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 hover:underline font-medium"
                         >
                           <PackageCheck className="w-3.5 h-3.5" />
-                          Confirm Goods Received
+                          {t('purchases.confirmReceived')}
                         </button>
                       )}
                     </td>
@@ -159,16 +161,16 @@ export default function PurchasesPage() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
-            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">New Purchase Order</h2>
+            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('purchases.modalTitle')}</h2>
             <form onSubmit={handleCreatePo} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Supplier</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('purchases.supplier')}</label>
                 <select required value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
                   {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Product</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('purchases.product')}</label>
                 <select required value={form.product_id} onChange={(e) => {
                   const p = products.find((x) => x.id === Number(e.target.value));
                   setForm({ ...form, product_id: e.target.value, unit_cost: p ? String(p.purchase_price) : form.unit_cost });
@@ -178,21 +180,21 @@ export default function PurchasesPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ordered Qty</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('purchases.orderedQty')}</label>
                   <input required type="number" min="1" value={form.ordered_qty} onChange={(e) => setForm({ ...form, ordered_qty: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Unit Cost ({currency})</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('purchases.unitCost', { currency })}</label>
                   <input required type="number" min="0" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                 </div>
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Expected Delivery Date</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('purchases.expectedDate')}</label>
                 <input type="date" value={form.expected_delivery_date} onChange={(e) => setForm({ ...form, expected_delivery_date: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Issue PO</button>
+                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
+                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('purchases.issuePo')}</button>
               </div>
             </form>
           </div>

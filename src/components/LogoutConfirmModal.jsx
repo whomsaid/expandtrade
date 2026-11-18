@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { LogOut } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function LogoutConfirmModal({ open, onConfirm, onCancel }) {
+  const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -54,10 +56,10 @@ export default function LogoutConfirmModal({ open, onConfirm, onCancel }) {
           </div>
           <div className="space-y-1">
             <h2 id="logout-confirm-title" className="text-base font-bold text-[#0B192C] dark:text-white">
-              Confirm Logout
+              {t('components.logoutTitle')}
             </h2>
             <p id="logout-confirm-message" className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              Are you sure you want to log out of your account?
+              {t('components.logoutMessage')}
             </p>
           </div>
         </div>
@@ -71,7 +73,7 @@ export default function LogoutConfirmModal({ open, onConfirm, onCancel }) {
             }}
             className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -79,7 +81,7 @@ export default function LogoutConfirmModal({ open, onConfirm, onCancel }) {
             onClick={handleConfirm}
             className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
           >
-            {submitting ? 'Logging out...' : 'Yes'}
+            {submitting ? t('components.loggingOut') : t('common.yes')}
           </button>
         </div>
       </div>

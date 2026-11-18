@@ -5,7 +5,7 @@ import { execute, query, queryOne, roundMoney, transaction } from '../config/db.
 import { authenticate, requireProfileImage } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { logAudit, notifyBusinessManagers } from '../services/auditService.js';
-import { getCached, setCached } from '../services/cacheService.js';
+import { getCached, invalidatePrefix, setCached } from '../services/cacheService.js';
 import { sendMail } from '../services/mailService.js';
 
 const router = express.Router();
@@ -63,45 +63,78 @@ router.get('/public/businesses', async (req, res, next) => {
     const q = String(req.query.q || '').trim().toLowerCase();
     const category = String(req.query.category || '').trim();
     const district = String(req.query.district || '').trim();
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    const limit = Math.min(60, Math.max(1, parseInt(String(req.query.limit || '24'), 10) || 24));
+    const offset = (page - 1) * limit;
 
-    const cacheKey = `public:businesses:${q}:${category}:${district}`;
+    const cacheKey = `public:businesses:${q}:${category}:${district}:${page}:${limit}`;
     const cached = getCached(cacheKey);
     if (cached) return res.json(cached);
 
-    let sql = `
-      SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
-             b.country, b.province, b.district, b.physical_address, b.currency_code, b.operating_hours,
-             (SELECT COUNT(*) FROM products p WHERE p.business_id = b.id AND p.status = 'active') AS product_count,
-             (SELECT COUNT(*) FROM branches br WHERE br.business_id = b.id AND br.is_active = 1) AS branch_count,
-             (SELECT ROUND(AVG(pr.rating), 1) FROM product_reviews pr WHERE pr.business_id = b.id) AS avg_rating,
-             (SELECT COUNT(*) FROM product_reviews pr WHERE pr.business_id = b.id) AS review_count
-      FROM businesses b
-      WHERE b.status = 'active' AND b.is_public_listed = 1 AND b.deleted_at IS NULL
-    `;
+    let whereSql = `WHERE b.status = 'active' AND b.is_public_listed = 1 AND b.deleted_at IS NULL`;
     const params = [];
 
     if (category) {
-      sql += ' AND b.category = ?';
+      whereSql += ' AND b.category = ?';
       params.push(category);
     }
     if (district) {
-      sql += ' AND b.district = ?';
+      whereSql += ' AND b.district = ?';
       params.push(district);
     }
     if (q) {
-      sql += ` AND (LOWER(b.name) LIKE ? OR LOWER(b.category) LIKE ? OR LOWER(COALESCE(b.description, '')) LIKE ? OR LOWER(b.district) LIKE ?)`;
+      whereSql += ` AND (LOWER(b.name) LIKE ? OR LOWER(b.category) LIKE ? OR LOWER(COALESCE(b.description, '')) LIKE ? OR LOWER(b.district) LIKE ?)`;
       params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
 
-    sql += ' ORDER BY b.id DESC LIMIT 100';
-    const [businesses, categories] = await Promise.all([
-      query(sql, params),
+    const listSql = `
+      SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
+             b.country, b.province, b.district, b.physical_address, b.currency_code, b.operating_hours,
+             COALESCE(p_agg.product_count, 0) AS product_count,
+             COALESCE(b_agg.branch_count, 0) AS branch_count,
+             r_agg.avg_rating AS avg_rating,
+             COALESCE(r_agg.review_count, 0) AS review_count
+      FROM businesses b
+      LEFT JOIN (
+        SELECT business_id, COUNT(*) AS product_count
+        FROM products
+        WHERE status = 'active'
+        GROUP BY business_id
+      ) p_agg ON p_agg.business_id = b.id
+      LEFT JOIN (
+        SELECT business_id, COUNT(*) AS branch_count
+        FROM branches
+        WHERE is_active = 1
+        GROUP BY business_id
+      ) b_agg ON b_agg.business_id = b.id
+      LEFT JOIN (
+        SELECT business_id, ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS review_count
+        FROM product_reviews
+        GROUP BY business_id
+      ) r_agg ON r_agg.business_id = b.id
+      ${whereSql}
+      ORDER BY b.id DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const [businesses, countRow, categories] = await Promise.all([
+      query(listSql, [...params, limit, offset]),
+      queryOne(`SELECT COUNT(*) AS total FROM businesses b ${whereSql}`, params),
       query(
         `SELECT DISTINCT category FROM businesses WHERE status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL ORDER BY category ASC`
       ),
     ]);
 
-    const payload = { businesses, categories: categories.map((c) => c.category) };
+    const total = Number(countRow?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const payload = {
+      businesses,
+      categories: categories.map((c) => c.category),
+      total,
+      page,
+      limit,
+      totalPages,
+    };
     setCached(cacheKey, payload, 15_000);
     res.json(payload);
   } catch (err) {
@@ -308,11 +341,25 @@ router.post(
   [
     body('business_id').isInt({ gt: 0 }).withMessage('Valid business is required'),
     body('items').isArray({ min: 1 }).withMessage('Order must include at least one item'),
+    body('items.*.product_id').isInt({ gt: 0 }).withMessage('Valid product ID is required for every order item'),
+    body('items.*.quantity').isInt({ min: 1, max: 10000 }).withMessage('Order item quantity must be at least 1'),
   ],
   validateRequest,
   async (req, res, next) => {
     try {
-      const { business_id, branch_id = null, delivery_address = '', notes = '', items } = req.body;
+      const { business_id, branch_id = null, delivery_address = '', notes = '', items, idempotency_key = null } = req.body;
+      const cleanIdempotency = idempotency_key ? String(idempotency_key).trim().slice(0, 120) : null;
+
+      if (cleanIdempotency) {
+        const existingOrder = await queryOne(
+          'SELECT * FROM orders WHERE business_id = ? AND idempotency_key = ?',
+          [business_id, cleanIdempotency]
+        );
+        if (existingOrder) {
+          return res.status(200).json({ order: existingOrder, message: `Order ${existingOrder.order_number} already placed.` });
+        }
+      }
+
       const business = await queryOne(
         `SELECT * FROM businesses WHERE id = ? AND status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL`,
         [business_id]
@@ -368,14 +415,15 @@ router.post(
 
         const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${crypto.randomBytes(1).toString('hex').toUpperCase()}`;
         const ordRes = await tx.execute(
-          `INSERT INTO orders (business_id, branch_id, customer_id, customer_user_id, order_number, customer_name, customer_phone, delivery_address, total_amount, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO orders (business_id, branch_id, customer_id, customer_user_id, order_number, idempotency_key, customer_name, customer_phone, delivery_address, total_amount, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             business.id,
             branch.id,
             cust.id,
             req.user.id,
             orderNumber,
+            cleanIdempotency,
             req.user.full_name,
             req.user.phone,
             delivery_address || '',
@@ -493,6 +541,8 @@ router.post(
         entityId: r.insertId,
         changes: { rating },
       });
+
+      invalidatePrefix('public:businesses:');
 
       res.status(201).json({ id: r.insertId, message: 'Thank you for submitting your review.' });
     } catch (err) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Megaphone, Plus, Send } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -7,6 +8,7 @@ import UserAvatar from '../../components/UserAvatar.jsx';
 import { formatDate, formatDateTime } from '../../utils/format.js';
 
 export default function TasksPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, socket, hasPermission } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -108,18 +110,18 @@ export default function TasksPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">Tasks & Internal Team Communication</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Assign branch tasks, post operational announcements, and chat with authenticated colleagues.</p>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('tasks.title')}</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('tasks.subtitle')}</p>
         </div>
         {hasPermission('tasks.manage') && (
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setShowAnnModal(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <Megaphone className="w-3.5 h-3.5" />
-              Post Announcement
+              {t('tasks.postAnnouncement')}
             </button>
             <button type="button" onClick={() => setShowTaskModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
               <Plus className="w-3.5 h-3.5" />
-              Assign Task
+              {t('tasks.assignTask')}
             </button>
           </div>
         )}
@@ -131,12 +133,19 @@ export default function TasksPage() {
         {/* Tasks List */}
         <div className="lg:col-span-7 space-y-4">
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Team Tasks ({tasks.length})</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('tasks.teamTasks', { count: tasks.length })}</h2>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {tasks.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">No tasks assigned yet.</div>
+                <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">{t('tasks.noTasks')}</div>
               ) : (
-                tasks.map((task) => (
+                tasks.map((task) => {
+                  const priorityLabel = {
+                    low: t('tasks.priorityLow'),
+                    medium: t('tasks.priorityMedium'),
+                    high: t('tasks.priorityHigh'),
+                    urgent: t('tasks.priorityUrgent'),
+                  }[task.priority] || task.priority;
+                  return (
                   <div key={task.id} className="py-3 space-y-2 text-xs">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -147,7 +156,11 @@ export default function TasksPage() {
                             <UserAvatar src={task.assigned_to_avatar} name={task.assigned_to_name} size="xs" />
                           )}
                           <span>
-                            Assigned: {task.assigned_to_name || 'Unassigned'} · Priority: {task.priority} · Due: {formatDate(task.deadline)}
+                            {t('tasks.assignedMeta', {
+                              name: task.assigned_to_name || t('tasks.unassigned'),
+                              priority: priorityLabel,
+                              due: formatDate(task.deadline),
+                            })}
                           </span>
                         </div>
                       </div>
@@ -156,22 +169,23 @@ export default function TasksPage() {
                         onChange={(e) => handleStatusChange(task.id, e.target.value)}
                         className="px-2 py-1 border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs"
                       >
-                        <option value="pending">Pending</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
+                        <option value="pending">{t('status.pending')}</option>
+                        <option value="in_progress">{t('status.in_progress')}</option>
+                        <option value="completed">{t('status.completed')}</option>
+                        <option value="cancelled">{t('status.cancelled')}</option>
                       </select>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Internal Announcements</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('tasks.announcementsTitle')}</h2>
             {announcements.length === 0 ? (
-              <div className="text-xs text-slate-400 dark:text-slate-500">No announcements posted.</div>
+              <div className="text-xs text-slate-400 dark:text-slate-500">{t('tasks.noAnnouncements')}</div>
             ) : (
               <div className="space-y-3">
                 {announcements.map((a) => (
@@ -181,7 +195,7 @@ export default function TasksPage() {
                       <span className="text-slate-400 dark:text-slate-500 font-normal">{formatDate(a.created_at)}</span>
                     </div>
                     <p className="text-slate-700 dark:text-slate-300 mt-1">{a.body}</p>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Posted by {a.author_name}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{t('tasks.postedBy', { name: a.author_name })}</div>
                   </div>
                 ))}
               </div>
@@ -192,12 +206,12 @@ export default function TasksPage() {
         {/* Real-time Business Team Chat */}
         <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col h-[520px]">
           <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Workspace Team Channel</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('tasks.teamChannelTitle')}</h2>
             <StatusBadge status="active" />
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 ? (
-              <div className="text-center text-xs text-slate-400 dark:text-slate-500 py-10">No messages yet. Start a real team thread below.</div>
+              <div className="text-center text-xs text-slate-400 dark:text-slate-500 py-10">{t('tasks.noMessages')}</div>
             ) : (
               messages.map((m) => (
                 <div key={m.id} className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-lg border border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
@@ -217,7 +231,7 @@ export default function TasksPage() {
             <input
               value={msgText}
               onChange={(e) => setMsgText(e.target.value)}
-              placeholder="Write a message to your team..."
+              placeholder={t('tasks.messagePlaceholder')}
               className="flex-1 px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
             <button type="submit" className="px-3.5 py-2 bg-[#0B192C] dark:bg-sky-600 text-white rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
@@ -230,26 +244,26 @@ export default function TasksPage() {
       {showTaskModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
-            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">Assign Task</h2>
+            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('tasks.taskModalTitle')}</h2>
             <form onSubmit={handleCreateTask} className="space-y-3 text-xs">
-              <input required placeholder="Task Title" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-              <textarea rows={2} placeholder="Description" value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+              <input required placeholder={t('tasks.taskTitlePlaceholder')} value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+              <textarea rows={2} placeholder={t('tasks.descriptionPlaceholder')} value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <div className="grid grid-cols-2 gap-2">
                 <select value={taskForm.assigned_to_user_id} onChange={(e) => setTaskForm({ ...taskForm, assigned_to_user_id: e.target.value })} className="px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                  <option value="">Unassigned</option>
+                  <option value="">{t('tasks.unassigned')}</option>
                   {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
                 </select>
                 <select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })} className="px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="low">{t('tasks.priorityLow')}</option>
+                  <option value="medium">{t('tasks.priorityMedium')}</option>
+                  <option value="high">{t('tasks.priorityHigh')}</option>
+                  <option value="urgent">{t('tasks.priorityUrgent')}</option>
                 </select>
               </div>
               <input type="date" value={taskForm.deadline} onChange={(e) => setTaskForm({ ...taskForm, deadline: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowTaskModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Create Task</button>
+                <button type="button" onClick={() => setShowTaskModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
+                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('tasks.createTask')}</button>
               </div>
             </form>
           </div>
@@ -259,13 +273,13 @@ export default function TasksPage() {
       {showAnnModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
-            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">Post Business Announcement</h2>
+            <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('tasks.annModalTitle')}</h2>
             <form onSubmit={handleCreateAnn} className="space-y-3 text-xs">
-              <input required placeholder="Announcement Headline" value={annForm.title} onChange={(e) => setAnnForm({ ...annForm, title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-              <textarea required rows={3} placeholder="Message to all branches..." value={annForm.body} onChange={(e) => setAnnForm({ ...annForm, body: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+              <input required placeholder={t('tasks.annHeadlinePlaceholder')} value={annForm.title} onChange={(e) => setAnnForm({ ...annForm, title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+              <textarea required rows={3} placeholder={t('tasks.annBodyPlaceholder')} value={annForm.body} onChange={(e) => setAnnForm({ ...annForm, body: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowAnnModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Publish</button>
+                <button type="button" onClick={() => setShowAnnModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
+                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('tasks.publish')}</button>
               </div>
             </form>
           </div>

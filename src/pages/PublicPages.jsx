@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
   BarChart3,
@@ -44,233 +45,50 @@ import { usePlatformConfig } from '../context/PlatformConfigContext.jsx';
 import { api } from '../services/api.js';
 import { formatDate, formatDateTime, formatMoney } from '../utils/format.js';
 
-const PLATFORM_FEATURES = [
-  {
-    title: 'Business Management',
-    icon: Building2,
-    desc: 'Organize company identity, currency defaults, tax rules, operating hours, and daily governance in one isolated workspace.',
-  },
-  {
-    title: 'Sales and Point of Sale (POS)',
-    icon: ShoppingCart,
-    desc: 'Process counter sales quickly with product search, barcode lookup, split payments, and printable customer receipts.',
-  },
-  {
-    title: 'Product Management',
-    icon: Package,
-    desc: 'Maintain structured SKU catalogs, categories, pricing tiers, cost tracking, and active product listings.',
-  },
-  {
-    title: 'Inventory Management',
-    icon: Boxes,
-    desc: 'Track real-time stock quantities, low-stock alerts, stock adjustments, and inter-branch inventory transfers.',
-  },
-  {
-    title: 'Customer Management',
-    icon: Users,
-    desc: 'Build verified customer profiles, monitor receivables and loyalty records, and manage customer inquiries cleanly.',
-  },
-  {
-    title: 'Supplier Management',
-    icon: Truck,
-    desc: 'Track vendor contacts, purchase histories, and outstanding supplier payables across all business branches.',
-  },
-  {
-    title: 'Financial Management',
-    icon: Wallet,
-    desc: 'Record revenue, cost of goods sold, operating expenses with approval workflows, and live profit visibility.',
-  },
-  {
-    title: 'Employee Management',
-    icon: UserCheck,
-    desc: 'Assign staff to branches with role-based permissions covering managers, cashiers, accountants, and inventory teams.',
-  },
-  {
-    title: 'Branch Management',
-    icon: GitBranch,
-    desc: 'Run multiple store locations under one business account with branch-level inventory, sales, and staff separation.',
-  },
-  {
-    title: 'Order Management',
-    icon: ShoppingBag,
-    desc: 'Receive customer orders from the public directory and guide them smoothly from confirmation through delivery.',
-  },
-  {
-    title: 'Reports and Analytics',
-    icon: BarChart3,
-    desc: 'Review daily, monthly, and yearly performance summaries, branch comparisons, and exportable operational reports.',
-  },
-  {
-    title: 'Business Communication',
-    icon: MessageSquare,
-    desc: 'Keep employees aligned with internal branch messaging channels and business-wide announcements.',
-  },
-  {
-    title: 'Task Management',
-    icon: ClipboardList,
-    desc: 'Assign operational tasks to team members, set deadlines and priorities, and collaborate via task comments.',
-  },
-  {
-    title: 'Promotional Advertising',
-    icon: Video,
-    desc: 'Upload and publish promotional videos with product links and thumbnails directly to your public storefront.',
-  },
-  {
-    title: 'AI Business Assistant',
-    icon: Bot,
-    desc: 'Ask natural business questions grounded in your own operational sales, stock, and branch records.',
-  },
-  {
-    title: 'Notifications and Alerts',
-    icon: Bell,
-    desc: 'Stay informed about low inventory, incoming customer orders, expense approvals, and security updates.',
-  },
+const FEATURE_ICONS = [
+  Building2,
+  ShoppingCart,
+  Package,
+  Boxes,
+  Users,
+  Truck,
+  Wallet,
+  UserCheck,
+  GitBranch,
+  ShoppingBag,
+  BarChart3,
+  MessageSquare,
+  ClipboardList,
+  Video,
+  Bot,
+  Bell,
 ];
 
-const WORKFLOW_STEPS = [
+const TECH_STACK_STATIC = [
   {
-    step: '01',
-    title: 'Platform Super Admin registers a business',
-    desc: 'The Super Admin collects verified business profile details, tax configuration, subscription plan, and headquarters setup.',
-  },
-  {
-    step: '02',
-    title: 'Assigned Business Admin receives activation credentials',
-    desc: 'The designated Business Admin receives a secure activation link, completes profile photo upload, and sets a permanent password.',
-  },
-  {
-    step: '03',
-    title: 'Business Admin sets up branches, products, and employees',
-    desc: 'Configure store branches, categories, products, opening inventory, and staff accounts with role-specific permissions.',
-  },
-  {
-    step: '04',
-    title: 'Staff run daily business operations',
-    desc: 'Cashiers, inventory managers, and accountants execute POS sales, stock transfers, purchase orders, and expense tracking.',
-  },
-  {
-    step: '05',
-    title: 'Business Admin monitors reports, profits, and team activities',
-    desc: 'Review financial statements, branch performance charts, employee tasks, and audit logs from a unified dashboard.',
-  },
-  {
-    step: '06',
-    title: 'Customers browse businesses, order products, and track orders',
-    desc: 'Registered customers explore public catalogs, watch promotional videos, place orders, and follow fulfillment live.',
-  },
-];
-
-const PLATFORM_BENEFITS = [
-  {
-    title: 'Better Business Organization',
-    desc: 'Unify products, branches, suppliers, staff, and customer orders in a single structured system.',
-  },
-  {
-    title: 'Accurate Sales & Stock Tracking',
-    desc: 'Every POS transaction and stock adjustment updates branch inventory and audit logs automatically.',
-  },
-  {
-    title: 'Improved Team Collaboration',
-    desc: 'Connect branch teams with assigned tasks, internal messaging, and role-controlled workflows.',
-  },
-  {
-    title: 'Clear Financial Visibility',
-    desc: 'Monitor sales revenue, approved expenses, receivables, payables, and gross margins without manual spreadsheets.',
-  },
-  {
-    title: 'Faster Customer Service',
-    desc: 'Accelerate checkout with barcode search, printed receipts, and online customer order fulfillment.',
-  },
-  {
-    title: 'Reduced Manual Errors',
-    desc: 'Replace error-prone paper books with validated entries, automated tax totals, and stock movement records.',
-  },
-  {
-    title: 'Centralized Multi-Branch Control',
-    desc: 'Oversee headquarters and regional branches from one dashboard with strict tenant data isolation.',
-  },
-  {
-    title: 'Built for Sustainable Growth',
-    desc: 'Scale seamlessly from a single neighborhood store into a multi-branch retail or wholesale operation.',
-  },
-];
-
-const SUPPORTED_BUSINESSES = [
-  'Retail Shops',
-  'Supermarkets',
-  'Wholesalers',
-  'Pharmacies',
-  'Hardware Stores',
-  'Clothing & Fashion Stores',
-  'Electronics Shops',
-  'Restaurants & Cafés',
-  'Service Businesses',
-  'Small and Medium Enterprises (SMEs)',
-];
-
-const TECH_STACK = [
-  {
-    category: 'Languages & Frontend',
+    key: 'frontend',
     icon: Layers,
     items: ['JavaScript (ES2023+)', 'React.js', 'Vite', 'Tailwind CSS', 'HTML5 & CSS3'],
   },
   {
-    category: 'Backend & APIs',
+    key: 'backend',
     icon: Code2,
     items: ['Node.js', 'Express.js', 'REST API Architecture', 'JWT & Role-Based Auth'],
   },
   {
-    category: 'Database Technologies',
+    key: 'database',
     icon: Database,
     items: ['MySQL', 'SQLite', 'Relational Schema Design', 'Transaction Integrity'],
   },
   {
-    category: 'Development Tools',
+    key: 'tools',
     icon: Wrench,
     items: ['Git', 'GitHub', 'VS Code', 'Postman', 'npm & Vite Tooling'],
   },
 ];
 
-const DEVELOPER_PROJECTS = [
-  {
-    id: 'biztrade-africa',
-    name: 'BizTradeAfrica',
-    image: '/src/assets/images/project_biztrade_africa_1794832786709.jpg',
-    fallbackCode: 'BT',
-    description:
-      'An African-focused business and employment platform designed to connect businesses, customers, traders and job seekers.',
-    technologies: ['React.js', 'Vite', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
-    status: 'IN DEVELOPMENT',
-    publicRoute: '/',
-    publicLabel: 'Open Platform',
-  },
-  {
-    id: 'kigali-store',
-    name: 'Kigali-Store',
-    image: '/src/assets/images/project_kigali_store_1794832787098.jpg',
-    fallbackCode: 'KS',
-    description:
-      'An electronics e-commerce platform for managing products, customers, shopping activities, orders and business operations.',
-    technologies: ['React.js', 'JavaScript', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
-    status: 'IN DEVELOPMENT',
-    publicRoute: null,
-    publicLabel: null,
-  },
-  {
-    id: 'electrovault',
-    name: 'ElectroVault',
-    image: '/src/assets/images/project_electrovault_1794832787681.jpg',
-    fallbackCode: 'EV',
-    description:
-      'A modern electronics shopping platform focused on providing customers with an organized and convenient electronics shopping experience.',
-    technologies: ['React.js', 'Vite', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
-    status: 'IN DEVELOPMENT',
-    publicRoute: null,
-    publicLabel: null,
-  },
-];
-
 export function HomePage() {
+  const { t } = useTranslation();
   const { config } = usePlatformConfig();
   const location = useLocation();
   const [contactForm, setContactForm] = useState({
@@ -282,6 +100,11 @@ export function HomePage() {
   });
   const [contactStatus, setContactStatus] = useState({ type: '', text: '' });
   const [submittingContact, setSubmittingContact] = useState(false);
+
+  const platformFeatures = t('public.features', { returnObjects: true }) || [];
+  const workflowSteps = t('public.workflowSteps', { returnObjects: true }) || [];
+  const platformBenefits = t('public.benefits', { returnObjects: true }) || [];
+  const supportedBusinesses = t('public.sectors', { returnObjects: true }) || [];
 
   useEffect(() => {
     if (!location.hash) return;
@@ -325,43 +148,41 @@ export function HomePage() {
         <div className="max-w-7xl mx-auto px-6 py-16 lg:py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-center space-y-6 animate-fade-up">
             <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
-              BizTrade Africa — Complete Multi-Tenant Business Platform
+              {t('public.heroEyebrow')}
             </p>
             <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-[#0B192C] dark:text-white leading-[1.1] [text-wrap:balance]">
-              Expand Your Business. Manage Everything.
+              {t('public.heroTitle')}
             </h1>
             <p className="text-base text-slate-600 dark:text-slate-300 leading-relaxed max-w-xl">
-              An all-in-one business-management platform designed to help African businesses manage,
-              grow, and expand their operations—from Point of Sale and multi-branch inventory to customers,
-              suppliers, employees, finances, and commercial trade.
+              {t('public.heroDesc')}
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <a
                 href="#features"
                 className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors whitespace-nowrap shrink-0"
               >
-                Features
+                {t('nav.features')}
                 <ArrowRight className="w-4 h-4" />
               </a>
               <Link
                 to="/register"
                 className="inline-flex items-center px-5 py-3 text-sm font-semibold text-[#0B192C] dark:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors whitespace-nowrap shrink-0"
               >
-                Get Started
+                {t('public.getStarted')}
               </Link>
               <Link
                 to="/login"
                 className="inline-flex items-center px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0"
               >
-                Login
+                {t('public.login')}
               </Link>
             </div>
             <div className="pt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-              <span>Multi-Branch Workspace Control</span>
+              <span>{t('public.bullet1')}</span>
               <span aria-hidden="true">·</span>
-              <span>Role-Based Staff Permissions</span>
+              <span>{t('public.bullet2')}</span>
               <span aria-hidden="true">·</span>
-              <span>Customer Storefront & Order Tracking</span>
+              <span>{t('public.bullet3')}</span>
             </div>
           </div>
 
@@ -369,23 +190,23 @@ export function HomePage() {
             <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 relative">
               <img
                 src="/src/assets/images/hero_kigali_commerce_1794724575172.jpg"
-                alt="Retail and wholesale business operations running on BizTrade Africa"
+                alt={t('public.heroImgAlt')}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 transition-transform duration-200 hover:-translate-y-0.5">
-                <div className="text-xs font-semibold text-[#0B192C] dark:text-white">POS & Receipts</div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Fast counter checkout & VAT control</div>
+                <div className="text-xs font-semibold text-[#0B192C] dark:text-white">{t('public.card1Title')}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{t('public.card1Desc')}</div>
               </div>
               <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 transition-transform duration-200 hover:-translate-y-0.5">
-                <div className="text-xs font-semibold text-[#0B192C] dark:text-white">Stock & Transfers</div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Live inventory across store branches</div>
+                <div className="text-xs font-semibold text-[#0B192C] dark:text-white">{t('public.card2Title')}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{t('public.card2Desc')}</div>
               </div>
               <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 transition-transform duration-200 hover:-translate-y-0.5">
-                <div className="text-xs font-semibold text-[#0B192C] dark:text-white">Accounts & Team</div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Expenses, staff roles & tasks</div>
+                <div className="text-xs font-semibold text-[#0B192C] dark:text-white">{t('public.card3Title')}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{t('public.card3Desc')}</div>
               </div>
             </div>
           </div>
@@ -398,38 +219,33 @@ export function HomePage() {
           <div className="lg:col-span-5 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 min-h-[280px]">
             <img
               src="/src/assets/images/feature_pos_inventory_1794724576072.jpg"
-              alt="Store manager verifying product inventory and operations"
+              alt={t('public.aboutImgAlt')}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />
           </div>
           <div className="lg:col-span-7 flex flex-col justify-center space-y-6">
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">About BizTrade Africa</p>
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">{t('public.aboutEyebrow')}</p>
               <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
-                Engineered to replace fragmented notebooks and spreadsheets with structured control
+                {t('public.aboutTitle')}
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                BizTrade Africa is an all-in-one business-management platform designed to help African businesses
-                manage, grow, and expand their operations. Instead of juggling separate notebooks, disconnected
-                POS terminals, and scattered spreadsheets across retail, wholesale, pharmacy, hardware, hospitality,
-                and service teams, everyone works inside one governed multi-tenant workspace.
+                {t('public.aboutDesc')}
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
-                <h3 className="text-sm font-semibold text-[#0B192C] dark:text-white">Problems It Solves</h3>
+                <h3 className="text-sm font-semibold text-[#0B192C] dark:text-white">{t('public.problemsTitle')}</h3>
                 <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Eliminates untracked stock shrinkage, manual receipt errors, unclear cash and mobile money balances,
-                  and delays in coordinating branch staff.
+                  {t('public.problemsDesc')}
                 </p>
               </div>
               <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
-                <h3 className="text-sm font-semibold text-[#0B192C] dark:text-white">Organizational Productivity</h3>
+                <h3 className="text-sm font-semibold text-[#0B192C] dark:text-white">{t('public.productivityTitle')}</h3>
                 <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Improves accountability with role-based permissions, audit logs, task assignments, and clear daily
-                  profit and operational visibility.
+                  {t('public.productivityDesc')}
                 </p>
               </div>
             </div>
@@ -439,7 +255,7 @@ export function HomePage() {
                 to="/about"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline"
               >
-                <span>Read full About Us &amp; Developer Profile</span>
+                <span>{t('public.readFullAbout')}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -451,21 +267,21 @@ export function HomePage() {
       <RevealBlock as="section" id="features" className="scroll-mt-20 bg-white dark:bg-slate-900 border-y border-slate-200 dark:border-slate-800 py-20">
         <div className="max-w-7xl mx-auto px-6 space-y-12">
           <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">Platform Capabilities</p>
+            <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">{t('public.featuresEyebrow')}</p>
             <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
-              Sixteen integrated modules for complete commercial operations
+              {t('public.featuresTitle')}
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Every department—from front-counter sales and warehouse inventory to finance, staff tasks, and customer ordering—operates on shared, consistent data.
+              {t('public.featuresDesc')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {PLATFORM_FEATURES.map((feat) => {
-              const Icon = feat.icon;
+            {platformFeatures.map((feat, idx) => {
+              const Icon = FEATURE_ICONS[idx % FEATURE_ICONS.length];
               return (
                 <div
-                  key={feat.title}
+                  key={idx}
                   className="bg-slate-50 dark:bg-slate-950 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 hover:border-sky-500/50 dark:hover:border-sky-500/50 transition-[transform,border-color] duration-200 hover:-translate-y-0.5"
                 >
                   <div className="w-9 h-9 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-sky-700 dark:text-sky-400">
@@ -483,17 +299,17 @@ export function HomePage() {
       {/* 4. How BizTrade Africa Works */}
       <RevealBlock as="section" id="how-it-works" className="scroll-mt-20 max-w-7xl mx-auto px-6 py-20 w-full space-y-12">
         <div className="max-w-2xl space-y-3">
-          <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">How BizTrade Africa Works</p>
+          <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">{t('public.howEyebrow')}</p>
           <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
-            Structured governance from onboarding to daily trade
+            {t('public.howTitle')}
           </h2>
           <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-            Businesses are verified and registered by the Platform Super Admin so every workspace starts with clean isolation, assigned leadership, and verified customer visibility.
+            {t('public.howDesc')}
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {WORKFLOW_STEPS.map((item) => (
+          {workflowSteps.map((item) => (
             <div
               key={item.step}
               className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-sky-500/40"
@@ -511,16 +327,16 @@ export function HomePage() {
         <div className="max-w-7xl mx-auto px-6 space-y-16">
           <div className="space-y-8">
             <div className="max-w-2xl space-y-2">
-              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">Why Businesses Choose BizTrade Africa</p>
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">{t('public.benefitsEyebrow')}</p>
               <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
-                Practical operational benefits across every branch
+                {t('public.benefitsTitle')}
               </h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {PLATFORM_BENEFITS.map((b) => (
+              {platformBenefits.map((b, idx) => (
                 <div
-                  key={b.title}
+                  key={idx}
                   className="bg-slate-50 dark:bg-slate-950 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -534,24 +350,24 @@ export function HomePage() {
           <div className="pt-8 border-t border-slate-200 dark:border-slate-800 space-y-6">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div className="space-y-1.5">
-                <h2 className="text-xl font-bold text-[#0B192C] dark:text-white">Supported Business Sectors</h2>
+                <h2 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('public.sectorsTitle')}</h2>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Built to adapt to commercial workflows across diverse retail, wholesale, and service industries.
+                  {t('public.sectorsDesc')}
                 </p>
               </div>
               <Link
                 to="/businesses"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline whitespace-nowrap shrink-0"
               >
-                Explore Registered Businesses
+                {t('public.exploreBusinesses')}
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {SUPPORTED_BUSINESSES.map((sector) => (
+              {supportedBusinesses.map((sector, idx) => (
                 <div
-                  key={sector}
+                  key={idx}
                   className="bg-slate-50 dark:bg-slate-950 px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2"
                 >
                   <Store className="w-3.5 h-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
@@ -568,12 +384,12 @@ export function HomePage() {
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5 space-y-6">
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">Contact & Onboarding</p>
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">{t('public.contactEyebrow')}</p>
               <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white [text-wrap:balance]">
-                Connect with the BizTrade Africa team
+                {t('public.contactTitle')}
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                Reach out to request new business onboarding, schedule a platform walkthrough, or ask questions about workspace administration.
+                {t('public.contactDesc')}
               </p>
             </div>
 
@@ -621,9 +437,9 @@ export function HomePage() {
 
           <form
             onSubmit={handleHomeContactSubmit}
-            className="lg:col-span-7 bg-slate-50 dark:bg-slate-950 p-6 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4"
+            className="lg:col-span-7 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4"
           >
-            <h3 className="text-base font-bold text-[#0B192C] dark:text-white">Send an Inquiry</h3>
+            <h3 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.sendInquiryTitle')}</h3>
             {contactStatus.text && (
               <div
                 className={`p-3 rounded-lg text-xs font-medium border ${
@@ -637,52 +453,52 @@ export function HomePage() {
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('auth.fullName')}</label>
                 <input
                   required
                   value={contactForm.full_name}
                   onChange={(e) => setContactForm({ ...contactForm, full_name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('common.email')}</label>
                 <input
                   required
                   type="email"
                   value={contactForm.email}
                   onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('common.phone')}</label>
                 <input
                   value={contactForm.phone}
                   onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Name</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.businessName')}</label>
                 <input
                   value={contactForm.business_name}
                   onChange={(e) => setContactForm({ ...contactForm, business_name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Message</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.message')}</label>
               <textarea
                 required
                 rows={4}
                 value={contactForm.message}
                 onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                placeholder="Tell us about your business or how we can help..."
-                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                placeholder={t('public.messagePlaceholder')}
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
               />
             </div>
             <button
@@ -690,7 +506,7 @@ export function HomePage() {
               disabled={submittingContact}
               className="px-5 py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60 transition-colors"
             >
-              {submittingContact ? 'Sending...' : 'Send Message'}
+              {submittingContact ? t('public.sending') : t('public.sendMessage')}
             </button>
           </form>
         </div>
@@ -702,6 +518,7 @@ export function HomePage() {
 }
 
 export function PublicBusinessesPage() {
+  const { t } = useTranslation();
   const [businesses, setBusinesses] = useState([]);
   const [videos, setVideos] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -742,9 +559,9 @@ export function PublicBusinessesPage() {
       <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full space-y-8 animate-fade-up">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-1.5">
-            <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">Registered Businesses Directory</h1>
+            <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.directoryTitle')}</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Browse verified businesses on BizTrade Africa, explore published catalogs, and place customer orders.
+              {t('public.directorySubtitle')}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -753,7 +570,7 @@ export function PublicBusinessesPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search businesses or cities..."
+                placeholder={t('public.searchBusinessesPlaceholder')}
                 className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
               />
             </div>
@@ -762,7 +579,7 @@ export function PublicBusinessesPage() {
               onChange={(e) => setCategory(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
             >
-              <option value="">All Categories</option>
+              <option value="">{t('public.allCategories')}</option>
               {categories.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -781,9 +598,9 @@ export function PublicBusinessesPage() {
         ) : businesses.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 p-12 rounded-xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
             <Store className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto" />
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">No publicly listed businesses match yet</h2>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('public.noBusinessesMatch')}</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-              Businesses appear here once registered and activated by the Platform Super Admin.
+              {t('public.noBusinessesMatchDesc')}
             </p>
           </div>
         ) : (
@@ -823,13 +640,13 @@ export function PublicBusinessesPage() {
 
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
                   <div className="text-xs text-slate-600 dark:text-slate-400 tabular-nums">
-                    {b.product_count} products · {b.review_count > 0 ? `${b.avg_rating}★ (${b.review_count})` : 'No reviews yet'}
+                    {b.product_count} {t('public.productsCount')} · {b.review_count > 0 ? `${b.avg_rating}★ (${b.review_count})` : t('public.noReviewsYet')}
                   </div>
                   <Link
                     to={`/businesses/${b.slug}`}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 whitespace-nowrap"
                   >
-                    View Catalog
+                    {t('public.viewCatalog')}
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -841,9 +658,9 @@ export function PublicBusinessesPage() {
         {!loading && videos.length > 0 && (
           <section className="space-y-4 pt-4">
             <div>
-              <h2 className="text-xl font-bold text-[#0B192C] dark:text-white">Featured Promotional Videos</h2>
+              <h2 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('public.featuredVideosTitle')}</h2>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                Watch product and service showcases published by verified businesses on BizTrade Africa.
+                {t('public.featuredVideosDesc')}
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -860,6 +677,7 @@ export function PublicBusinessesPage() {
 }
 
 export function PublicBusinessDetailPage() {
+  const { t } = useTranslation();
   const { slug } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -985,7 +803,7 @@ export function PublicBusinessDetailPage() {
       <PublicHeader />
       <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8">
         <div className="text-xs text-slate-500 dark:text-slate-400">
-          <Link to="/businesses" className="hover:text-slate-900 dark:hover:text-white">← Back to Businesses Directory</Link>
+          <Link to="/businesses" className="hover:text-slate-900 dark:hover:text-white">← {t('public.backToDirectory')}</Link>
         </div>
 
         {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-lg">{error}</div>}
@@ -993,7 +811,7 @@ export function PublicBusinessDetailPage() {
           <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-lg flex items-center justify-between gap-4">
             <span>{notice}</span>
             {user && !user.is_platform_admin && (
-              <Link to="/customer" className="font-semibold underline whitespace-nowrap">View in Customer Portal →</Link>
+              <Link to="/customer" className="font-semibold underline whitespace-nowrap">{t('public.viewInCustomerPortal')} →</Link>
             )}
           </div>
         )}
@@ -1002,7 +820,7 @@ export function PublicBusinessDetailPage() {
           <div className="h-64 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 animate-pulse" />
         ) : !data?.business ? (
           <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-400">
-            Business profile not found.
+            {t('public.businessNotFound')}
           </div>
         ) : (
           <>
@@ -1030,10 +848,10 @@ export function PublicBusinessDetailPage() {
                 </div>
               </div>
               <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1 shrink-0">
-                <div>Phone: <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{data.business.phone}</span></div>
-                <div>Email: <span className="font-medium text-slate-900 dark:text-slate-100">{data.business.email}</span></div>
+                <div>{t('common.phone')}: <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">{data.business.phone}</span></div>
+                <div>{t('common.email')}: <span className="font-medium text-slate-900 dark:text-slate-100">{data.business.email}</span></div>
                 {data.business.operating_hours && (
-                  <div>Hours: <span className="font-medium text-slate-900 dark:text-slate-100">{data.business.operating_hours}</span></div>
+                  <div>{t('public.hours')}: <span className="font-medium text-slate-900 dark:text-slate-100">{data.business.operating_hours}</span></div>
                 )}
               </div>
             </div>
@@ -1042,9 +860,9 @@ export function PublicBusinessDetailPage() {
             {data.videos?.length > 0 && (
               <section className="space-y-4">
                 <div>
-                  <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Promotional Videos</h2>
+                  <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.promoVideos')}</h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Product and service showcases published by {data.business.name}.
+                    {t('public.promoVideosBy')} {data.business.name}.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -1060,13 +878,13 @@ export function PublicBusinessDetailPage() {
               <section className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Open Job Positions</h2>
+                    <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.openPositions')}</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Apply directly to join the team at {data.business.name}.
+                      {t('public.openPositionsDesc')} {data.business.name}.
                     </p>
                   </div>
                   <Link to="/jobs" className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline">
-                    View All Platform Jobs →
+                    {t('public.viewAllJobs')} →
                   </Link>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1075,11 +893,11 @@ export function PublicBusinessDetailPage() {
                       <div className="space-y-1">
                         <div className="font-bold text-sm text-slate-900 dark:text-white">{vac.title}</div>
                         <div className="text-slate-500 dark:text-slate-400">
-                          {vac.department || 'General'} · {vac.location}
+                          {vac.department || t('public.general')} · {vac.location}
                         </div>
                         {vac.application_deadline && (
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                            Deadline: {formatDate(vac.application_deadline)}
+                            {t('public.deadline')}: {formatDate(vac.application_deadline)}
                           </div>
                         )}
                       </div>
@@ -1087,7 +905,7 @@ export function PublicBusinessDetailPage() {
                         to={`/jobs/${vac.id}`}
                         className="inline-flex items-center justify-center gap-1 px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                       >
-                        View Vacancy & Apply
+                        {t('public.viewVacancyApply')}
                         <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                     </div>
@@ -1099,10 +917,10 @@ export function PublicBusinessDetailPage() {
             {/* Catalog + Customer Order Builder */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               <div className="lg:col-span-8 space-y-4">
-                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Published Products & Services</h2>
+                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.publishedProducts')}</h2>
                 {data.products.length === 0 ? (
                   <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-                    This business has not published catalog items yet.
+                    {t('public.noCatalogItems')}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1112,10 +930,10 @@ export function PublicBusinessDetailPage() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">{p.name}</div>
                             <span className={`text-[11px] font-medium ${p.in_stock ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                              {p.in_stock ? 'Available' : 'Out of stock'}
+                              {p.in_stock ? t('public.available') : t('public.outOfStock')}
                             </span>
                           </div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400">{p.category_name || 'General'} · {p.unit}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">{p.category_name || t('public.general')} · {p.unit}</div>
                           {p.description && <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{p.description}</p>}
                         </div>
                         <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
@@ -1136,7 +954,7 @@ export function PublicBusinessDetailPage() {
                                 onClick={() => adjustQty(p.id, 1)}
                                 className="px-3 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
                               >
-                                Add to Order
+                                {t('public.addToOrder')}
                               </button>
                             )}
                           </div>
@@ -1150,12 +968,12 @@ export function PublicBusinessDetailPage() {
               <div className="lg:col-span-4 space-y-6">
                 <form onSubmit={handlePlaceOrder} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">Customer Order Basket</h2>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{cartItems.length} item(s)</span>
+                    <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">{t('public.orderBasket')}</h2>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{cartItems.length} {t('public.itemCount')}</span>
                   </div>
 
                   {cartItems.length === 0 ? (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Select available products from the catalog to build an order.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('public.selectCatalogHint')}</p>
                   ) : (
                     <>
                       <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
@@ -1169,13 +987,13 @@ export function PublicBusinessDetailPage() {
                         ))}
                       </div>
                       <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between text-sm font-bold text-[#0B192C] dark:text-white">
-                        <span>Estimated Total</span>
+                        <span>{t('public.estimatedTotal')}</span>
                         <span className="tabular-nums">{formatMoney(cartTotal, data.business.currency_code)}</span>
                       </div>
 
                       {data.branches.length > 0 && (
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Fulfillment Branch</label>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.fulfillmentBranch')}</label>
                           <select
                             value={branchId}
                             onChange={(e) => setBranchId(e.target.value)}
@@ -1188,21 +1006,21 @@ export function PublicBusinessDetailPage() {
                         </div>
                       )}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Delivery Address</label>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.deliveryAddress')}</label>
                         <input
                           required
                           value={deliveryAddress}
                           onChange={(e) => setDeliveryAddress(e.target.value)}
-                          placeholder="Sector, cell, street / landmark"
+                          placeholder={t('public.deliveryAddressPlaceholder')}
                           className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Order Notes (Optional)</label>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.orderNotes')}</label>
                         <input
                           value={orderNotes}
                           onChange={(e) => setOrderNotes(e.target.value)}
-                          placeholder="Preferred delivery window..."
+                          placeholder={t('public.orderNotesPlaceholder')}
                           className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                         />
                       </div>
@@ -1213,14 +1031,14 @@ export function PublicBusinessDetailPage() {
                           disabled={submittingOrder}
                           className="w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
                         >
-                          {submittingOrder ? 'Submitting Order...' : 'Place Customer Order'}
+                          {submittingOrder ? t('public.submittingOrder') : t('public.placeOrder')}
                         </button>
                       ) : (
                         <Link
                           to="/login"
                           className="block text-center w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                         >
-                          Sign In as Customer to Place Order
+                          {t('public.signInPlaceOrder')}
                         </Link>
                       )}
                     </>
@@ -1231,23 +1049,23 @@ export function PublicBusinessDetailPage() {
                 <form onSubmit={handleContactBusiness} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
                   <div className="flex items-center gap-2 text-sm font-bold text-[#0B192C] dark:text-white">
                     <MessageSquare className="w-4 h-4 text-sky-700 dark:text-sky-400" />
-                    <span>Message This Business</span>
+                    <span>{t('public.messageBusiness')}</span>
                   </div>
                   <textarea
                     required
                     rows={3}
                     value={contactMsg}
                     onChange={(e) => setContactMsg(e.target.value)}
-                    placeholder="Ask about stock availability, bulk pricing, or delivery..."
+                    placeholder={t('public.messageBusinessPlaceholder')}
                     className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                   />
                   {user ? (
                     <button type="submit" className="w-full py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                      Send Message
+                      {t('public.sendMessage')}
                     </button>
                   ) : (
                     <Link to="/login" className="block text-center py-2 text-xs font-semibold text-sky-700 dark:text-sky-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
-                      Sign In to Message Business
+                      {t('public.signInMessageBusiness')}
                     </Link>
                   )}
                 </form>
@@ -1257,7 +1075,7 @@ export function PublicBusinessDetailPage() {
             {/* Reviews Section */}
             <section className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">Customer Reviews ({data.reviews.length})</h2>
+                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.customerReviews')} ({data.reviews.length})</h2>
               </div>
 
               {data.allow_customer_reviews && (
@@ -1267,18 +1085,18 @@ export function PublicBusinessDetailPage() {
                     onChange={(e) => setReviewForm({ ...reviewForm, rating: e.target.value })}
                     className="md:col-span-2 px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                   >
-                    <option value="5">5 Stars</option>
-                    <option value="4">4 Stars</option>
-                    <option value="3">3 Stars</option>
-                    <option value="2">2 Stars</option>
-                    <option value="1">1 Star</option>
+                    <option value="5">5 {t('public.stars')}</option>
+                    <option value="4">4 {t('public.stars')}</option>
+                    <option value="3">3 {t('public.stars')}</option>
+                    <option value="2">2 {t('public.stars')}</option>
+                    <option value="1">1 {t('public.star')}</option>
                   </select>
                   <select
                     value={reviewForm.product_id}
                     onChange={(e) => setReviewForm({ ...reviewForm, product_id: e.target.value })}
                     className="md:col-span-3 px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                   >
-                    <option value="">General Business Review</option>
+                    <option value="">{t('public.generalBusinessReview')}</option>
                     {data.products.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -1287,23 +1105,23 @@ export function PublicBusinessDetailPage() {
                     required
                     value={reviewForm.comment}
                     onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
-                    placeholder="Share your verified experience..."
+                    placeholder={t('public.shareReviewPlaceholder')}
                     className="md:col-span-5 px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                   />
                   {user ? (
                     <button type="submit" className="md:col-span-2 px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                      Submit Review
+                      {t('public.submitReview')}
                     </button>
                   ) : (
                     <Link to="/login" className="md:col-span-2 text-center px-4 py-2 font-semibold text-sky-700 dark:text-sky-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
-                      Sign In
+                      {t('nav.signIn')}
                     </Link>
                   )}
                 </form>
               )}
 
               {data.reviews.length === 0 ? (
-                <p className="text-xs text-slate-500 dark:text-slate-400">No customer reviews submitted yet.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{t('public.noReviewsSubmitted')}</p>
               ) : (
                 <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                   {data.reviews.map((rev) => (
@@ -1334,31 +1152,25 @@ export function PublicBusinessDetailPage() {
 }
 
 export function FeaturesPage() {
-  const modules = [
-    ['Point of Sale (POS)', 'Instant search & barcode scanning, authorized discounts, MTN MoMo, Airtel Money, Cash, Card, partial payments, and PDF receipts.'],
-    ['Inventory & Transfers', 'Every stock change writes an immutable stock_movements record. Atomic row locking prevents simultaneous overselling.'],
-    ['Purchases & Suppliers', 'Issue purchase orders, track supplier balances, and update branch inventory only when physical goods are received.'],
-    ['Financial Management', 'Track sales revenue, COGS, gross profit, operating expenses with manager approval workflows, and cash flow.'],
-    ['CRM & Customer Orders', 'Manage retail/wholesale customer balances, loyalty points, complaints, and 7-stage delivery order tracking.'],
-    ['Employees, Tasks & Chat', 'Invite staff with custom RBAC roles, assign branch tasks, broadcast announcements, and chat in real time.'],
-  ];
+  const { t } = useTranslation();
+  const modules = t('public.featuresPageModules', { returnObjects: true }) || [];
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
       <main className="flex-1 max-w-6xl mx-auto px-6 py-16 space-y-12 animate-fade-up">
         <div className="space-y-3 max-w-2xl">
-          <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">Complete Operational Capabilities</h1>
+          <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.featuresPageTitle')}</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Designed for electronics stores, supermarkets, pharmacies, hardware suppliers, and service businesses.
+            {t('public.featuresPageSubtitle')}
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {modules.map(([title, desc], idx) => (
-            <div key={title} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+          {modules.map((mod, idx) => (
+            <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
               <div className="text-xs font-mono text-sky-700 dark:text-sky-400 font-semibold">0{idx + 1}.</div>
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{desc}</p>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">{mod.title}</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{mod.desc}</p>
             </div>
           ))}
         </div>
@@ -1369,6 +1181,7 @@ export function FeaturesPage() {
 }
 
 export function PricingPage() {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState([]);
   const [billing, setBilling] = useState('monthly');
 
@@ -1382,9 +1195,9 @@ export function PricingPage() {
       <main className="flex-1 max-w-7xl mx-auto px-6 py-16 space-y-10 w-full animate-fade-up">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">Transparent RWF Subscription Plans</h1>
+            <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.pricingTitle')}</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Businesses are onboarded and verified by Platform Super Admin. Contact our team to provision your business workspace.
+              {t('public.pricingSubtitle')}
             </p>
           </div>
           <div className="inline-flex p-1 bg-slate-200/70 dark:bg-slate-800 rounded-lg self-start">
@@ -1397,7 +1210,7 @@ export function PricingPage() {
                   : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              Monthly Billing
+              {t('public.monthlyBilling')}
             </button>
             <button
               type="button"
@@ -1408,7 +1221,7 @@ export function PricingPage() {
                   : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              Annual (2 Months Free)
+              {t('public.annualBilling')}
             </button>
           </div>
         </div>
@@ -1432,21 +1245,21 @@ export function PricingPage() {
                   </div>
                   <div className="text-2xl font-bold text-[#0B192C] dark:text-white tabular-nums">
                     {formatMoney(price, 'RWF')}
-                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400"> / {billing === 'annual' ? 'year' : 'month'}</span>
+                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400"> / {billing === 'annual' ? t('public.yearUnit') : t('public.monthUnit')}</span>
                   </div>
                   <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Up to {plan.max_employees} employees</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Up to {plan.max_branches} branches</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {plan.max_products.toLocaleString()} active SKUs</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {plan.max_ai_requests_monthly} AI queries / month</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {plan.advanced_reports_enabled ? 'Full P&L & Export suite' : 'Standard daily reports'}</li>
+                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.upToEmployees', { count: plan.max_employees })}</li>
+                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.upToBranches', { count: plan.max_branches })}</li>
+                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.activeSkus', { count: plan.max_products.toLocaleString() })}</li>
+                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.aiQueriesMonth', { count: plan.max_ai_requests_monthly })}</li>
+                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {plan.advanced_reports_enabled ? t('public.fullPnlReports') : t('public.standardDailyReports')}</li>
                   </ul>
                 </div>
                 <Link
                   to="/contact"
                   className="block text-center py-2.5 px-4 text-xs font-semibold rounded-lg bg-[#0B192C] dark:bg-sky-600 text-white hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
                 >
-                  Request Business Onboarding
+                  {t('public.requestOnboardingBtn')}
                 </Link>
               </div>
             );
@@ -1476,7 +1289,7 @@ function ProjectPreviewMedia({ project }) {
     <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
       <img
         src={project.image}
-        alt={`${project.name} software platform preview`}
+        alt={`${project.name}`}
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
@@ -1486,15 +1299,50 @@ function ProjectPreviewMedia({ project }) {
 }
 
 export function AboutPage() {
+  const { t } = useTranslation();
   const { config } = usePlatformConfig();
   const [portraitFailed, setPortraitFailed] = useState(false);
 
   const developerName = config.developer_name?.trim() || 'Xavine Hakim';
   const developerRole = config.developer_role?.trim() || 'Full Stack Developer';
   const portfolioUrl = config.developer_portfolio_url?.trim() || 'https://xavineanoited.vercel.app/';
-  const developerBio =
-    config.developer_bio?.trim() ||
-    'Full Stack Developer at softworld specializing in multi-tenant commercial platforms, relational database architecture, and responsive web applications built for African businesses and digital retail—including BizTradeAfrica, Kigali-Store, and ElectroVault.';
+  const developerBio = config.developer_bio?.trim() || t('public.defaultDevBio');
+
+  const developerProjects = [
+    {
+      id: 'biztrade-africa',
+      name: 'BizTradeAfrica',
+      image: '/src/assets/images/project_biztrade_africa_1794832786709.jpg',
+      fallbackCode: 'BT',
+      description: t('public.projectDescBiztrade'),
+      technologies: ['React.js', 'Vite', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
+      status: t('public.inDevelopment'),
+      publicRoute: '/',
+      publicLabel: t('public.openPlatform'),
+    },
+    {
+      id: 'kigali-store',
+      name: 'Kigali-Store',
+      image: '/src/assets/images/project_kigali_store_1794832787098.jpg',
+      fallbackCode: 'KS',
+      description: t('public.projectDescKigali'),
+      technologies: ['React.js', 'JavaScript', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
+      status: t('public.inDevelopment'),
+      publicRoute: null,
+      publicLabel: null,
+    },
+    {
+      id: 'electrovault',
+      name: 'ElectroVault',
+      image: '/src/assets/images/project_electrovault_1794832787681.jpg',
+      fallbackCode: 'EV',
+      description: t('public.projectDescElectro'),
+      technologies: ['React.js', 'Vite', 'Tailwind CSS', 'Node.js', 'Express.js', 'MySQL'],
+      status: t('public.inDevelopment'),
+      publicRoute: null,
+      publicLabel: null,
+    },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -1505,30 +1353,27 @@ export function AboutPage() {
         <section className="max-w-6xl mx-auto px-6 py-16 space-y-8 animate-fade-up">
           <div className="max-w-3xl space-y-4">
             <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
-              About BizTrade Africa
+              {t('public.aboutEyebrow')}
             </p>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0B192C] dark:text-white">
-              Structured Business Management &amp; Employment Infrastructure
+              {t('public.aboutPageTitle')}
             </h1>
             <p className="text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-              BizTrade Africa is an all-in-one business-management platform designed to help African businesses
-              manage, grow, and expand their operations across Rwanda and East Africa on one reliable commercial cloud platform.
+              {t('public.aboutPageDesc')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Rwanda-First Engineering</h2>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('public.rwandaEngineeringTitle')}</h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                Configured out of the box with Rwandan Franc (RWF), +250 phone validation, Africa/Kigali
-                timezone, configurable VAT rates, and MTN MoMo / Airtel Money tracking.
+                {t('public.rwandaEngineeringDesc')}
               </p>
             </div>
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Built for Continental Growth</h2>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">{t('public.continentalGrowthTitle')}</h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                Multi-country localization settings allow businesses expanding into Kenya, Uganda, Tanzania,
-                Ghana, or Nigeria to configure regional currencies and tax rules in seconds.
+                {t('public.continentalGrowthDesc')}
               </p>
             </div>
           </div>
@@ -1540,26 +1385,22 @@ export function AboutPage() {
           className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-16 lg:py-20"
         >
           <div className="max-w-6xl mx-auto px-6 space-y-14">
-            {/* Section Header */}
             <div className="max-w-2xl space-y-2">
               <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
-                Engineering &amp; Product Development
+                {t('public.devSectionEyebrow')}
               </p>
               <h2
                 id="about-developer-heading"
                 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B192C] dark:text-white"
               >
-                Developer &amp; Architecture Profile
+                {t('public.devSectionTitle')}
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                Designed and engineered with a focus on dependable transaction records, clean multi-tenant
-                isolation, and accessible commercial tooling.
+                {t('public.devSectionDesc')}
               </p>
             </div>
 
-            {/* Developer Profile + Skills Split */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              {/* Left Column: Developer Identity Card */}
               <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-950 p-6 sm:p-7 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6">
                 <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row items-start sm:items-center lg:items-start xl:items-center gap-5">
                   <div className="w-24 h-24 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-200 dark:bg-slate-800 shrink-0">
@@ -1580,7 +1421,7 @@ export function AboutPage() {
 
                   <div className="space-y-1.5 min-w-0">
                     <div className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
-                      Developed by softworld
+                      {t('public.developedBySoftworld')}
                     </div>
                     <h3 className="text-xl font-bold tracking-tight text-[#0B192C] dark:text-white">
                       {developerName}
@@ -1600,11 +1441,10 @@ export function AboutPage() {
 
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
                   <div className="text-xs font-semibold text-[#0B192C] dark:text-white">
-                    Project Vision
+                    {t('public.projectVision')}
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Equip growing African businesses and digital storefronts with dependable stock tracking,
-                    transparent accounting, and structured hiring workflows without unnecessary complexity.
+                    {t('public.projectVisionDesc')}
                   </p>
 
                   <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -1614,7 +1454,7 @@ export function AboutPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
                     >
-                      <span>Visit Developer Portfolio</span>
+                      <span>{t('public.visitDevPortfolio')}</span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
 
@@ -1624,7 +1464,7 @@ export function AboutPage() {
                         className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors"
                       >
                         <Mail className="w-3.5 h-3.5" />
-                        <span>Email</span>
+                        <span>{t('common.email')}</span>
                       </a>
                     )}
                     {config.developer_github_url && (
@@ -1653,28 +1493,27 @@ export function AboutPage() {
                 </div>
               </div>
 
-              {/* Right Column: Technical Skills & Engineering Stack */}
               <div className="lg:col-span-7 space-y-5">
                 <div className="space-y-1">
                   <h3 className="text-lg font-bold text-[#0B192C] dark:text-white">
-                    Technical Skills &amp; Stack
+                    {t('public.techSkillsTitle')}
                   </h3>
                   <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Core programming languages, application frameworks, databases, and engineering workflow tools.
+                    {t('public.techSkillsDesc')}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {TECH_STACK.map((group) => {
+                  {TECH_STACK_STATIC.map((group) => {
                     const Icon = group.icon;
                     return (
                       <div
-                        key={group.category}
+                        key={group.key}
                         className="bg-slate-50 dark:bg-slate-950 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-sky-500/40"
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold text-[#0B192C] dark:text-white">
                           <Icon className="w-4 h-4 text-sky-700 dark:text-sky-400 shrink-0" />
-                          <span>{group.category}</span>
+                          <span>{t(`public.techStackCategories.${group.key}`)}</span>
                         </div>
                         <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
                           {group.items.map((tech) => (
@@ -1691,24 +1530,23 @@ export function AboutPage() {
               </div>
             </div>
 
-            {/* Developer Projects Showcase */}
             <div className="pt-8 border-t border-slate-200 dark:border-slate-800 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div className="space-y-1">
                   <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
-                    Active Software Systems
+                    {t('public.activeSystemsEyebrow')}
                   </p>
                   <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#0B192C] dark:text-white">
-                    Featured Developer Projects
+                    {t('public.featuredProjectsTitle')}
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Developed by <span className="font-semibold text-slate-700 dark:text-slate-200">softworld</span> · Built by {developerName} ({developerRole})
+                  {t('common.developedBy')} <span className="font-semibold text-slate-700 dark:text-slate-200">softworld</span> · {t('public.builtBy')} {developerName} ({developerRole})
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {DEVELOPER_PROJECTS.map((project) => (
+                {developerProjects.map((project) => (
                   <article
                     key={project.id}
                     className="group bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col justify-between transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-sky-500/40"
@@ -1732,7 +1570,7 @@ export function AboutPage() {
 
                     <div className="px-6 pb-6 pt-3 border-t border-slate-200/80 dark:border-slate-800 space-y-3">
                       <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">Technologies: </span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{t('public.technologiesLabel')} </span>
                         {project.technologies.join(' · ')}
                       </div>
 
@@ -1762,6 +1600,7 @@ export function AboutPage() {
 }
 
 export function ContactPage() {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ full_name: '', email: '', phone: '+250', business_name: '', message: '' });
   const [status, setStatus] = useState({ type: '', text: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -1786,9 +1625,9 @@ export function ContactPage() {
       <PublicHeader />
       <main className="flex-1 max-w-3xl mx-auto px-6 py-16 w-full space-y-8 animate-fade-up">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">Contact Our Kigali Team</h1>
+          <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.contactPageTitle')}</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Request new business registration, enterprise onboarding, branch hardware advice, or custom support. Inquiries are routed directly to{' '}
+            {t('public.contactPageSubtitle')}{' '}
             <a href="mailto:allofme140@gmail.com" className="font-semibold text-sky-700 dark:text-sky-400 hover:underline">
               allofme140@gmail.com
             </a>.
@@ -1803,7 +1642,7 @@ export function ContactPage() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('auth.fullName')}</label>
               <input
                 required
                 value={form.full_name}
@@ -1812,7 +1651,7 @@ export function ContactPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('common.email')}</label>
               <input
                 required
                 type="email"
@@ -1824,7 +1663,7 @@ export function ContactPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('common.phone')}</label>
               <input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -1832,7 +1671,7 @@ export function ContactPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Name</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.businessName')}</label>
               <input
                 value={form.business_name}
                 onChange={(e) => setForm({ ...form, business_name: e.target.value })}
@@ -1841,7 +1680,7 @@ export function ContactPage() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Message</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.message')}</label>
             <textarea
               required
               rows={4}
@@ -1855,7 +1694,7 @@ export function ContactPage() {
             disabled={submitting}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
           >
-            {submitting ? 'Sending...' : 'Send Inquiry'}
+            {submitting ? t('public.sending') : t('public.sendInquiry')}
           </button>
         </form>
       </main>
@@ -1865,6 +1704,7 @@ export function ContactPage() {
 }
 
 export function TrackOrderPage() {
+  const { t } = useTranslation();
   const [orderNumber, setOrderNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [result, setResult] = useState(null);
@@ -1889,16 +1729,16 @@ export function TrackOrderPage() {
       <PublicHeader />
       <main className="flex-1 max-w-2xl mx-auto px-6 py-16 w-full space-y-6 animate-fade-up">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">Customer Order Tracking</h1>
+          <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.trackOrderTitle')}</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Enter your order number and phone number to check live fulfillment and delivery status.
+            {t('public.trackOrderSubtitle')}
           </p>
         </div>
 
         <form onSubmit={handleTrack} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Order Number</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.orderNumber')}</label>
               <input
                 required
                 placeholder="ORD-123456"
@@ -1908,7 +1748,7 @@ export function TrackOrderPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Customer Phone</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('public.customerPhone')}</label>
               <input
                 required
                 placeholder="+250788..."
@@ -1923,7 +1763,7 @@ export function TrackOrderPage() {
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
           >
             <Search className="w-4 h-4" />
-            Track Order
+            {t('public.trackOrderBtn')}
           </button>
         </form>
 
@@ -1939,13 +1779,15 @@ export function TrackOrderPage() {
               <StatusBadge status={result.order.order_status} />
             </div>
             <div className="text-sm text-slate-600 dark:text-slate-300">
-              Total: <span className="font-semibold text-slate-900 dark:text-white tabular-nums">{formatMoney(result.order.total_amount, result.order.currency_code)}</span>
+              {t('common.total')}: <span className="font-semibold text-slate-900 dark:text-white tabular-nums">{formatMoney(result.order.total_amount, result.order.currency_code)}</span>
             </div>
             <div className="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-2">
-              <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">Status Timeline</div>
+              <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('public.statusTimeline')}</div>
               {(result.history || []).map((h, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs py-1">
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{h.new_status.replace(/_/g, ' ')} {h.note ? `— ${h.note}` : ''}</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">
+                    {t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })} {h.note ? `— ${h.note}` : ''}
+                  </span>
                   <span className="text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(h.created_at)}</span>
                 </div>
               ))}
@@ -1958,23 +1800,18 @@ export function TrackOrderPage() {
   );
 }
 
-export function LegalPage({ title }) {
+export function LegalPage({ type = 'terms', title }) {
+  const { t } = useTranslation();
+  const heading = title || (type === 'privacy' ? t('public.privacyTitle') : t('public.termsTitle'));
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
       <main className="flex-1 max-w-3xl mx-auto px-6 py-16 space-y-6">
-        <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{title}</h1>
+        <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{heading}</h1>
         <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-          <p>
-            BizTrade Africa operates as a multi-tenant commercial software platform with strict data isolation.
-            Each registered business owns all operational records, product catalogs, customer data, and financial
-            transactions created inside its workspace.
-          </p>
-          <p>
-            When a subscription expires, BizTrade Africa preserves tenant records under defined grace-period
-            and retention policies rather than deleting business history unexpectedly. Platform administrators
-            never receive unrestricted access to private tenant financial entries.
-          </p>
+          <p>{t('public.legalP1')}</p>
+          <p>{t('public.legalP2')}</p>
         </div>
       </main>
       <PublicFooter />

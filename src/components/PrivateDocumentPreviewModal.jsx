@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Download, ExternalLink, FileText, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 
 export function toApiRelativeUrl(url) {
@@ -25,6 +26,7 @@ export async function downloadPrivateDocument(downloadUrl, filename = 'document'
 }
 
 export default function PrivateDocumentPreviewModal({ document: doc, onClose }) {
+  const { t } = useTranslation();
   const [blobUrl, setBlobUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -58,7 +60,7 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
         setBlobUrl(createdUrl);
       })
       .catch((err) => {
-        if (!revoked) setError(err.message || 'Unable to load document preview.');
+        if (!revoked) setError(err.message || t('components.unableLoadPreview'));
       })
       .finally(() => {
         if (!revoked) setLoading(false);
@@ -68,7 +70,7 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
       revoked = true;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [doc, canInlinePreview]);
+  }, [doc, canInlinePreview, t]);
 
   if (!doc) return null;
 
@@ -77,7 +79,7 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
     try {
       await downloadPrivateDocument(doc.download_url, doc.original_filename || doc.document_name || 'document');
     } catch (err) {
-      setError(err.message || 'Download failed.');
+      setError(err.message || t('components.downloadFailed'));
     }
   };
 
@@ -87,7 +89,7 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
         <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="text-sm font-bold text-slate-900 dark:text-white truncate">
-              {doc.document_name || doc.document_type || 'Document Preview'}
+              {doc.document_name || doc.document_type || t('components.docPreview')}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
               {doc.original_filename} · {doc.mime_type}
@@ -100,12 +102,12 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
             >
               <Download className="w-3.5 h-3.5" />
-              Download
+              {t('common.download')}
             </button>
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close document preview"
+              aria-label={t('components.closeDocPreview')}
               className="p-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg border border-slate-200 dark:border-slate-700"
             >
               <X className="w-4 h-4" />
@@ -119,15 +121,15 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
               {error}
             </div>
           ) : loading ? (
-            <div className="text-xs text-slate-500 dark:text-slate-400">Loading authorized preview...</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('components.loadingPreview')}</div>
           ) : !canInlinePreview ? (
             <div className="max-w-md text-center space-y-3 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
               <FileText className="w-10 h-10 text-sky-600 dark:text-sky-400 mx-auto" />
               <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                Inline preview is unavailable for DOCX files
+                {t('components.docxUnavailable')}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Download this Microsoft Word document directly to inspect its full formatting cleanly on your device.
+                {t('components.docxUnavailableDesc')}
               </p>
               <button
                 type="button"
@@ -135,7 +137,7 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
               >
                 <Download className="w-3.5 h-3.5" />
-                Download {doc.original_filename}
+                {t('common.download')} {doc.original_filename}
               </button>
             </div>
           ) : isImage && blobUrl ? (
@@ -158,7 +160,7 @@ export default function PrivateDocumentPreviewModal({ document: doc, onClose }) 
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline"
                 >
-                  Open PDF in browser tab
+                  {t('components.openPdfTab')}
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>

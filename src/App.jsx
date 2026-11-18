@@ -1,8 +1,10 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { PlatformConfigProvider } from './context/PlatformConfigContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
+import GlobalWatermark from './components/GlobalWatermark.jsx';
 import AppLayout from './layouts/AppLayout.jsx';
 import {
   AboutPage,
@@ -51,9 +53,10 @@ const AdvertisementsPage = lazy(() => import('./modules/ads/AdvertisementsPage.j
 const RecruitmentPage = lazy(() => import('./modules/recruitment/RecruitmentPage.jsx'));
 
 function AuthLoadingScreen() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-sm text-slate-500 dark:text-slate-400">
-      Loading BizTrade Africa...
+      {t('common.loading')}
     </div>
   );
 }
@@ -119,6 +122,7 @@ export default function App() {
       <ThemeProvider>
         <PlatformConfigProvider>
           <BrowserRouter>
+            <GlobalWatermark />
             <Suspense fallback={<AuthLoadingScreen />}>
               <Routes>
                 {/* Public Website Routes */}
@@ -140,8 +144,8 @@ export default function App() {
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/contact" element={<ContactPage />} />
                 <Route path="/track-order" element={<TrackOrderPage />} />
-                <Route path="/terms" element={<LegalPage title="Terms of Service" />} />
-                <Route path="/privacy" element={<LegalPage title="Privacy Policy" />} />
+                <Route path="/terms" element={<LegalPage type="terms" />} />
+                <Route path="/privacy" element={<LegalPage type="privacy" />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/activate-account" element={<ActivateAccountPage />} />

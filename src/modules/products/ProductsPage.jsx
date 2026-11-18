@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, Package, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -6,6 +7,7 @@ import StatusBadge from '../../components/StatusBadge.jsx';
 import { formatMoney } from '../../utils/format.js';
 
 export default function ProductsPage() {
+  const { t } = useTranslation();
   const { activeBusinessId, activeBranchId, workspace, hasPermission } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -161,8 +163,8 @@ export default function ProductsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">Product Catalog</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Manage SKUs, barcodes, local computer image uploads, and branch pricing.</p>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-slate-100">{t('products.title')}</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('products.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -171,7 +173,7 @@ export default function ProductsPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            Export CSV
+            {t('products.exportCsv')}
           </button>
           {hasPermission('products.create') && (
             <button
@@ -180,7 +182,7 @@ export default function ProductsPage() {
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 whitespace-nowrap transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
-              Add Product
+              {t('products.addProduct')}
             </button>
           )}
         </div>
@@ -200,7 +202,7 @@ export default function ProductsPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, SKU, or barcode..."
+              placeholder={t('products.searchPlaceholder')}
               className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
@@ -209,7 +211,7 @@ export default function ProductsPage() {
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="text-xs border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
           >
-            <option value="">All Categories</option>
+            <option value="">{t('products.allCategories')}</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -221,11 +223,11 @@ export default function ProductsPage() {
             <input
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
-              placeholder="New category..."
+              placeholder={t('products.newCatPlaceholder')}
               className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
             <button type="submit" className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700">
-              Add Category
+              {t('products.addCategory')}
             </button>
           </form>
         )}
@@ -236,25 +238,25 @@ export default function ProductsPage() {
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
             <tr>
-              <th className="py-3 px-4 font-semibold">Product</th>
-              <th className="py-3 px-4 font-semibold">SKU / Barcode</th>
-              <th className="py-3 px-4 font-semibold">Category</th>
-              <th className="py-3 px-4 font-semibold text-right">Purchase</th>
-              <th className="py-3 px-4 font-semibold text-right">Selling</th>
-              <th className="py-3 px-4 font-semibold text-right">Branch Stock</th>
-              <th className="py-3 px-4 font-semibold">Status</th>
-              <th className="py-3 px-4 font-semibold text-right">Actions</th>
+              <th className="py-3 px-4 font-semibold">{t('products.colProduct')}</th>
+              <th className="py-3 px-4 font-semibold">{t('products.colSkuBarcode')}</th>
+              <th className="py-3 px-4 font-semibold">{t('products.colCategory')}</th>
+              <th className="py-3 px-4 font-semibold text-right">{t('products.colPurchase')}</th>
+              <th className="py-3 px-4 font-semibold text-right">{t('products.colSelling')}</th>
+              <th className="py-3 px-4 font-semibold text-right">{t('products.colBranchStock')}</th>
+              <th className="py-3 px-4 font-semibold">{t('products.colStatus')}</th>
+              <th className="py-3 px-4 font-semibold text-right">{t('products.colActions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {loading ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-400 dark:text-slate-500">Loading products...</td>
+                <td colSpan={8} className="py-8 text-center text-slate-400 dark:text-slate-500">{t('products.loading')}</td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-10 text-center text-slate-500 dark:text-slate-400">
-                  No products found. Click &ldquo;Add Product&rdquo; to create your first item.
+                  {t('products.empty')}
                 </td>
               </tr>
             ) : (
@@ -296,7 +298,7 @@ export default function ProductsPage() {
                   <td className="py-3 px-4 text-right space-x-2">
                     {hasPermission('products.update') && (
                       <button type="button" onClick={() => openEdit(p)} className="text-sky-700 dark:text-sky-400 hover:underline font-medium">
-                        Edit
+                        {t('products.edit')}
                       </button>
                     )}
                     {hasPermission('products.delete') && (
@@ -316,35 +318,35 @@ export default function ProductsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in">
-            <h2 className="text-lg font-bold text-[#0B192C] dark:text-slate-100">{editing ? 'Edit Product' : 'Add New Product'}</h2>
+            <h2 className="text-lg font-bold text-[#0B192C] dark:text-slate-100">{editing ? t('products.editModalTitle') : t('products.createModalTitle')}</h2>
             <form onSubmit={handleSaveProduct} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Product Name</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.productName')}</label>
                   <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">SKU</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.sku')}</label>
                   <input required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono" />
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Barcode</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.barcode')}</label>
                   <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono" />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Category</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.category')}</label>
                   <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                    <option value="">None</option>
+                    <option value="">{t('products.none')}</option>
                     {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Supplier</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.supplier')}</label>
                   <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                    <option value="">None</option>
+                    <option value="">{t('products.none')}</option>
                     {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
@@ -352,30 +354,30 @@ export default function ProductsPage() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Purchase Price</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.purchasePrice')}</label>
                   <input type="number" step="0.01" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Selling Price</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.sellingPrice')}</label>
                   <input required type="number" step="0.01" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                 </div>
                 {!editing && (
                   <div>
-                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Opening Qty</label>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.openingQty')}</label>
                     <input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                   </div>
                 )}
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Min Stock</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.minStock')}</label>
                   <input type="number" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Product Image (Upload from Computer)</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.productImage')}</label>
                 <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                   <Upload className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                  <span className="text-slate-600 dark:text-slate-300">{form.image ? form.image.name : 'Choose JPG, PNG, or WebP (max 5MB)'}</span>
+                  <span className="text-slate-600 dark:text-slate-300">{form.image ? form.image.name : t('products.chooseImage')}</span>
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
@@ -386,8 +388,8 @@ export default function ProductsPage() {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">Save Product</button>
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
+                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('products.saveProduct')}</button>
               </div>
             </form>
           </div>

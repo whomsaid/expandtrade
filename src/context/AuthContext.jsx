@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import i18n, { normalizeLanguage } from '../i18n.js';
 import { api } from '../services/api.js';
 
 const AuthContext = createContext(null);
@@ -18,10 +19,25 @@ export function AuthProvider({ children }) {
   });
   const [workspace, setWorkspace] = useState(null);
   const [notifications, setNotifications] = useState([]);
-  const [language, setLanguage] = useState(() => localStorage.getItem('biztrade_lang') || localStorage.getItem('bizflow_lang') || 'en');
+  const [language, setLanguage] = useState(() =>
+    normalizeLanguage(localStorage.getItem('biztrade_lang') || localStorage.getItem('bizflow_lang') || i18n.language || 'en')
+  );
   const [socket, setSocket] = useState(null);
   const [loading, setLoading] = useState(Boolean(localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token')));
   const logoutPromiseRef = useRef(null);
+
+  const applyLanguageLocally = useCallback((lang) => {
+    const next = normalizeLanguage(lang);
+    setLanguage(next);
+    localStorage.setItem('biztrade_lang', next);
+    if (i18n.language !== next) {
+      i18n.changeLanguage(next);
+    }
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = next;
+    }
+    return next;
+  }, []);
 
   const loadWorkspace = useCallback(async (bizId, branchIdOverride = null) => {
     if (!bizId) {
@@ -50,9 +66,6 @@ export function AuthProvider({ children }) {
       const nextBranch = data.activeBranchId || data.branches?.[0]?.id || null;
       setActiveBranchId(nextBranch);
       if (nextBranch) localStorage.setItem('biztrade_branch_id', String(nextBranch));
-      if (data.settings?.language) {
-        setLanguage(data.settings.language);
-      }
     } catch {
       setWorkspace(null);
     }
@@ -78,6 +91,9 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get('/auth/me');
       setUser(data.user);
+      if (data.user?.preferred_language) {
+        applyLanguageLocally(data.user.preferred_language);
+      }
       setMemberships(data.memberships || []);
       setLoading(false);
       if (!data.user?.must_change_password) {
@@ -104,7 +120,7 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [loadWorkspace, refreshNotifications]);
+  }, [applyLanguageLocally, loadWorkspace, refreshNotifications]);
 
   useEffect(() => {
     refreshMe();
@@ -154,6 +170,9 @@ export function AuthProvider({ children }) {
     localStorage.setItem('biztrade_token', data.token);
     setToken(data.token);
     setUser(data.user);
+    if (data.user?.preferred_language) {
+      applyLanguageLocally(data.user.preferred_language);
+    }
     setMemberships(data.memberships || []);
     if (!data.user?.must_change_password) {
       const firstBiz = data.memberships?.[0]?.business_id || null;
@@ -169,6 +188,9 @@ export function AuthProvider({ children }) {
     localStorage.setItem('biztrade_token', newToken);
     setToken(newToken);
     setUser(newUser);
+    if (newUser?.preferred_language) {
+      applyLanguageLocally(newUser.preferred_language);
+    }
     setMemberships(newMemberships);
     if (!newUser?.must_change_password) {
       const firstBiz = newMemberships?.[0]?.business_id || null;
@@ -218,10 +240,22 @@ export function AuthProvider({ children }) {
     await loadWorkspace(activeBusinessId, Number(branchId));
   };
 
-  const changeLanguage = (lang) => {
-    setLanguage(lang);
-    localStorage.setItem('biztrade_lang', lang);
-  };
+  const changeLanguage = useCallback(
+    async (lang) => {
+      const next = applyLanguageLocally(lang);
+      const activeToken = localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token');
+      if (activeToken) {
+        setUser((prev) => (prev ? { ...prev, preferred_language: next } : prev));
+        try {
+          await api.patch('/auth/language', { preferred_language: next });
+        } catch {
+          // ignore network error; local selection remains active
+        }
+      }
+      return next;
+    },
+    [applyLanguageLocally]
+  );
 
   const hasPermission = (permKey) => {
     if (user?.is_platform_admin) return true;
@@ -234,15 +268,21 @@ export function AuthProvider({ children }) {
     setUser((prev) => (prev ? { ...prev, ...fields } : prev));
   }, []);
 
-  const savePreferences = useCallback(async (patch) => {
-    const { data } = await api.put('/auth/preferences', patch);
-    if (data?.user) {
-      setUser(data.user);
-    } else if (data?.dashboard_preferences) {
-      setUser((prev) => (prev ? { ...prev, dashboard_preferences: data.dashboard_preferences } : prev));
-    }
-    return data;
-  }, []);
+  const savePreferences = useCallback(
+    async (patch) => {
+      const { data } = await api.put('/auth/preferences', patch);
+      if (data?.user) {
+        setUser(data.user);
+        if (data.user.preferred_language) {
+          applyLanguageLocally(data.user.preferred_language);
+        }
+      } else if (data?.dashboard_preferences) {
+        setUser((prev) => (prev ? { ...prev, dashboard_preferences: data.dashboard_preferences } : prev));
+      }
+      return data;
+    },
+    [applyLanguageLocally]
+  );
 
   return (
     <AuthContext.Provider

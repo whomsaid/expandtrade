@@ -51,8 +51,28 @@ export const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (!ALLOWED_MIME.has(file.mimetype)) {
-      return cb(new Error('Unsupported file type. Allowed: JPG, PNG, WebP, PDF (max 5MB).'));
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const extOk = !ext || new Set(['.jpg', '.jpeg', '.png', '.webp', '.pdf']).has(ext);
+    if (!ALLOWED_MIME.has(file.mimetype) || !extOk) {
+      const err = new Error('Unsupported file type. Allowed: JPG, JPEG, PNG, WebP, PDF (max 5MB).');
+      err.statusCode = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
+});
+
+export const imageUpload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const mimeOk = Boolean(AVATAR_MIME_TO_EXT[file.mimetype]);
+    const extOk = !ext || AVATAR_ALLOWED_EXT.has(ext);
+    if (!mimeOk || !extOk) {
+      const err = new Error('Unsupported image format. Allowed: JPG, JPEG, PNG, and WEBP (max 5MB).');
+      err.statusCode = 400;
+      return cb(err);
     }
     cb(null, true);
   },
@@ -354,6 +374,20 @@ export function verifyCertificateSignature(filePath, mimetype) {
     return verifyPdfSignature(filePath);
   }
   return verifyImageSignature(filePath);
+}
+
+export function verifyReceiptSignature(filePath, mimetype) {
+  return verifyCertificateSignature(filePath, mimetype);
+}
+
+export function verifyFileNonEmpty(file) {
+  if (!file || !file.path) return false;
+  try {
+    const stat = fs.statSync(file.path);
+    return stat.isFile() && stat.size > 0;
+  } catch {
+    return false;
+  }
 }
 
 export function removeUploadedFile(filePathOrUrl) {

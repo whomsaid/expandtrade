@@ -5,12 +5,12 @@ import { body } from 'express-validator';
 import { execute, query, queryOne, roundMoney, transaction } from '../config/db.js';
 import { authenticate, requirePlatformAdmin, requireProfileImage } from '../middleware/auth.js';
 import { requireBusiness, requirePermission } from '../middleware/tenant.js';
-import { platformLogoUpload, removeUploadedFile, upload, verifyPlatformLogoFile } from '../middleware/upload.js';
+import { cleanupMulterFiles, imageUpload, platformLogoUpload, removeUploadedFile, verifyFileNonEmpty, verifyImageSignature, verifyPlatformLogoFile } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, emitToBusiness, logAudit } from '../services/auditService.js';
 import { queryBusinessAssistant } from '../services/aiService.js';
 import { sendMail } from '../services/mailService.js';
-import { getCached, invalidateCache, setCached } from '../services/cacheService.js';
+import { getCached, invalidateCache, invalidatePrefix, setCached } from '../services/cacheService.js';
 
 const router = express.Router();
 
@@ -312,14 +312,14 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
       ),
       query(
         `SELECT date(created_at) AS day, COALESCE(SUM(total_amount), 0) AS revenue, COUNT(*) AS transactions
-         FROM sales WHERE business_id = ? AND sale_status != 'cancelled'${branchFilter}
+         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded')${branchFilter}
          GROUP BY date(created_at) ORDER BY day DESC LIMIT 14`,
         baseParams
       ),
       query(
         `SELECT si.product_name, SUM(si.quantity) AS qty, SUM(si.line_total) AS revenue
          FROM sale_items si JOIN sales s ON s.id = si.sale_id
-         WHERE s.business_id = ? AND s.sale_status != 'cancelled'
+         WHERE s.business_id = ? AND s.sale_status NOT IN ('cancelled', 'refunded')
          GROUP BY si.product_id, si.product_name ORDER BY revenue DESC LIMIT 6`,
         [req.businessId]
       ),
@@ -329,14 +329,14 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
          JOIN sales s ON s.id = si.sale_id
          JOIN products p ON p.id = si.product_id
          LEFT JOIN categories c ON c.id = p.category_id
-         WHERE s.business_id = ? AND s.sale_status != 'cancelled'
+         WHERE s.business_id = ? AND s.sale_status NOT IN ('cancelled', 'refunded')
          GROUP BY c.name ORDER BY revenue DESC`,
         [req.businessId]
       ),
       query(
         `SELECT b.name AS branch_name, COALESCE(SUM(s.total_amount), 0) AS revenue
          FROM branches b
-         LEFT JOIN sales s ON s.branch_id = b.id AND s.business_id = ? AND s.sale_status != 'cancelled'
+         LEFT JOIN sales s ON s.branch_id = b.id AND s.business_id = ? AND s.sale_status NOT IN ('cancelled', 'refunded')
          WHERE b.business_id = ?
          GROUP BY b.id, b.name ORDER BY revenue DESC`,
         [req.businessId, req.businessId]
@@ -411,7 +411,7 @@ router.get('/reports/analytics', authenticate, requireBusiness, requirePermissio
     const salesByEmployee = await query(
       `SELECT u.full_name AS employee_name, COUNT(s.id) AS sales_count, COALESCE(SUM(s.total_amount), 0) AS revenue
        FROM sales s JOIN users u ON u.id = s.cashier_user_id
-       WHERE s.business_id = ? AND s.sale_status != 'cancelled'
+       WHERE s.business_id = ? AND s.sale_status NOT IN ('cancelled', 'refunded')
        GROUP BY s.cashier_user_id, u.full_name ORDER BY revenue DESC`,
       [req.businessId]
     );
@@ -422,7 +422,7 @@ router.get('/reports/analytics', authenticate, requireBusiness, requirePermissio
     );
     const topCustomers = await query(
       `SELECT c.full_name, c.phone, c.loyalty_points, c.outstanding_balance, COUNT(s.id) AS orders_count, COALESCE(SUM(s.total_amount), 0) AS total_spent
-       FROM customers c LEFT JOIN sales s ON s.customer_id = c.id AND s.sale_status != 'cancelled'
+       FROM customers c LEFT JOIN sales s ON s.customer_id = c.id AND s.sale_status NOT IN ('cancelled', 'refunded')
        WHERE c.business_id = ? GROUP BY c.id ORDER BY total_spent DESC LIMIT 10`,
       [req.businessId]
     );
@@ -570,7 +570,7 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
                 (SELECT COUNT(*) FROM user_sessions WHERE is_revoked = 0) AS active_sessions,
                 (SELECT COUNT(*) FROM support_tickets WHERE status != 'resolved') AS open_tickets,
                 (SELECT COUNT(*) FROM activity_logs) AS total_audit_events,
-                (SELECT COUNT(*) FROM sales WHERE sale_status != 'cancelled') AS total_sales_count,
+                (SELECT COUNT(*) FROM sales WHERE sale_status NOT IN ('cancelled', 'refunded')) AS total_sales_count,
                 (SELECT COALESCE(SUM(amount_rwf), 0) FROM subscription_payments WHERE status = 'verified') AS platform_subscription_revenue`
       ),
       query(
@@ -590,7 +590,7 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
                 p.id AS plan_id, p.name AS plan_name, s.status AS subscription_status, s.billing_cycle, s.ends_at AS subscription_ends_at,
                 (SELECT COUNT(*) FROM business_members bm WHERE bm.business_id = b.id AND bm.status = 'active') AS employee_count,
                 (SELECT COUNT(*) FROM branches br WHERE br.business_id = b.id) AS branch_count,
-                (SELECT COUNT(*) FROM sales sl WHERE sl.business_id = b.id AND sl.sale_status != 'cancelled') AS sales_count
+                (SELECT COUNT(*) FROM sales sl WHERE sl.business_id = b.id AND sl.sale_status NOT IN ('cancelled', 'refunded')) AS sales_count
          FROM businesses b
          JOIN users u ON u.id = b.owner_user_id
          LEFT JOIN business_admins ba ON ba.id = (
@@ -680,7 +680,7 @@ router.post(
   '/admin/businesses',
   authenticate,
   requirePlatformAdmin,
-  upload.single('logo'),
+  imageUpload.single('logo'),
   [
     body('name').trim().isLength({ min: 2, max: 160 }).withMessage('Business name is required'),
     body('category').trim().notEmpty().withMessage('Business category is required'),
@@ -694,6 +694,10 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
+      if (req.file && (!verifyFileNonEmpty(req.file) || !verifyImageSignature(req.file.path))) {
+        cleanupMulterFiles(req);
+        return res.status(400).json({ error: 'Invalid or empty business logo image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+      }
       const {
         name,
         category,
@@ -725,6 +729,7 @@ router.post(
 
       const existingAdminUser = await queryOne('SELECT id, is_platform_admin, is_email_verified FROM users WHERE email = ?', [admin_email]);
       if (existingAdminUser?.is_platform_admin) {
+        cleanupMulterFiles(req);
         return res.status(400).json({ error: 'Platform Super Admin email cannot be assigned as a tenant Business Admin' });
       }
 
@@ -864,6 +869,7 @@ router.post(
         ipAddress: req.ip,
       });
 
+      invalidatePrefix('public:businesses:');
       const created = await queryOne('SELECT * FROM businesses WHERE id = ?', [result.businessId]);
       res.status(201).json({
         message: mailResult.delivered
@@ -874,6 +880,7 @@ router.post(
         activation_token: !mailResult.delivered || process.env.NODE_ENV !== 'production' ? activationToken : undefined,
       });
     } catch (err) {
+      cleanupMulterFiles(req);
       next(err);
     }
   }
@@ -884,11 +891,18 @@ router.put(
   '/admin/businesses/:id',
   authenticate,
   requirePlatformAdmin,
-  upload.single('logo'),
+  imageUpload.single('logo'),
   async (req, res, next) => {
     try {
+      if (req.file && (!verifyFileNonEmpty(req.file) || !verifyImageSignature(req.file.path))) {
+        cleanupMulterFiles(req);
+        return res.status(400).json({ error: 'Invalid or empty business logo image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+      }
       const biz = await queryOne('SELECT * FROM businesses WHERE id = ?', [req.params.id]);
-      if (!biz) return res.status(404).json({ error: 'Business not found' });
+      if (!biz) {
+        cleanupMulterFiles(req);
+        return res.status(404).json({ error: 'Business not found' });
+      }
 
       const {
         name,
@@ -963,9 +977,15 @@ router.put(
         ipAddress: req.ip,
       });
 
+      if (logoUrl && biz.logo_url && biz.logo_url !== logoUrl) {
+        removeUploadedFile(biz.logo_url);
+      }
+      invalidatePrefix('public:businesses:');
+
       const updated = await queryOne('SELECT * FROM businesses WHERE id = ?', [req.params.id]);
       res.json({ message: 'Business details updated', business: updated });
     } catch (err) {
+      cleanupMulterFiles(req);
       next(err);
     }
   }
@@ -982,6 +1002,7 @@ router.patch('/admin/businesses/:id/status', authenticate, requirePlatformAdmin,
       return res.status(404).json({ error: 'Active business not found' });
     }
     await execute(`UPDATE businesses SET status = ?, updated_at = datetime('now') WHERE id = ?`, [status, req.params.id]);
+    invalidatePrefix('public:businesses:');
     await logAudit({
       businessId: Number(req.params.id),
       userId: req.user.id,
@@ -1030,6 +1051,7 @@ router.delete('/admin/businesses/:id', authenticate, requirePlatformAdmin, async
       ipAddress: req.ip,
     });
 
+    invalidatePrefix('public:businesses:');
     res.json({ message: `Business "${biz.name}" deactivated and scheduled under controlled retention policy.` });
   } catch (err) {
     next(err);

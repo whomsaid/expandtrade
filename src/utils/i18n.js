@@ -1,81 +1,12 @@
-const DICTIONARY = {
-  en: {
-    dashboard: 'Dashboard',
-    products: 'Products',
-    inventory: 'Inventory',
-    pos: 'Point of Sale',
-    sales: 'Sales',
-    orders: 'Orders',
-    customers: 'Customers',
-    suppliers: 'Suppliers',
-    purchases: 'Purchases',
-    finance: 'Finance',
-    payroll: 'Payroll',
-    myPayroll: 'My Payroll',
-    employees: 'Employees',
-    recruitment: 'Job Applications',
-    branches: 'Branches',
-    ads: 'Video Ads',
-    tasks: 'Tasks & Chat',
-    reports: 'Reports',
-    ai: 'AI Assistant',
-    notifications: 'Notifications',
-    settings: 'Settings',
-    admin: 'Platform Admin',
-    signOut: 'Sign Out',
-  },
-  rw: {
-    dashboard: 'Incamake',
-    products: 'Ibicuruzwa',
-    inventory: 'Ububiko',
-    pos: 'Kugurisha (POS)',
-    sales: 'Ibyagurishijwe',
-    orders: 'Komande',
-    customers: 'Abakiriya',
-    suppliers: 'Abagemura',
-    purchases: 'Ibyaguzwe',
-    finance: 'Imari',
-    payroll: 'Imishahara',
-    myPayroll: 'Umushahara Wanjye',
-    employees: 'Abakozi',
-    recruitment: 'Ubusabe bw’Akazi',
-    branches: 'Amashami',
-    ads: 'Amatangazo ya Video',
-    tasks: 'Imirimo n’Ubutumwa',
-    reports: 'Raporo',
-    ai: 'Ubufasha bwa AI',
-    notifications: 'Amenyesha',
-    settings: 'Igenamiterere',
-    admin: 'Ubuyobozi bw’Urubuga',
-    signOut: 'Sohoka',
-  },
-  fr: {
-    dashboard: 'Tableau de bord',
-    products: 'Produits',
-    inventory: 'Inventaire',
-    pos: 'Point de vente',
-    sales: 'Ventes',
-    orders: 'Commandes',
-    customers: 'Clients',
-    suppliers: 'Fournisseurs',
-    purchases: 'Achats',
-    finance: 'Finances',
-    payroll: 'Paie',
-    myPayroll: 'Ma Paie',
-    employees: 'Employés',
-    recruitment: 'Candidatures',
-    branches: 'Succursales',
-    ads: 'Vidéos Pub',
-    tasks: 'Tâches & Chat',
-    reports: 'Rapports',
-    ai: 'Assistant IA',
-    notifications: 'Notifications',
-    settings: 'Paramètres',
-    admin: 'Super Admin',
-    signOut: 'Déconnexion',
-  },
-};
+import i18n from '../i18n.js';
 
-export function t(lang, key) {
-  return DICTIONARY[lang]?.[key] || DICTIONARY.en[key] || key;
+export function t(lang, key, options) {
+  if (lang && i18n.hasLoadedNamespace('translation')) {
+    return i18n.getFixedT(lang)(`nav.${key}`, {
+      defaultValue: i18n.getFixedT(lang)(key, options),
+    });
+  }
+  return i18n.t(key, options);
 }
+
+export { i18n };

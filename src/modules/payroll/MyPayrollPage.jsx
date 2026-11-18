@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Banknote, Bell, Calendar, Lock, Phone, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api.js';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
 
 export default function MyPayrollPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState({ configs: [], transactions: [], notifications: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -70,9 +72,9 @@ export default function MyPayrollPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">My Payroll &amp; Salary History</h1>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('myPayroll.title')}</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            View your configured salary schedule, upcoming payment date, Mobile Money payout number, and verified payment history.
+            {t('myPayroll.subtitle')}
           </p>
         </div>
         <button
@@ -81,7 +83,7 @@ export default function MyPayrollPage() {
           className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
+          {t('common.refresh')}
         </button>
       </div>
 
@@ -102,10 +104,16 @@ export default function MyPayrollPage() {
           <div className="h-32 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 animate-pulse" />
         ) : data.configs.length === 0 ? (
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
-            No employee salary schedule has been configured for your account yet. Contact your Business Admin if you expect to be on payroll.
+            {t('myPayroll.emptyConfigs')}
           </div>
         ) : (
-          data.configs.map((cfg) => (
+          data.configs.map((cfg) => {
+            const freqLabel = {
+              monthly: t('myPayroll.freqMonthly'),
+              weekly: t('myPayroll.freqWeekly'),
+              custom: t('myPayroll.freqCustom'),
+            }[cfg.payment_frequency] || cfg.payment_frequency;
+            return (
             <div key={cfg.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-xs">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -118,7 +126,7 @@ export default function MyPayrollPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div>
                   <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                    <Banknote className="w-3.5 h-3.5" /> Configured Salary
+                    <Banknote className="w-3.5 h-3.5" /> {t('myPayroll.configuredSalary')}
                   </div>
                   <div className="font-bold text-base text-slate-900 dark:text-white tabular-nums mt-0.5">
                     {formatMoney(cfg.salary_amount, cfg.currency_code || cfg.business_currency)}
@@ -126,38 +134,39 @@ export default function MyPayrollPage() {
                 </div>
                 <div>
                   <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" /> Upcoming Pay Date
+                    <Calendar className="w-3.5 h-3.5" /> {t('myPayroll.upcomingPayDate')}
                   </div>
                   <div className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums mt-0.5">
                     {formatDate(cfg.next_payment_date)}
                   </div>
-                  <div className="text-[11px] text-slate-500 capitalize">{cfg.payment_frequency}</div>
+                  <div className="text-[11px] text-slate-500">{freqLabel}</div>
                 </div>
                 <div>
                   <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                    <Phone className="w-3.5 h-3.5" /> Payout MoMo
+                    <Phone className="w-3.5 h-3.5" /> {t('myPayroll.payoutMomo')}
                   </div>
                   <div className="font-mono font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{cfg.momo_phone}</div>
                   <div className="text-[11px] text-slate-500">
-                    {cfg.momo_provider === 'airtel_money' ? 'Airtel Money' : 'MTN Mobile Money'}
+                    {cfg.momo_provider === 'airtel_money' ? t('myPayroll.providerAirtelFull') : t('myPayroll.providerMtnFull')}
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                  Last paid: {cfg.last_paid_date ? formatDate(cfg.last_paid_date) : 'No payout yet'}
+                  {t('myPayroll.lastPaid', { date: cfg.last_paid_date ? formatDate(cfg.last_paid_date) : t('myPayroll.noPayoutYet') })}
                 </span>
                 <button
                   type="button"
                   onClick={() => startEditMomo(cfg)}
                   className="px-3 py-1.5 font-semibold text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-950/40"
                 >
-                  Update Mobile Money Number
+                  {t('myPayroll.updateMomoBtn')}
                 </button>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -169,22 +178,22 @@ export default function MyPayrollPage() {
         >
           <div className="flex items-center gap-2 font-bold text-sm text-[#0B192C] dark:text-white">
             <Lock className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-            Verify Account Password &amp; Update Mobile Money Number ({editingCfg.business_name})
+            {t('myPayroll.verifyAndUpdateTitle', { business: editingCfg.business_name })}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">Mobile Money Provider</label>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('myPayroll.momoProviderLabel')}</label>
               <select
                 value={momoForm.momo_provider}
                 onChange={(e) => setMomoForm({ ...momoForm, momo_provider: e.target.value })}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
               >
-                <option value="mtn_momo">MTN Mobile Money Rwanda</option>
-                <option value="airtel_money">Airtel Money Rwanda</option>
+                <option value="mtn_momo">{t('myPayroll.providerMtnFull')}</option>
+                <option value="airtel_money">{t('myPayroll.providerAirtelFull')}</option>
               </select>
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">New MoMo Number</label>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('myPayroll.newMomoNumber')}</label>
               <input
                 required
                 value={momoForm.momo_phone}
@@ -196,14 +205,14 @@ export default function MyPayrollPage() {
           </div>
           <div>
             <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">
-              Current BizTrade Account Password (Verification)
+              {t('myPayroll.passwordLabel')}
             </label>
             <input
               required
               type="password"
               value={momoForm.current_password}
               onChange={(e) => setMomoForm({ ...momoForm, current_password: e.target.value })}
-              placeholder="Enter your account login password"
+              placeholder={t('myPayroll.passwordPlaceholder')}
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
             />
           </div>
@@ -213,14 +222,14 @@ export default function MyPayrollPage() {
               disabled={saving}
               className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
             >
-              {saving ? 'Verifying & Saving...' : 'Save Mobile Money Number'}
+              {saving ? t('myPayroll.verifyingSaving') : t('myPayroll.saveMomoNumber')}
             </button>
             <button
               type="button"
               onClick={() => setEditingCfg(null)}
               className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </form>
@@ -230,25 +239,25 @@ export default function MyPayrollPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
           <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 font-bold text-sm text-[#0B192C] dark:text-white">
-            My Salary Payment History
+            {t('myPayroll.historyTitle')}
           </div>
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
-                <th className="py-3 px-4 font-semibold">Reference</th>
-                <th className="py-3 px-4 font-semibold">Business</th>
-                <th className="py-3 px-4 font-semibold">Period</th>
-                <th className="py-3 px-4 font-semibold">MoMo Phone</th>
-                <th className="py-3 px-4 font-semibold text-right">Amount</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
-                <th className="py-3 px-4 font-semibold text-right">Date</th>
+                <th className="py-3 px-4 font-semibold">{t('myPayroll.colReference')}</th>
+                <th className="py-3 px-4 font-semibold">{t('myPayroll.colBusiness')}</th>
+                <th className="py-3 px-4 font-semibold">{t('myPayroll.colPeriod')}</th>
+                <th className="py-3 px-4 font-semibold">{t('myPayroll.colMomoPhone')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('myPayroll.colAmount')}</th>
+                <th className="py-3 px-4 font-semibold">{t('myPayroll.colStatus')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('myPayroll.colDate')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {data.transactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 px-4 text-center text-slate-500">
-                    No salary payments recorded yet.
+                    {t('myPayroll.emptyTransactions')}
                   </td>
                 </tr>
               ) : (
@@ -275,11 +284,11 @@ export default function MyPayrollPage() {
         <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden self-start">
           <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 font-bold text-sm text-[#0B192C] dark:text-white flex items-center gap-2">
             <Bell className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-            Salary Notifications
+            {t('myPayroll.notificationsTitle')}
           </div>
           <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-96 overflow-y-auto">
             {data.notifications.length === 0 ? (
-              <div className="p-6 text-center text-slate-500">No salary notifications yet.</div>
+              <div className="p-6 text-center text-slate-500">{t('myPayroll.emptyNotifications')}</div>
             ) : (
               data.notifications.map((n) => (
                 <div key={n.id} className="p-4 space-y-1">

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import i18n from '../i18n.js';
 
 export const api = axios.create({
   baseURL: '/api',
@@ -55,6 +56,7 @@ api.interceptors.request.use((config) => {
   if (branchId) {
     config.headers['x-branch-id'] = branchId;
   }
+  config.headers['Accept-Language'] = i18n.language || 'en';
   return config;
 });
 
@@ -78,8 +80,8 @@ api.interceptors.response.use(
     const isTimeout = error.code === 'ECONNABORTED';
     const message =
       error.response?.data?.error ||
-      (isTimeout ? 'Request timed out. Please check your connection and try again.' : error.message) ||
-      'Request failed';
+      (isTimeout ? i18n.t('common.requestTimeout') : error.message) ||
+      i18n.t('common.requestFailed');
     const err = new Error(message);
     err.status = status;
     err.code = error.response?.data?.code || error.code;
