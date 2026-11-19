@@ -25,6 +25,8 @@ export default function OrdersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ customer_name: '', customer_phone: '+250', delivery_address: '', product_id: '', quantity: '1', notes: '' });
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const currency = workspace?.business?.currency_code || 'RWF';
 
@@ -45,7 +47,9 @@ export default function OrdersPage() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
+    setSaving(true);
     try {
       await api.post('/orders', {
         customer_name: form.customer_name,
@@ -57,7 +61,9 @@ export default function OrdersPage() {
       setShowCreate(false);
       await loadOrders();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -81,6 +87,7 @@ export default function OrdersPage() {
           <button
             type="button"
             onClick={() => {
+              setModalError('');
               setForm({ customer_name: '', customer_phone: '+250', delivery_address: '', product_id: products[0]?.id || '', quantity: '1', notes: '' });
               setShowCreate(true);
             }}
@@ -92,7 +99,18 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
+      {error && (
+        <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg flex items-center justify-between gap-2">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => { setError(''); loadOrders(); }}
+            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100 shrink-0"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
         <table className="w-full text-left text-xs">
@@ -151,6 +169,7 @@ export default function OrdersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('orders.modalTitle')}</h2>
+            {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
             <form onSubmit={handleCreate} className="space-y-3 text-xs">
               <input required placeholder={t('orders.customerNamePlaceholder')} value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <input required placeholder={t('orders.customerPhonePlaceholder')} value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
@@ -162,8 +181,8 @@ export default function OrdersPage() {
                 <input required type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('orders.createOrder')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">{saving ? t('common.saving') : t('orders.createOrder')}</button>
               </div>
             </form>
           </div>

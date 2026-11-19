@@ -29,6 +29,8 @@ export default function EmployeesPage() {
   const [message, setMessage] = useState('');
   const [activationPreviewUrl, setActivationPreviewUrl] = useState('');
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const currency = workspace?.business?.currency_code || 'RWF';
   const employeeRoles = roles.filter((r) => ALLOWED_EMPLOYEE_ROLE_CODES.includes(r.code));
@@ -56,9 +58,11 @@ export default function EmployeesPage() {
 
   const handleInvite = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
     setMessage('');
     setActivationPreviewUrl('');
+    setSaving(true);
     try {
       const { data } = await api.post('/members/invite', form);
       setShowInvite(false);
@@ -68,7 +72,9 @@ export default function EmployeesPage() {
       }
       await loadData();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -94,6 +100,7 @@ export default function EmployeesPage() {
             type="button"
             onClick={() => {
               const cashierRole = employeeRoles.find((r) => r.code === 'cashier') || employeeRoles[0];
+              setModalError('');
               setForm({
                 full_name: '',
                 email: '',
@@ -221,6 +228,7 @@ export default function EmployeesPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {t('employees.modalSubtitle')}
             </p>
+            {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
             <form onSubmit={handleInvite} className="space-y-3 text-xs">
               <input required placeholder={t('employees.fullNamePlaceholder')} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <input required type="email" placeholder={t('employees.emailPlaceholder')} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
@@ -235,8 +243,8 @@ export default function EmployeesPage() {
               </div>
               <input placeholder={t('employees.jobTitlePlaceholder')} value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowInvite(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('employees.sendInvite')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowInvite(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">{saving ? t('common.saving') : t('employees.sendInvite')}</button>
               </div>
             </form>
           </div>

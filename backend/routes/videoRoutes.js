@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
@@ -11,17 +12,30 @@ import { loadMemberPermissions, requireBusiness, requirePermission } from '../mi
 import {
   adVideoUpload,
   cleanupMulterFiles,
+  MAX_VIDEO_FILE_BYTES,
+  removeChunkSessionDir,
   removeUploadedFile,
   verifyFileNonEmpty,
   verifyImageSignature,
   verifyVideoSignature,
+  VIDEO_CHUNKS_DIR,
   VIDEO_STORAGE_DIR,
+  videoChunkUpload,
+  videoThumbUpload,
 } from '../middleware/upload.js';
 import { logAudit } from '../services/auditService.js';
+import { createBackgroundJob, getBackgroundJob, updateBackgroundJob } from '../services/jobService.js';
 
 const router = express.Router();
 
-const MAX_CHUNK_BYTES = 1024 * 1024; // 1MB progressive chunk cap for slower connections
+const MAX_STREAM_CHUNK_BYTES = 1024 * 1024; // 1MB progressive streaming window
+const DEFAULT_UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024; // 2MB resumable chunk size
+
+function disableRequestTimeout(req, res, next) {
+  req.setTimeout(0);
+  res.setTimeout(0);
+  next();
+}
 
 function formatVideoRow(row) {
   if (!row) return null;
@@ -55,7 +69,7 @@ function streamVideoFile(req, res, video) {
       return res.status(416).end();
     }
     const start = Number(match[1]);
-    const requestedEnd = match[2] ? Number(match[2]) : Math.min(start + MAX_CHUNK_BYTES - 1, total - 1);
+    const requestedEnd = match[2] ? Number(match[2]) : Math.min(start + MAX_STREAM_CHUNK_BYTES - 1, total - 1);
     const end = Math.min(requestedEnd, total - 1);
 
     if (Number.isNaN(start) || Number.isNaN(end) || start >= total || start > end) {
@@ -81,6 +95,234 @@ function streamVideoFile(req, res, video) {
     if (!res.headersSent) res.status(500).end();
   });
   return stream.pipe(res);
+}
+
+function scanSessionChunksOnDisk(session) {
+  const uploadedChunks = [];
+  let uploadedBytes = 0;
+  if (!session?.temp_dir || !fs.existsSync(session.temp_dir)) {
+    return { uploadedChunks, uploadedBytes };
+  }
+  for (let i = 0; i < session.total_chunks; i += 1) {
+    const partPath = path.join(session.temp_dir, `chunk_${i}.part`);
+    if (fs.existsSync(partPath)) {
+      try {
+        const stat = fs.statSync(partPath);
+        if (stat.isFile() && stat.size > 0) {
+          uploadedChunks.push(i);
+          uploadedBytes += stat.size;
+        }
+      } catch {
+        // skip unreadable part
+      }
+    }
+  }
+  return { uploadedChunks, uploadedBytes };
+}
+
+function appendFileToWriteStream(srcPath, writeStream) {
+  return new Promise((resolve, reject) => {
+    const readStream = fs.createReadStream(srcPath, { highWaterMark: 256 * 1024 });
+    readStream.on('error', reject);
+    readStream.on('end', resolve);
+    readStream.pipe(writeStream, { end: false });
+  });
+}
+
+async function loadUploadSession(req, res, next) {
+  try {
+    const session = await queryOne(
+      'SELECT * FROM video_upload_sessions WHERE upload_id = ? AND business_id = ?',
+      [req.params.uploadId, req.businessId]
+    );
+    if (!session) {
+      return res.status(404).json({ error: 'Video upload session not found for this business.' });
+    }
+    req.uploadSession = session;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function finalizeChunkedVideoJob({ session, jobId, ipAddress }) {
+  const ext = path.extname(session.original_filename || '').toLowerCase() === '.webm' || session.video_mime_type === 'video/webm'
+    ? '.webm'
+    : '.mp4';
+  const finalFilename = `${crypto.randomUUID()}${ext}`;
+  const finalAbsPath = path.join(VIDEO_STORAGE_DIR, finalFilename);
+
+  try {
+    await updateBackgroundJob(jobId, { status: 'processing', progress: 10, stageLabel: 'processing' });
+
+    await new Promise((resolve, reject) => {
+      const ws = fs.createWriteStream(finalAbsPath);
+      ws.on('error', reject);
+      ws.on('finish', resolve);
+
+      (async () => {
+        for (let i = 0; i < session.total_chunks; i += 1) {
+          const partPath = path.join(session.temp_dir, `chunk_${i}.part`);
+          if (!fs.existsSync(partPath)) {
+            throw new Error(`Missing chunk ${i} during assembly.`);
+          }
+          await appendFileToWriteStream(partPath, ws);
+          if (i % 5 === 0 || i === session.total_chunks - 1) {
+            const pct = 10 + Math.round(((i + 1) / session.total_chunks) * 60);
+            await updateBackgroundJob(jobId, { status: 'processing', progress: pct, stageLabel: 'processing' });
+          }
+        }
+        ws.end();
+      })().catch((err) => {
+        ws.destroy();
+        reject(err);
+      });
+    });
+
+    if (!fs.existsSync(finalAbsPath)) {
+      throw new Error('Assembled video file could not be verified on storage.');
+    }
+    const finalStat = fs.statSync(finalAbsPath);
+    if (finalStat.size !== Number(session.total_size_bytes) || finalStat.size <= 0) {
+      throw new Error(`Uploaded file size mismatch (${finalStat.size} vs expected ${session.total_size_bytes} bytes).`);
+    }
+    if (!verifyVideoSignature(finalAbsPath, session.video_mime_type)) {
+      throw new Error('Assembled video failed format header verification. Upload a valid MP4 or WEBM file.');
+    }
+
+    await updateBackgroundJob(jobId, { status: 'processing', progress: 85, stageLabel: 'saving' });
+
+    let savedVideoId = null;
+    if (session.editing_video_id) {
+      const existing = await queryOne(
+        'SELECT * FROM business_videos WHERE id = ? AND business_id = ?',
+        [session.editing_video_id, session.business_id]
+      );
+      if (!existing) {
+        throw new Error('Target advertisement video no longer exists for this business.');
+      }
+
+      const nextThumb = session.thumbnail_url || existing.thumbnail_url;
+      await execute(
+        `UPDATE business_videos
+         SET title = ?, description = ?, product_id = ?, video_path = ?, video_mime_type = ?, file_size_bytes = ?, thumbnail_url = ?, updated_at = datetime('now')
+         WHERE id = ? AND business_id = ?`,
+        [
+          session.title,
+          session.description || '',
+          session.product_id || null,
+          finalFilename,
+          session.video_mime_type,
+          finalStat.size,
+          nextThumb,
+          existing.id,
+          session.business_id,
+        ]
+      );
+      savedVideoId = existing.id;
+
+      if (existing.video_path && existing.video_path !== finalFilename) {
+        removeUploadedFile(path.join(VIDEO_STORAGE_DIR, path.basename(existing.video_path)));
+      }
+      if (session.thumbnail_url && existing.thumbnail_url && existing.thumbnail_url !== session.thumbnail_url) {
+        removeUploadedFile(existing.thumbnail_url);
+      }
+
+      await logAudit({
+        businessId: session.business_id,
+        userId: session.user_id,
+        action: 'ads.video_updated',
+        entityType: 'business_video',
+        entityId: existing.id,
+        changes: { title: session.title, productId: session.product_id || null },
+        ipAddress,
+      });
+    } else {
+      const publishFlag = session.is_published ? 1 : 0;
+      const ins = await execute(
+        `INSERT INTO business_videos
+           (business_id, created_by_user_id, product_id, title, description, video_path, video_mime_type, file_size_bytes, thumbnail_url, is_published, published_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END)`,
+        [
+          session.business_id,
+          session.user_id,
+          session.product_id || null,
+          session.title,
+          session.description || '',
+          finalFilename,
+          session.video_mime_type,
+          finalStat.size,
+          session.thumbnail_url || null,
+          publishFlag,
+          publishFlag,
+        ]
+      );
+      savedVideoId = ins.insertId;
+
+      await logAudit({
+        businessId: session.business_id,
+        userId: session.user_id,
+        action: 'ads.video_created',
+        entityType: 'business_video',
+        entityId: savedVideoId,
+        changes: { title: session.title, productId: session.product_id || null, is_published: Boolean(publishFlag) },
+        ipAddress,
+      });
+    }
+
+    const saved = await queryOne(
+      `SELECT bv.*, p.name AS product_name, p.selling_price AS product_price,
+              u.full_name AS author_name, u.avatar_url AS author_avatar
+       FROM business_videos bv
+       LEFT JOIN products p ON p.id = bv.product_id
+       LEFT JOIN users u ON u.id = bv.created_by_user_id
+       WHERE bv.id = ? AND bv.business_id = ?`,
+      [savedVideoId, session.business_id]
+    );
+    if (!saved || !fs.existsSync(path.join(VIDEO_STORAGE_DIR, path.basename(saved.video_path)))) {
+      throw new Error('Database and storage post-save verification failed.');
+    }
+
+    await execute(
+      `UPDATE video_upload_sessions
+       SET status = 'completed', video_id = ?, updated_at = datetime('now')
+       WHERE upload_id = ?`,
+      [saved.id, session.upload_id]
+    );
+
+    removeChunkSessionDir(session.temp_dir);
+
+    const payloadVideo = {
+      ...formatVideoRow(saved),
+      admin_stream_url: `/api/ads/videos/${saved.id}/stream`,
+    };
+    await updateBackgroundJob(jobId, {
+      status: 'completed',
+      progress: 100,
+      stageLabel: 'completed',
+      result: {
+        message: session.editing_video_id
+          ? 'Promotional video updated and verified successfully.'
+          : saved.is_published
+            ? 'Promotional video uploaded, verified, and published.'
+            : 'Promotional video uploaded and saved as draft for preview.',
+        video: payloadVideo,
+      },
+    });
+  } catch (err) {
+    removeUploadedFile(finalAbsPath);
+    await execute(
+      `UPDATE video_upload_sessions
+       SET status = 'failed', error_message = ?, updated_at = datetime('now')
+       WHERE upload_id = ?`,
+      [err.message || 'Video processing failed', session.upload_id]
+    );
+    await updateBackgroundJob(jobId, {
+      status: 'failed',
+      stageLabel: 'failed',
+      errorMessage: err.message || 'Video processing failed',
+    });
+  }
 }
 
 // ================= PUBLIC & CUSTOMER-FACING VIDEO ENDPOINTS =================
@@ -149,6 +391,324 @@ router.get('/public/videos/:id/stream', async (req, res, next) => {
   }
 });
 
+// ================= RESUMABLE CHUNKED VIDEO UPLOAD ENDPOINTS (NO TIME LIMIT) =================
+router.post(
+  '/ads/videos/uploads/init',
+  authenticate,
+  requireBusiness,
+  requirePermission('ads.manage'),
+  disableRequestTimeout,
+  videoThumbUpload.single('thumbnail'),
+  [
+    body('title').trim().isLength({ min: 2, max: 160 }).withMessage('Video title is required (2–160 characters)'),
+    body('description').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }).withMessage('Description cannot exceed 2000 characters'),
+    body('filename').trim().notEmpty().withMessage('Original video filename is required'),
+    body('total_size_bytes').isInt({ min: 1, max: MAX_VIDEO_FILE_BYTES }).withMessage(`Video size must be between 1 byte and ${Math.round(MAX_VIDEO_FILE_BYTES / (1024 * 1024))}MB`),
+    body('product_id').optional({ values: 'falsy' }).isInt({ min: 1 }).withMessage('Invalid product selection'),
+    body('editing_video_id').optional({ values: 'falsy' }).isInt({ min: 1 }).withMessage('Invalid video reference'),
+  ],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const thumbFile = req.file || null;
+      if (thumbFile) {
+        if (!verifyFileNonEmpty(thumbFile) || thumbFile.size > 5 * 1024 * 1024 || !verifyImageSignature(thumbFile.path)) {
+          cleanupMulterFiles(req);
+          return res.status(400).json({ error: 'Invalid or empty video thumbnail. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+        }
+      }
+
+      const originalFilename = String(req.body.filename || '').trim();
+      const ext = path.extname(originalFilename).toLowerCase();
+      const rawMime = String(req.body.mimetype || '').toLowerCase();
+      if (!['.mp4', '.webm'].includes(ext) && !['video/mp4', 'video/webm'].includes(rawMime)) {
+        cleanupMulterFiles(req);
+        return res.status(400).json({ error: 'Unsupported video format. Allowed: MP4 and WEBM.' });
+      }
+      const canonicalMime = rawMime === 'video/webm' || (rawMime !== 'video/mp4' && ext === '.webm') ? 'video/webm' : 'video/mp4';
+
+      let productId = null;
+      if (req.body.product_id) {
+        const product = await queryOne('SELECT id FROM products WHERE id = ? AND business_id = ?', [
+          Number(req.body.product_id),
+          req.businessId,
+        ]);
+        if (!product) {
+          cleanupMulterFiles(req);
+          return res.status(400).json({ error: 'Selected product or service does not belong to this business' });
+        }
+        productId = product.id;
+      }
+
+      let editingVideoId = null;
+      if (req.body.editing_video_id) {
+        const existing = await queryOne('SELECT id FROM business_videos WHERE id = ? AND business_id = ?', [
+          Number(req.body.editing_video_id),
+          req.businessId,
+        ]);
+        if (!existing) {
+          cleanupMulterFiles(req);
+          return res.status(404).json({ error: 'Target advertisement video not found for this business' });
+        }
+        editingVideoId = existing.id;
+      }
+
+      const totalSizeBytes = Number(req.body.total_size_bytes);
+      const requestedChunk = Number(req.body.chunk_size_bytes || DEFAULT_UPLOAD_CHUNK_BYTES);
+      const chunkSizeBytes = Math.max(64 * 1024, Math.min(16 * 1024 * 1024, Number.isFinite(requestedChunk) ? requestedChunk : DEFAULT_UPLOAD_CHUNK_BYTES));
+      const totalChunks = Math.ceil(totalSizeBytes / chunkSizeBytes);
+      const uploadId = crypto.randomUUID();
+      const tempDir = path.join(VIDEO_CHUNKS_DIR, uploadId);
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      const publishFlag = req.body.is_published === '1' || req.body.is_published === 'true' || req.body.is_published === true ? 1 : 0;
+      const thumbnailUrl = thumbFile ? `/uploads/video-thumbnails/${thumbFile.filename}` : null;
+
+      await execute(
+        `INSERT INTO video_upload_sessions
+           (upload_id, business_id, user_id, editing_video_id, product_id, title, description, is_published, original_filename, video_mime_type, total_size_bytes, chunk_size_bytes, total_chunks, uploaded_chunks_json, thumbnail_url, temp_dir, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 'uploading')`,
+        [
+          uploadId,
+          req.businessId,
+          req.user.id,
+          editingVideoId,
+          productId,
+          req.body.title.trim(),
+          (req.body.description || '').trim(),
+          publishFlag,
+          originalFilename,
+          canonicalMime,
+          totalSizeBytes,
+          chunkSizeBytes,
+          totalChunks,
+          thumbnailUrl,
+          tempDir,
+        ]
+      );
+
+      res.status(201).json({
+        uploadId,
+        chunkSize: chunkSizeBytes,
+        totalChunks,
+        totalSizeBytes,
+        uploadedChunks: [],
+        uploadedBytes: 0,
+        status: 'uploading',
+      });
+    } catch (err) {
+      cleanupMulterFiles(req);
+      next(err);
+    }
+  }
+);
+
+router.get(
+  '/ads/videos/uploads/:uploadId',
+  authenticate,
+  requireBusiness,
+  requirePermission('ads.view'),
+  loadUploadSession,
+  async (req, res, next) => {
+    try {
+      const session = req.uploadSession;
+      const { uploadedChunks, uploadedBytes } = scanSessionChunksOnDisk(session);
+      const job = session.job_id ? await getBackgroundJob(session.job_id) : null;
+      res.json({
+        uploadId: session.upload_id,
+        title: session.title,
+        description: session.description || '',
+        productId: session.product_id,
+        editingVideoId: session.editing_video_id,
+        filename: session.original_filename,
+        mimetype: session.video_mime_type,
+        totalSizeBytes: Number(session.total_size_bytes),
+        chunkSize: Number(session.chunk_size_bytes),
+        totalChunks: Number(session.total_chunks),
+        uploadedChunks,
+        uploadedBytes,
+        status: session.status,
+        jobId: session.job_id,
+        job,
+        videoId: session.video_id,
+        errorMessage: session.error_message,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.put(
+  '/ads/videos/uploads/:uploadId/chunk/:chunkIndex',
+  authenticate,
+  requireBusiness,
+  requirePermission('ads.manage'),
+  disableRequestTimeout,
+  loadUploadSession,
+  (req, res, next) => {
+    const idx = Number(req.params.chunkIndex);
+    const session = req.uploadSession;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= session.total_chunks) {
+      return res.status(400).json({ error: 'Invalid chunk index for this upload session.' });
+    }
+    if (session.status !== 'uploading') {
+      return res.status(409).json({ error: `Cannot upload chunk while session status is "${session.status}".` });
+    }
+    return next();
+  },
+  videoChunkUpload.single('chunk'),
+  async (req, res, next) => {
+    try {
+      const session = req.uploadSession;
+      const idx = Number(req.params.chunkIndex);
+      const chunkFile = req.file;
+      if (!chunkFile || !verifyFileNonEmpty(chunkFile)) {
+        if (chunkFile?.path && fs.existsSync(chunkFile.path)) fs.unlinkSync(chunkFile.path);
+        return res.status(400).json({ error: 'Empty or missing video chunk payload.' });
+      }
+
+      if (idx === 0 && !verifyVideoSignature(chunkFile.path, session.video_mime_type)) {
+        fs.unlinkSync(chunkFile.path);
+        return res.status(400).json({ error: 'Invalid or corrupted video header. Only valid MP4 and WEBM files are allowed.' });
+      }
+
+      const finalPartPath = path.join(session.temp_dir, `chunk_${idx}.part`);
+      fs.renameSync(chunkFile.path, finalPartPath);
+
+      const { uploadedChunks, uploadedBytes } = scanSessionChunksOnDisk(session);
+      await execute(
+        `UPDATE video_upload_sessions
+         SET uploaded_chunks_json = ?, updated_at = datetime('now')
+         WHERE upload_id = ?`,
+        [JSON.stringify(uploadedChunks), session.upload_id]
+      );
+
+      res.json({
+        uploadId: session.upload_id,
+        chunkIndex: idx,
+        uploadedChunks,
+        uploadedBytes,
+        totalSizeBytes: Number(session.total_size_bytes),
+        totalChunks: Number(session.total_chunks),
+      });
+    } catch (err) {
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      }
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/ads/videos/uploads/:uploadId/complete',
+  authenticate,
+  requireBusiness,
+  requirePermission('ads.manage'),
+  loadUploadSession,
+  async (req, res, next) => {
+    try {
+      const session = req.uploadSession;
+
+      if (session.status === 'completed' && session.job_id) {
+        const existingJob = await getBackgroundJob(session.job_id);
+        return res.json({ message: 'Video upload already completed.', uploadId: session.upload_id, jobId: session.job_id, job: existingJob });
+      }
+      if (session.status === 'processing' && session.job_id) {
+        const existingJob = await getBackgroundJob(session.job_id);
+        return res.status(202).json({ message: 'Video finalization already in progress.', uploadId: session.upload_id, jobId: session.job_id, job: existingJob });
+      }
+      if (session.status === 'cancelled') {
+        return res.status(409).json({ error: 'This upload session was cancelled.' });
+      }
+
+      const { uploadedChunks, uploadedBytes } = scanSessionChunksOnDisk(session);
+      const missingChunks = [];
+      const uploadedSet = new Set(uploadedChunks);
+      for (let i = 0; i < session.total_chunks; i += 1) {
+        if (!uploadedSet.has(i)) missingChunks.push(i);
+      }
+
+      if (missingChunks.length > 0 || uploadedBytes !== Number(session.total_size_bytes)) {
+        return res.status(400).json({
+          error: 'Upload is incomplete. Some video chunks have not been received yet.',
+          missingChunks,
+          uploadedChunks,
+          uploadedBytes,
+          expectedBytes: Number(session.total_size_bytes),
+        });
+      }
+
+      const job = await createBackgroundJob({
+        businessId: req.businessId,
+        userId: req.user.id,
+        jobType: 'video_finalize',
+        stageLabel: 'processing',
+      });
+
+      await execute(
+        `UPDATE video_upload_sessions
+         SET status = 'processing', job_id = ?, error_message = NULL, updated_at = datetime('now')
+         WHERE upload_id = ?`,
+        [job.id, session.upload_id]
+      );
+
+      setImmediate(() => {
+        finalizeChunkedVideoJob({
+          session: { ...session, job_id: job.id },
+          jobId: job.id,
+          ipAddress: req.ip,
+        });
+      });
+
+      res.status(202).json({
+        message: 'Video upload received. Assembling, verifying, and saving video...',
+        uploadId: session.upload_id,
+        jobId: job.id,
+        job,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.delete(
+  '/ads/videos/uploads/:uploadId',
+  authenticate,
+  requireBusiness,
+  requirePermission('ads.manage'),
+  loadUploadSession,
+  async (req, res, next) => {
+    try {
+      const session = req.uploadSession;
+      if (session.status !== 'completed') {
+        removeChunkSessionDir(session.temp_dir);
+        if (session.thumbnail_url) {
+          const used = await queryOne('SELECT id FROM business_videos WHERE thumbnail_url = ?', [session.thumbnail_url]);
+          if (!used) removeUploadedFile(session.thumbnail_url);
+        }
+        await execute(
+          `UPDATE video_upload_sessions
+           SET status = 'cancelled', updated_at = datetime('now')
+           WHERE upload_id = ?`,
+          [session.upload_id]
+        );
+        if (session.job_id) {
+          const job = await getBackgroundJob(session.job_id);
+          if (job && ['queued', 'processing'].includes(job.status)) {
+            await updateBackgroundJob(session.job_id, { status: 'cancelled', stageLabel: 'cancelled' });
+          }
+        }
+      }
+      res.json({ message: 'Upload session cancelled and temporary chunks cleaned up.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // ================= BUSINESS ADMIN TENANT-ISOLATED VIDEO MANAGEMENT =================
 router.get('/ads/videos', authenticate, requireBusiness, requirePermission('ads.view'), async (req, res, next) => {
   try {
@@ -200,7 +760,7 @@ router.get('/ads/videos/:id/stream', async (req, res, next) => {
     }
 
     const user = await queryOne(
-      'SELECT id, avatar_url, must_change_password, is_active FROM users WHERE id = ?',
+      'SELECT id, avatar_url, must_change_password, is_active, is_platform_admin FROM users WHERE id = ?',
       [decoded.sub]
     );
     if (!user || !user.is_active || user.must_change_password) {
@@ -218,25 +778,27 @@ router.get('/ads/videos/:id/stream', async (req, res, next) => {
     if (!video) {
       return res.status(404).json({ error: 'Advertisement video not found' });
     }
-    if (businessId && businessId !== video.business_id) {
+    if (!user.is_platform_admin && businessId && businessId !== video.business_id) {
       return res.status(403).json({ error: 'Tenant isolation violation' });
     }
 
-    const membership = await queryOne(
-      `SELECT bm.*, r.code AS role_code
-       FROM business_members bm
-       JOIN roles r ON r.id = bm.role_id
-       WHERE bm.business_id = ? AND bm.user_id = ? AND bm.status = 'active'`,
-      [video.business_id, user.id]
-    );
-    if (!membership) {
-      return res.status(403).json({ error: 'Tenant isolation violation' });
-    }
+    if (!user.is_platform_admin) {
+      const membership = await queryOne(
+        `SELECT bm.*, r.code AS role_code
+         FROM business_members bm
+         JOIN roles r ON r.id = bm.role_id
+         WHERE bm.business_id = ? AND bm.user_id = ? AND bm.status = 'active'`,
+        [video.business_id, user.id]
+      );
+      if (!membership) {
+        return res.status(403).json({ error: 'Tenant isolation violation' });
+      }
 
-    if (!['business_owner', 'business_admin'].includes(membership.role_code)) {
-      const perms = await loadMemberPermissions(membership.id, membership.role_id);
-      if (!perms.includes('ads.view')) {
-        return res.status(403).json({ error: 'Permission denied' });
+      if (!['business_owner', 'business_admin'].includes(membership.role_code)) {
+        const perms = await loadMemberPermissions(membership.id, membership.role_id);
+        if (!perms.includes('ads.view')) {
+          return res.status(403).json({ error: 'Permission denied' });
+        }
       }
     }
 
@@ -251,6 +813,7 @@ router.post(
   authenticate,
   requireBusiness,
   requirePermission('ads.manage'),
+  disableRequestTimeout,
   adVideoUpload.fields([
     { name: 'video', maxCount: 1 },
     { name: 'thumbnail', maxCount: 1 },
@@ -268,7 +831,7 @@ router.post(
 
       if (!videoFile) {
         cleanupMulterFiles(req);
-        return res.status(400).json({ error: 'Promotional video file is required (MP4 or WEBM, max 50MB).' });
+        return res.status(400).json({ error: 'Promotional video file is required (MP4 or WEBM, max 250MB).' });
       }
 
       if (!verifyFileNonEmpty(videoFile) || !verifyVideoSignature(videoFile.path, videoFile.mimetype)) {
@@ -296,8 +859,19 @@ router.post(
         productId = product.id;
       }
 
+      const storedVideoPath = path.resolve(VIDEO_STORAGE_DIR, path.basename(videoFile.filename));
+      if (!fs.existsSync(storedVideoPath) || fs.statSync(storedVideoPath).size <= 0) {
+        cleanupMulterFiles(req);
+        return res.status(500).json({ error: 'Video storage verification failed. Please retry.' });
+      }
+
       const publishFlag = req.body.is_published === '1' || req.body.is_published === 'true' || req.body.is_published === true ? 1 : 0;
       const thumbnailUrl = thumbFile ? `/uploads/video-thumbnails/${thumbFile.filename}` : null;
+      const videoExt = path.extname(videoFile.filename || videoFile.originalname || '').toLowerCase();
+      const canonicalVideoMime =
+        videoFile.mimetype === 'video/webm' || (videoFile.mimetype !== 'video/mp4' && videoExt === '.webm')
+          ? 'video/webm'
+          : 'video/mp4';
 
       const ins = await execute(
         `INSERT INTO business_videos
@@ -310,7 +884,7 @@ router.post(
           req.body.title.trim(),
           (req.body.description || '').trim(),
           videoFile.filename,
-          videoFile.mimetype,
+          canonicalVideoMime,
           videoFile.size,
           thumbnailUrl,
           publishFlag,
@@ -357,6 +931,7 @@ router.put(
   authenticate,
   requireBusiness,
   requirePermission('ads.manage'),
+  disableRequestTimeout,
   adVideoUpload.fields([
     { name: 'video', maxCount: 1 },
     { name: 'thumbnail', maxCount: 1 },
@@ -403,8 +978,21 @@ router.put(
         productId = product.id;
       }
 
+      if (videoFile) {
+        const storedVideoPath = path.resolve(VIDEO_STORAGE_DIR, path.basename(videoFile.filename));
+        if (!fs.existsSync(storedVideoPath) || fs.statSync(storedVideoPath).size <= 0) {
+          cleanupMulterFiles(req);
+          return res.status(500).json({ error: 'Video storage verification failed. Please retry.' });
+        }
+      }
+
       const nextVideoPath = videoFile ? videoFile.filename : existing.video_path;
-      const nextMimeType = videoFile ? videoFile.mimetype : existing.video_mime_type;
+      const nextVideoExt = videoFile ? path.extname(videoFile.filename || videoFile.originalname || '').toLowerCase() : '';
+      const nextMimeType = videoFile
+        ? (videoFile.mimetype === 'video/webm' || (videoFile.mimetype !== 'video/mp4' && nextVideoExt === '.webm')
+            ? 'video/webm'
+            : 'video/mp4')
+        : existing.video_mime_type;
       const nextSize = videoFile ? videoFile.size : existing.file_size_bytes;
       const nextThumbnail = thumbFile ? `/uploads/video-thumbnails/${thumbFile.filename}` : existing.thumbnail_url;
 
@@ -474,6 +1062,11 @@ router.patch('/ads/videos/:id/publish', authenticate, requireBusiness, requirePe
     ]);
     if (!existing) {
       return res.status(404).json({ error: 'Advertisement video not found for this business' });
+    }
+
+    const storedPath = path.resolve(VIDEO_STORAGE_DIR, path.basename(existing.video_path || ''));
+    if (!fs.existsSync(storedPath) || fs.statSync(storedPath).size <= 0) {
+      return res.status(400).json({ error: 'Cannot publish: video file is missing from storage.' });
     }
 
     const nextPublished = req.body.is_published === undefined

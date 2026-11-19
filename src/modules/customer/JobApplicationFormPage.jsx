@@ -286,7 +286,7 @@ export default function JobApplicationFormPage() {
   };
 
   const persistDraft = async ({ silent = false } = {}) => {
-    if (!application?.id) return false;
+    if (!application?.id || saving) return false;
     setSaving(true);
     if (!silent) {
       setError('');
@@ -315,9 +315,30 @@ export default function JobApplicationFormPage() {
   const handleCvUpload = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !application?.id) return;
+    if (!file || !application?.id || uploadingCv) return;
     setError('');
     setNotice('');
+
+    if (file.size === 0) {
+      setError(t('validation.emptyFile'));
+      return;
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const allowedMimes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    const isGenericMime = !file.type || file.type === 'application/octet-stream';
+    const validType = allowedMimes.includes(file.type) || (isGenericMime && ['pdf', 'docx'].includes(ext));
+    if (!validType || !['pdf', 'docx'].includes(ext)) {
+      setError(t('validation.unsupportedDocFormat'));
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError(t('validation.documentTooLarge'));
+      return;
+    }
+
     setUploadingCv(true);
     setCvProgress(0);
 
@@ -325,6 +346,7 @@ export default function JobApplicationFormPage() {
       const formData = new FormData();
       formData.append('cv', file);
       const { data } = await api.post(`/customer/applications/${application.id}/cv`, formData, {
+        timeout: 0,
         onUploadProgress: (evt) => {
           if (evt.total) setCvProgress(Math.round((evt.loaded * 100) / evt.total));
         },
@@ -342,9 +364,30 @@ export default function JobApplicationFormPage() {
   const handleCertificateUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (files.length === 0 || !application?.id) return;
+    if (files.length === 0 || !application?.id || uploadingCert) return;
     setError('');
     setNotice('');
+
+    const allowedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    const allowedExts = ['pdf', 'jpg', 'jpeg', 'png'];
+    for (const file of files) {
+      if (file.size === 0) {
+        setError(t('validation.emptyFile'));
+        return;
+      }
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isGenericMime = !file.type || file.type === 'application/octet-stream';
+      const validType = allowedMimes.includes(file.type) || (isGenericMime && allowedExts.includes(ext));
+      if (!validType || !allowedExts.includes(ext)) {
+        setError(t('validation.unsupportedDocFormat'));
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError(t('validation.documentTooLarge'));
+        return;
+      }
+    }
+
     setUploadingCert(true);
     setCertProgress(0);
 
@@ -356,6 +399,7 @@ export default function JobApplicationFormPage() {
         formData.append('document_type', certMeta.document_type || 'Academic Certificate');
         formData.append('document_name', certMeta.document_name.trim() || file.name);
         const { data } = await api.post(`/customer/applications/${application.id}/documents`, formData, {
+          timeout: 0,
           onUploadProgress: (evt) => {
             if (evt.total) {
               const overall = Math.round(((i + evt.loaded / evt.total) / files.length) * 100);
@@ -409,7 +453,7 @@ export default function JobApplicationFormPage() {
   };
 
   const handleSubmitApplication = async () => {
-    if (!application?.id) return;
+    if (!application?.id || submitting) return;
     setError('');
     setNotice('');
     setSubmitting(true);

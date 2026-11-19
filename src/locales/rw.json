@@ -59,6 +59,10 @@
     "softworld": "softworld",
     "allRightsReserved": "Uburenganzira bwose burarinzwe.",
     "requestTimeout": "Igihe cyo gutegereza cyarangiye. Nyamuneka reba murandasi yawe wongere ugerageze.",
+    "networkError": "Ntibishobotse kwihuza na seriveri. Reba murandasi yawe wongere ugerageze.",
+    "retry": "Ongera ugerageze",
+    "previous": "Ibibanza",
+    "pageOf": "Urupapuro rwa {{page}} kuri {{total}}",
     "requestFailed": "Igikorwa nticyakunze"
   },
   "theme": {
@@ -227,7 +231,13 @@
     "newPasswordsMismatch": "Ijambobanga rishya n’iryemeza ntibihura",
     "selectProfileImage": "Nyamuneka hitamo ifoto y’umwirondoro (JPG, JPEG, PNG, cyangwa WEBP).",
     "unsupportedImageFormat": "Ubwoko bwa dosiye ntibwemewe. Ohereza ifoto ya JPG, JPEG, PNG, cyangwa WEBP.",
-    "imageTooLarge": "Ifoto ni nini cyane. Ntirenza 5MB."
+    "imageTooLarge": "Ifoto ni nini cyane. Ntirenza 5MB.",
+    "unsupportedReceiptFormat": "Ubwoko bwa dosiye ntibwemewe. Ohereza ifoto ya JPG, JPEG, PNG, WEBP cyangwa inyandiko ya PDF.",
+    "unsupportedLogoFormat": "Ubwoko bw'ikirango ntibwemewe. Ohereza dosiye ya PNG, JPG, JPEG, SVG cyangwa WEBP.",
+    "fileTooLarge": "Dosiye wahisemo ni nini cyane. Ntirenza 5MB.",
+    "emptyFile": "Dosiye wahisemo irimo ubusa (0 bytes). Nyamuneka hitamo dosiye nyayo.",
+    "unsupportedDocFormat": "Ubwoko bw’inyandiko ntibwemewe. Ibimenyerewe: PDF, DOCX, JPG, JPEG, cyangwa PNG (ntirenza 10MB).",
+    "documentTooLarge": "Inyandiko irenza urugero ntarengwa rwa 10MB."
   },
   "components": {
     "logoutTitle": "Emeza Gusohoka",
@@ -303,6 +313,17 @@
     "verifying": "Birimo kugenzurwa...",
     "verifyContinue": "Emeza & Komeza",
     "resendCode": "Ongera wohereze kode",
+    "sendOtpCode": "Ohereza Kode yo Kwemeza",
+    "sendingOtp": "Birimo koherezwa...",
+    "otpExpiresIn": "Kode irangira mu",
+    "otpExpiredNotice": "Kode yarangiye. Saba kode nshya hasi.",
+    "resendInSeconds": "Ongera usabe mu masegonda {{seconds}}s",
+    "verifyOtpCode": "Emeza Kode",
+    "emailVerifiedLabel": "Imeyili yemejwe",
+    "changeEmailAddress": "Koresha indi imeyili",
+    "verifyEmailStepSubtitle": "Banza wandike imeyili yawe kugira ngo wakire kode nyayo y’imibare 6 yo kwemeza.",
+    "completeRegistrationSubtitle": "Imeyili yawe yemejwe. Uzuza umwirondoro wawe hasi kugira ngo urangize.",
+    "verifyEmailNow": "Emeza Imeyili na OTP",
     "activateTitle": "Fungura Konti y’Ikigo",
     "activateSubtitle": "Emeza ubutumire bwawe maze ushyireho ijambobanga rikomeye. Ifoto y’umwirondoro si itegeko.",
     "validatingInvite": "Birimo kugenzura ubutumire...",
@@ -370,48 +391,152 @@
     "productivityDesc": "Biteza imbere inshingano zisobanutse hakoreshejwe uburenganzira bw’abakozi, raporo z’ibikorwa, no kureba inyungu ya buri munsi.",
     "readFullAbout": "Soma ibyerekeye twebwe & Umwirondoro w’Umuhanga",
     "featuresEyebrow": "Ubushobozi bw’Urubuga",
-    "featuresTitle": "Ibice cumi na bitandatu bikorana mu gucunga ubucuruzi bwose",
-    "featuresDesc": "Buri shami—kuva ku bagurisha n’ububiko kugeza ku mari, imirimo y’abakozi, na komande z’abakiriya—rikorera ku makuru amwe asobanutse.",
+    "featuresTitle": "Ibice cumi na birindwi bikorana mu gucunga ubucuruzi bwose",
+    "featuresDesc": "Buri shami—kuva ku bagurisha, ibyaguzwe n’ububiko kugeza ku mari, imirimo y’abakozi, na komande z’abakiriya—rikorera ku makuru amwe asobanutse.",
+    "viewMore": "Reba Ibindi",
+    "viewLess": "Reba Bike",
+    "viewAllFeatures": "Reba Ibice Byose",
+    "showingModulesCount": "Haragaragara {{shown}} muri {{total}} bice",
     "features": [
-      { "title": "Gucunga Ikigo", "desc": "Tunganya imyirondoro y’ikigo, ifaranga rikoreshwa, amategeko y’umusoro, amasaha y’akazi, n’imiyoborere ya buri munsi." },
-      { "title": "Ibyagurishijwe & POS", "desc": "Kora igurisha ryihuse ukoresheje gushakisha ibicuruzwa, gusoma barcode, kwishyura mu buryo bunyuranye, n’inyemezabuguzi." },
-      { "title": "Gucunga Ibicuruzwa", "desc": "Bika urutonde rw’ibicuruzwa (SKU), ibyiciro, ibiciro, ikiguzi, n’ibicuruzwa bigurishwa kuri rubanda." },
-      { "title": "Gucunga Ububiko", "desc": "Kurikirana ingano y’ibiri mu bubiko mu gihe nyacyo, imenyesha ry’ibishize, n’iyimurwa hagati y’amashami." },
-      { "title": "Gucunga Abakiriya", "desc": "Bika imyirondoro y’abakiriya bemejwe, ikurikiranamibare ry’amadeni, amanota y’ubudahemuka, n’ibibazo byabo." },
-      { "title": "Gucunga Abagemura", "desc": "Kurikirana abagemura ibicuruzwa, amateka y’ibyo waguze, n’amadeni ufitiye abagemura mu mashami yose." },
-      { "title": "Gucunga Imari", "desc": "Andika amafaranga yinjiye, ikiguzi cy’ibyacurujwe, amafaranga yasohotse yemejwe, n’inyungu igaragara neza." },
-      { "title": "Gucunga Abakozi", "desc": "Shyira abakozi mu mashami ufite uburenganzira bushingiye ku nshingano z’abayobozi, ababitsi, n’abacungamari." },
-      { "title": "Gucunga Amashami", "desc": "Yobora amashami menshi munsi y’ikigo kimwe, buri shami rifite ububiko, ibyagurishijwe n’abakozi baryo." },
-      { "title": "Gucunga Komande", "desc": "Akira komande z’abakiriya baturutse ku rubuga maze uzikurikirane kuva zemejwe kugeza zigeze ku mukiriya." },
-      { "title": "Raporo & Isesengura", "desc": "Reba raporo za buri munsi, buri kwezi n’umwaka, ugereranye amashami, kandi usohore raporo zikenewe." },
-      { "title": "Itumanaho mu Kigo", "desc": "Huza abakozi bo mu mashami ukoresheje ubutumwa bw’imbere n’amatangazo y’ikigo cyose." },
-      { "title": "Gucunga Imirimo", "desc": "Tanga imirimo ku bakozi, ushyireho amatariki ntarengwa n’ibitekerezo byo gufatanya." },
-      { "title": "Kwamamaza", "desc": "Shyiraho kandi utangaze amashusho yamamaza (video) ahuza n’ibicuruzwa byawe ku rubuga." },
-      { "title": "Ubufasha bwa AI", "desc": "Baza ibibazo by’ubucuruzi mu magambo asanzwe bishingiye ku makuru nyayo y’ibyagurishijwe n’ububiko byawe." },
-      { "title": "Amenyesha & Iburira", "desc": "Menya igihe ububiko bugabanutse, komande nshya zije, iyemezwa ry’amafaranga asohoka, n’umutekano." }
+      {
+        "title": "Gucunga Ikigo",
+        "desc": "Tunganya imyirondoro y’ikigo, ifaranga rikoreshwa, amategeko y’umusoro, amasaha y’akazi, n’imiyoborere ya buri munsi."
+      },
+      {
+        "title": "POS (Kugurisha)",
+        "desc": "Kora igurisha ryihuse ukoresheje gushakisha ibicuruzwa, gusoma barcode, kwishyura mu buryo bunyuranye, n’inyemezabuguzi."
+      },
+      {
+        "title": "Ububiko (Inventory)",
+        "desc": "Kurikirana ingano y’ibiri mu bubiko mu gihe nyacyo, imenyesha ry’ibishize, n’iyimurwa hagati y’amashami."
+      },
+      {
+        "title": "Ibicuruzwa",
+        "desc": "Bika urutonde rw’ibicuruzwa (SKU), ibyiciro, ibiciro, ikiguzi, n’ibicuruzwa bigurishwa kuri rubanda."
+      },
+      {
+        "title": "Imari",
+        "desc": "Andika amafaranga yinjiye, ikiguzi cy’ibyacurujwe, amafaranga yasohotse yemejwe, n’inyungu igaragara neza."
+      },
+      {
+        "title": "Abakozi",
+        "desc": "Shyira abakozi mu mashami ufite uburenganzira bushingiye ku nshingano z’abayobozi, imishahara, ababitsi, n’abacungamari."
+      },
+      {
+        "title": "Amashami",
+        "desc": "Yobora amashami menshi munsi y’ikigo kimwe, buri shami rifite ububiko, ibyagurishijwe n’abakozi baryo."
+      },
+      {
+        "title": "Abakiriya",
+        "desc": "Bika imyirondoro y’abakiriya bemejwe, ikurikiranamibare ry’amadeni, amanota y’ubudahemuka, n’ibibazo byabo."
+      },
+      {
+        "title": "Abagemura",
+        "desc": "Kurikirana abagemura ibicuruzwa, amateka y’ibyo waguze, n’amadeni ufitiye abagemura mu mashami yose."
+      },
+      {
+        "title": "Komande",
+        "desc": "Akira komande z’abakiriya baturutse ku rubuga maze uzikurikirane kuva zemejwe kugeza zigeze ku mukiriya."
+      },
+      {
+        "title": "Ibyaguzwe (Purchases)",
+        "desc": "Tanga komande ku bagemura, andika ibyageze mu bubiko, uvugurure ingano y’ibihari, kandi wishyure inyemezabuguzi."
+      },
+      {
+        "title": "Raporo",
+        "desc": "Reba raporo za buri munsi, buri kwezi n’umwaka, ugereranye amashami, kandi usohore raporo zikenewe."
+      },
+      {
+        "title": "Itumanaho",
+        "desc": "Huza abakozi bo mu mashami ukoresheje ubutumwa bw’imbere n’amatangazo y’ikigo cyose."
+      },
+      {
+        "title": "Imirimo",
+        "desc": "Tanga imirimo ku bakozi, ushyireho amatariki ntarengwa n’ibitekerezo byo gufatanya."
+      },
+      {
+        "title": "Kwamamaza",
+        "desc": "Shyiraho kandi utangaze amashusho yamamaza (video) ahuza n’ibicuruzwa byawe ku rubuga."
+      },
+      {
+        "title": "Ubufasha bwa AI",
+        "desc": "Baza ibibazo by’ubucuruzi mu magambo asanzwe bishingiye ku makuru nyayo y’ibyagurishijwe n’ububiko byawe."
+      },
+      {
+        "title": "Amenyesha",
+        "desc": "Menya igihe ububiko bugabanutse, komande nshya zije, iyemezwa ry’amafaranga asohoka, n’umutekano."
+      }
     ],
     "howEyebrow": "Uko BizTrade Africa Ikora",
     "howTitle": "Imiyoborere inoze kuva mu iyandikisha kugeza ku bucuruzi bwa buri munsi",
     "howDesc": "Ibigo byemezwa bikanandikwa n’Umuyobozi Mukuru w’Urubuga kugira ngo buri kigo gitangirane ubuyobozi n’umutekano w’amakuru.",
     "workflowSteps": [
-      { "step": "01", "title": "Umuyobozi Mukuru w’Urubuga yandika ikigo", "desc": "Akusanya amakuru nyayo y’ikigo, imisoro, ifatabuguzi, n’ishami rikuru." },
-      { "step": "02", "title": "Umuyobozi w’Ikigo yakira ubutumire bwo gufungura konti", "desc": "Yakira ubutumire bwizewe, ashyiraho ifoto y’umwirondoro, kandi akishyiriraho ijambobanga rye." },
-      { "step": "03", "title": "Umuyobozi w’Ikigo ashyiraho amashami, ibicuruzwa n’abakozi", "desc": "Ategura amashami, ibyiciro, ibicuruzwa, ububiko bw’ibanze, n’abakozi bafite inshingano zisobanutse." },
-      { "step": "04", "title": "Abakozi bakora imirimo ya buri munsi", "desc": "Abagurisha, abashinzwe ububiko n’abacungamari bakora POS, kwimura ibicuruzwa, no gucunga amafaranga." },
-      { "step": "05", "title": "Umuyobozi agenzura raporo, inyungu n’ibikorwa", "desc": "Areba raporo z’imari, imikorere y’amashami, imirimo y’abakozi, n’igenzura ry’ibyakozwe." },
-      { "step": "06", "title": "Abakiriya basura ibigo, bagatumiza bakanakurikirana komande", "desc": "Abakiriya biyandikishije bareba ibicuruzwa, amavideo yamamaza, bagatanga komande bakanazikurikirana." }
+      {
+        "step": "01",
+        "title": "Umuyobozi Mukuru w’Urubuga yandika ikigo",
+        "desc": "Akusanya amakuru nyayo y’ikigo, imisoro, ifatabuguzi, n’ishami rikuru."
+      },
+      {
+        "step": "02",
+        "title": "Umuyobozi w’Ikigo yakira ubutumire bwo gufungura konti",
+        "desc": "Yakira ubutumire bwizewe, ashyiraho ifoto y’umwirondoro, kandi akishyiriraho ijambobanga rye."
+      },
+      {
+        "step": "03",
+        "title": "Umuyobozi w’Ikigo ashyiraho amashami, ibicuruzwa n’abakozi",
+        "desc": "Ategura amashami, ibyiciro, ibicuruzwa, ububiko bw’ibanze, n’abakozi bafite inshingano zisobanutse."
+      },
+      {
+        "step": "04",
+        "title": "Abakozi bakora imirimo ya buri munsi",
+        "desc": "Abagurisha, abashinzwe ububiko n’abacungamari bakora POS, kwimura ibicuruzwa, no gucunga amafaranga."
+      },
+      {
+        "step": "05",
+        "title": "Umuyobozi agenzura raporo, inyungu n’ibikorwa",
+        "desc": "Areba raporo z’imari, imikorere y’amashami, imirimo y’abakozi, n’igenzura ry’ibyakozwe."
+      },
+      {
+        "step": "06",
+        "title": "Abakiriya basura ibigo, bagatumiza bakanakurikirana komande",
+        "desc": "Abakiriya biyandikishije bareba ibicuruzwa, amavideo yamamaza, bagatanga komande bakanazikurikirana."
+      }
     ],
     "benefitsEyebrow": "Impamvu Ibigo Bihitamo BizTrade Africa",
     "benefitsTitle": "Inyungu zigaragara mu mikorere ya buri shami",
     "benefits": [
-      { "title": "Imitunganyirize Myiza y’Ikigo", "desc": "Huza ibicuruzwa, amashami, abagemura, abakozi, na komande mu buryo bumwe butunganijwe." },
-      { "title": "Gukurikirana Neza Ibyagurishijwe & Ububiko", "desc": "Buri gurisha cyangwa ihindura ry’ububiko rihita rivugurura imibare n’amateka byikora." },
-      { "title": "Ubufatanye Bunoze mu Bakozi", "desc": "Huza amatsinda y’amashami ukoresheje imirimo yatanzwe, ubutumwa bw’imbere, n’inshingano zisobanutse." },
-      { "title": "Kugaragaza Neza Imari", "desc": "Kurikirana amafaranga yinjiye, ayasohotse yemejwe, amadeni n’inyungu utiriwe wandika mu mpapuro." },
-      { "title": "Serivisi Yihuse ku Bakiriya", "desc": "Ihutisha kwishyura ukoresheje barcode, inyemezabuguzi, na komande zikorwa kuri murandasi." },
-      { "title": "Kugabanya Amakosa", "desc": "Simbuza amakayi y’intoki amakuru yagenzuwe, imisoro ibarwa neza, n’inyandiko z’ububiko." },
-      { "title": "Kugenzura Amashami Menshi Hamwe", "desc": "Yobora icyicaro gikuru n’amashami yose uhereye ku rupapuro rumwe ufite umutekano w’amakuru." },
-      { "title": "Yubakiwe Gukura mu Gihe Kirekire", "desc": "Kwaguka byoroshye kuva ku iduka rimwe kugeza ku kigo gifite amashami menshi." }
+      {
+        "title": "Imitunganyirize Myiza y’Ikigo",
+        "desc": "Huza ibicuruzwa, amashami, abagemura, abakozi, na komande mu buryo bumwe butunganijwe."
+      },
+      {
+        "title": "Gukurikirana Neza Ibyagurishijwe & Ububiko",
+        "desc": "Buri gurisha cyangwa ihindura ry’ububiko rihita rivugurura imibare n’amateka byikora."
+      },
+      {
+        "title": "Ubufatanye Bunoze mu Bakozi",
+        "desc": "Huza amatsinda y’amashami ukoresheje imirimo yatanzwe, ubutumwa bw’imbere, n’inshingano zisobanutse."
+      },
+      {
+        "title": "Kugaragaza Neza Imari",
+        "desc": "Kurikirana amafaranga yinjiye, ayasohotse yemejwe, amadeni n’inyungu utiriwe wandika mu mpapuro."
+      },
+      {
+        "title": "Serivisi Yihuse ku Bakiriya",
+        "desc": "Ihutisha kwishyura ukoresheje barcode, inyemezabuguzi, na komande zikorwa kuri murandasi."
+      },
+      {
+        "title": "Kugabanya Amakosa",
+        "desc": "Simbuza amakayi y’intoki amakuru yagenzuwe, imisoro ibarwa neza, n’inyandiko z’ububiko."
+      },
+      {
+        "title": "Kugenzura Amashami Menshi Hamwe",
+        "desc": "Yobora icyicaro gikuru n’amashami yose uhereye ku rupapuro rumwe ufite umutekano w’amakuru."
+      },
+      {
+        "title": "Yubakiwe Gukura mu Gihe Kirekire",
+        "desc": "Kwaguka byoroshye kuva ku iduka rimwe kugeza ku kigo gifite amashami menshi."
+      }
     ],
     "sectorsTitle": "Inzego z’Ubucuruzi Zishobora Gukoresha Urubuga",
     "sectorsDesc": "Yubatswe ku buryo ikorana neza n’ubucuruzi butandukanye buranguza, budandaza, n’ubutanga serivisi.",
@@ -442,6 +567,7 @@
     "directorySubtitle": "Shakisha ibigo byemejwe kuri BizTrade Africa, urebe ibicuruzwa byabyo, kandi utange komande.",
     "searchBusinessesPlaceholder": "Shakisha ibigo cyangwa imijyi...",
     "allCategories": "Ibyiciro Byose",
+    "allLocations": "Ahantu Hose",
     "noBusinessesMatch": "Nta bigo biboneka bihuye n’ibyo ushakisha",
     "noBusinessesMatchDesc": "Ibigo bigaragara hano iyo bimaze kwandikwa no kwemezwa n’Umuyobozi Mukuru w’Urubuga.",
     "productsCount": "ibicuruzwa",
@@ -491,12 +617,74 @@
     "featuresPageTitle": "Ubushobozi Bwose bw’Imikorere",
     "featuresPageSubtitle": "Byubakiwe amaduka ya elegitoroniki, amasoko manini, farumasi, ibikoresho by’ubwubatsi, n’abatanga serivisi.",
     "featuresPageModules": [
-      { "title": "Kugurisha (POS)", "desc": "Gushakisha vuba no gusoma barcode, kugabanya ibiciro byemejwe, MTN MoMo, Airtel Money, Cash, Ikarita, n’inyemezabuguzi ya PDF." },
-      { "title": "Ububiko & Kwimura", "desc": "Buri mpinduka mu bubiko yandikwa mu mateka adasibama. Sisitemu irinda kugurisha ibirenze ibihari." },
-      { "title": "Ibyaguzwe & Abagemura", "desc": "Tanga komande z’ibyaguzwe, kurikirana amadeni y’abagemura, kandi wongere ububiko igihe ibicuruzwa byakiriwe." },
-      { "title": "Gucunga Imari", "desc": "Kurikirana amafaranga yinjiye, ikiguzi, inyungu mbumbe, amafaranga asohoka yemejwe, n’uruhererekane rw’amafaranga." },
-      { "title": "Abakiriya & Komande", "desc": "Genzura amadeni y’abakiriya, amanota y’ubudahemuka, ibibazo, n’ibyiciro 7 byo gukurikirana komande." },
-      { "title": "Abakozi, Imirimo & Chat", "desc": "Tumira abakozi bafite inshingano zihariye, ubatangeho imirimo, utangaze amakuru, kandi muganire ako kanya." }
+      {
+        "title": "Gucunga Ikigo",
+        "desc": "Imiyoborere y’ikigo yose mu buryo bwisanzuye: ikirango, ifaranga, imisoro, amasaha y’akazi, n’umutekano."
+      },
+      {
+        "title": "Kugurisha (POS)",
+        "desc": "Gushakisha vuba no gusoma barcode, kugabanya ibiciro byemejwe, MTN MoMo, Airtel Money, Cash, Ikarita, n’inyemezabuguzi."
+      },
+      {
+        "title": "Ububiko & Kwimura",
+        "desc": "Buri mpinduka mu bubiko yandikwa mu mateka adasibama. Sisitemu irinda kugurisha ibirenze ibihari."
+      },
+      {
+        "title": "Ibicuruzwa (Catalog)",
+        "desc": "Tunganya SKU, barcode, ibyiciro, ibiciro byo kugura no kugurisha, amafoto n’ibicuruzwa byerekanwa ku rubuga."
+      },
+      {
+        "title": "Imari & Amafaranga Asohoka",
+        "desc": "Kurikirana amafaranga yinjiye, ikiguzi, inyungu mbumbe, amafaranga asohoka yemejwe, n’uruhererekane rw’amafaranga."
+      },
+      {
+        "title": "Abakozi & Imishahara",
+        "desc": "Tumira abakozi bafite inshingano zihariye, ubagenere amashami, kandi utunganye imishahara yabo."
+      },
+      {
+        "title": "Amashami Menshi",
+        "desc": "Yobora icyicaro gikuru n’amashami yo mu turere munsi ya konti imwe ufite ububiko n’ibibaruro bitandukanye."
+      },
+      {
+        "title": "Abakiriya (CRM)",
+        "desc": "Genzura amadeni y’abakiriya, amanota y’ubudahemuka, ibibazo, n’inyandiko za serivisi."
+      },
+      {
+        "title": "Abagemura (Suppliers)",
+        "desc": "Bika imyirondoro y’abagemura, amateka yo kurangura, n’imyenda ikigo gifitiye abagemura."
+      },
+      {
+        "title": "Komande z’Abakiriya",
+        "desc": "Akira komande zivuye ku rubuga maze uzikurikirane neza kuva zemejwe kugeza zigeze ku mukiriya."
+      },
+      {
+        "title": "Ibyaguzwe & Kwakira Ibicuruzwa",
+        "desc": "Tanga komande z’ibyaguzwe, andika ibicuruzwa byakiriwe mu ishami, kandi wishyure inyemezabuguzi z’abagemura."
+      },
+      {
+        "title": "Raporo & Gusohora Imibare",
+        "desc": "Sesengura inyungu za buri munsi, buri kwezi n’umwaka maze usohore amakuru muri CSV."
+      },
+      {
+        "title": "Itumanaho ry’Ikigo",
+        "desc": "Huza abakozi bo mu mashami ukoresheje ubutumwa bw’imbere n’amatangazo rusange."
+      },
+      {
+        "title": "Gucunga Imirimo",
+        "desc": "Tanga imirimo ifite ibyihutirwa, amatariki ntarengwa, n’ibitekerezo byo gufatanya."
+      },
+      {
+        "title": "Kwamamaza na Video",
+        "desc": "Shyiraho amashusho yamamaza ahuza n’ibicuruzwa byawe ukoresheje kohereza mu bice byizewe."
+      },
+      {
+        "title": "Ubufasha bwa AI",
+        "desc": "Baza ibibazo by’ubucuruzi mu magambo asanzwe bishingiye ku makuru nyayo y’ikigo cyawe."
+      },
+      {
+        "title": "Amenyesha mu Gihe Nyacyo",
+        "desc": "Menya ako kanya ibicuruzwa bigiye gushira, komande nshya, iyemezwa ry’imari n’umutekano."
+      }
     ],
     "pricingTitle": "Ibiciro By’Ifatabuguzi mu RWF Bisobanutse",
     "pricingSubtitle": "Ibigo byandikwa bikanemezwa n’Umuyobozi Mukuru w’Urubuga. Twandikire kugira ngo tugufungurire ikigo cyawe.",
@@ -800,7 +988,10 @@
     "colOrders": "Komande",
     "colLoyaltyPts": "Amanota",
     "colOutstanding": "Umwenda",
-    "colTotalSpent": "Yose Yakoreshejwe"
+    "colTotalSpent": "Yose Yakoreshejwe",
+    "exportCsv": "Kuramo Raporo ya CSV",
+    "generatingCsv": "Kora CSV ({{progress}}%)",
+    "exportJobRunning": "Raporo irimo gutunganyirizwa mu bubiko..."
   },
   "products": {
     "title": "Urutonde rw’Ibicuruzwa",
@@ -1162,7 +1353,7 @@
     "subtitle": "Shyiraho amashusho ya MP4 cyangwa WEBM yamamaza ibicuruzwa na serivisi byawe, uyasuzume mbere yo kuyatangaza, kandi uyagaragaze ku rubuga rw’ubucuruzi bwawe.",
     "uploadVideoAd": "Shyiraho Video Yamamaza",
     "errFormat": "Imiterere ya video ntiyemewe. Nyamuneka shyiraho video ya MP4 cyangwa WEBM.",
-    "errVideoSize": "Ingano ya video irenze urugero ntarengwa rwa 50MB.",
+    "errVideoSize": "Ingano ya video irenze urugero ntarengwa rwa 250MB.",
     "errThumbFormat": "Ifoto igaragaza video igomba kuba JPG, JPEG, PNG, cyangwa WEBP.",
     "errThumbSize": "Ifoto igaragaza video irenze 5MB.",
     "errMissingVideo": "Nyamuneka hitamo dosiye ya video ya MP4 cyangwa WEBM yo gushyiraho.",
@@ -1179,7 +1370,7 @@
     "deleteAria": "Siba video yamamaza",
     "editModalTitle": "Hindura Video Yamamaza",
     "uploadModalTitle": "Shyiraho Video Yamamaza",
-    "modalFormatsHint": "Imiterere yemewe: MP4, WEBM (ntarengwa 50MB). Reba video mbere yo kuyitangaza.",
+    "modalFormatsHint": "Ubwoko bwemewe: MP4, WEBM (kugeza kuri 250MB, nta gihe ntarengwa cyo kohereza). Banza uyirebe mbere yo kuyishyira ahagaragara.",
     "videoTitleLabel": "Umutwe wa Video *",
     "videoTitlePlaceholder": "urugero: Kwerekana Imashini y’Ikawa i Kigali",
     "descriptionLabel": "Ibisobanuro",
@@ -1200,7 +1391,23 @@
     "previewModalTitle": "Isuzuma rya Video — {{title}}",
     "deleteModalTitle": "Siba Video Yamamaza",
     "deleteConfirm": "Uremeza ko ushaka gusiba burundu \"{{title}}\"? Abakiriya ntibazongera kubona iri tangazo.",
-    "deleteVideo": "Siba Video"
+    "deleteVideo": "Siba Video",
+    "statusUploading": "Birimo koherezwa",
+    "statusProcessing": "Birimo gutunganywa",
+    "statusSaving": "Birimo kubikwa",
+    "statusCompleted": "Byarangiye",
+    "statusFailed": "Byanze",
+    "statusCancelled": "Byahagaritswe",
+    "completedSuccess": "Video yamamaza yoherejwe, iragenzurwa kandi irabikwa neza.",
+    "jobNotFoundErr": "Igikorwa cyo kurangiza kubika video nticyabonetse.",
+    "jobFailedErr": "Gutunganya video byanze.",
+    "uploadCancelledMsg": "Kohereza byahagaritswe kandi ibice by'agateganyo byahanaguwe.",
+    "chunkRetryFailed": "Kohereza igice cya video byanze nyuma yo kugerageza kenshi.",
+    "reselectToResume": "Hitamo \"{{name}}\" ({{size}}) kugira ngo ukomeze kohereza aho byari bigeze.",
+    "cancelUploadBtn": "Hagarika Kohereza",
+    "resumeBannerTitle": "Hari Kohereza Video Kutararangira",
+    "resumeUploadBtn": "Komeza Kohereza",
+    "discardUploadBtn": "Siba"
   },
   "onboarding": {
     "title": "Fungura Ahakorera Ubucuruzi",

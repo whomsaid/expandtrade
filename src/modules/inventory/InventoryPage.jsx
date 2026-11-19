@@ -17,6 +17,8 @@ export default function InventoryPage() {
   const [adjForm, setAdjForm] = useState({ product_id: '', adjustment_type: 'add', quantity: '1', reason: '' });
   const [trfForm, setTrfForm] = useState({ from_branch_id: '', to_branch_id: '', product_id: '', quantity: '1', notes: '' });
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   const currency = workspace?.business?.currency_code || 'RWF';
@@ -47,29 +49,37 @@ export default function InventoryPage() {
 
   const handleAdjust = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
     setMessage('');
+    setSaving(true);
     try {
       await api.post('/inventory/adjust', adjForm);
       setShowAdjust(false);
       setMessage(t('inventory.adjustedSuccess'));
       await loadInventory();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleTransfer = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
     setMessage('');
+    setSaving(true);
     try {
       const { data } = await api.post('/inventory/transfer', trfForm);
       setShowTransfer(false);
       setMessage(t('inventory.transferSuccess', { ref: data.reference_number }));
       await loadInventory();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -86,6 +96,7 @@ export default function InventoryPage() {
             <button
               type="button"
               onClick={() => {
+                setModalError('');
                 setAdjForm({ product_id: items[0]?.product_id || '', adjustment_type: 'add', quantity: '1', reason: '' });
                 setShowAdjust(true);
               }}
@@ -98,6 +109,7 @@ export default function InventoryPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setModalError('');
                   setTrfForm({
                     from_branch_id: activeBranchId || branches[0]?.id || '',
                     to_branch_id: branches.find((b) => b.id !== activeBranchId)?.id || '',
@@ -244,6 +256,7 @@ export default function InventoryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('inventory.adjustModalTitle')}</h2>
+            {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
             <form onSubmit={handleAdjust} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('inventory.productLabel')}</label>
@@ -271,8 +284,8 @@ export default function InventoryPage() {
                 <input required value={adjForm.reason} onChange={(e) => setAdjForm({ ...adjForm, reason: e.target.value })} placeholder={t('inventory.reasonPlaceholder')} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowAdjust(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('inventory.applyAdjustment')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowAdjust(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">{saving ? t('common.saving') : t('inventory.applyAdjustment')}</button>
               </div>
             </form>
           </div>
@@ -284,6 +297,7 @@ export default function InventoryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('inventory.transferModalTitle')}</h2>
+            {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
             <form onSubmit={handleTransfer} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -316,8 +330,8 @@ export default function InventoryPage() {
                 <input value={trfForm.notes} onChange={(e) => setTrfForm({ ...trfForm, notes: e.target.value })} placeholder={t('inventory.notesPlaceholder')} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowTransfer(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('inventory.completeTransfer')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowTransfer(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">{saving ? t('common.saving') : t('inventory.completeTransfer')}</button>
               </div>
             </form>
           </div>

@@ -59,6 +59,10 @@
     "softworld": "softworld",
     "allRightsReserved": "Tous droits réservés.",
     "requestTimeout": "Délai d'attente dépassé. Vérifiez votre connexion et réessayez.",
+    "networkError": "Impossible de se connecter au serveur. Vérifiez votre connexion et réessayez.",
+    "retry": "Réessayer",
+    "previous": "Précédent",
+    "pageOf": "Page {{page}} sur {{total}}",
     "requestFailed": "Échec de la requête"
   },
   "theme": {
@@ -227,7 +231,13 @@
     "newPasswordsMismatch": "Le nouveau mot de passe et la confirmation ne correspondent pas",
     "selectProfileImage": "Veuillez sélectionner une image de profil (JPG, JPEG, PNG ou WEBP).",
     "unsupportedImageFormat": "Format de fichier non pris en charge. Veuillez importer une image JPG, JPEG, PNG ou WEBP.",
-    "imageTooLarge": "Le fichier image est trop volumineux. Taille maximale autorisée : 5 Mo."
+    "imageTooLarge": "Le fichier image est trop volumineux. Taille maximale autorisée : 5 Mo.",
+    "unsupportedReceiptFormat": "Format non pris en charge. Veuillez importer une image JPG, JPEG, PNG, WEBP ou un document PDF.",
+    "unsupportedLogoFormat": "Format de logo non pris en charge. Veuillez importer un fichier PNG, JPG, JPEG, SVG ou WEBP.",
+    "fileTooLarge": "Le fichier sélectionné est trop volumineux. Taille maximale autorisée : 5 Mo.",
+    "emptyFile": "Le fichier sélectionné est vide (0 octet). Veuillez choisir un fichier valide.",
+    "unsupportedDocFormat": "Format de document non pris en charge. Formats autorisés : PDF, DOCX, JPG, JPEG ou PNG (max 10 Mo).",
+    "documentTooLarge": "Le document dépasse la limite maximale de 10 Mo."
   },
   "components": {
     "logoutTitle": "Confirmer la déconnexion",
@@ -303,6 +313,17 @@
     "verifying": "Vérification...",
     "verifyContinue": "Vérifier et continuer",
     "resendCode": "Renvoyer le code de vérification",
+    "sendOtpCode": "Envoyer le code de vérification",
+    "sendingOtp": "Envoi du code...",
+    "otpExpiresIn": "Le code expire dans",
+    "otpExpiredNotice": "Code expiré. Demandez un nouveau code ci-dessous.",
+    "resendInSeconds": "Renvoyer dans {{seconds}}s",
+    "verifyOtpCode": "Vérifier le code",
+    "emailVerifiedLabel": "E-mail vérifié",
+    "changeEmailAddress": "Utiliser un autre e-mail",
+    "verifyEmailStepSubtitle": "Saisissez d'abord votre adresse e-mail pour recevoir un vrai code de vérification à usage unique à 6 chiffres.",
+    "completeRegistrationSubtitle": "Votre e-mail est vérifié. Complétez votre profil client ci-dessous.",
+    "verifyEmailNow": "Vérifier l'e-mail par OTP",
     "activateTitle": "Activer le compte entreprise",
     "activateSubtitle": "Vérifiez votre invitation et définissez un mot de passe sécurisé pour ouvrir votre espace. La photo de profil est optionnelle.",
     "validatingInvite": "Validation de l'invitation d'activation...",
@@ -370,48 +391,152 @@
     "productivityDesc": "Renforce la responsabilité grâce aux rôles, journaux d'audit, tâches d'équipe et visibilité quotidienne des bénéfices.",
     "readFullAbout": "Lire À propos & Profil du développeur",
     "featuresEyebrow": "Capacités de la plateforme",
-    "featuresTitle": "Seize modules intégrés pour des opérations commerciales complètes",
-    "featuresDesc": "Chaque département—du comptoir de vente et des entrepôts aux finances, tâches d'équipe et commandes clients—fonctionne sur des données cohérentes.",
+    "featuresTitle": "Dix-sept modules intégrés pour des opérations commerciales complètes",
+    "featuresDesc": "Chaque département—du comptoir de vente, des achats et des entrepôts aux finances, tâches d'équipe et commandes clients—fonctionne sur des données cohérentes.",
+    "viewMore": "Voir plus",
+    "viewLess": "Voir moins",
+    "viewAllFeatures": "Voir toutes les fonctionnalités",
+    "showingModulesCount": "Affichage de {{shown}} sur {{total}} modules",
     "features": [
-      { "title": "Gestion d'entreprise", "desc": "Organisez l'identité, les devises par défaut, les règles fiscales, les horaires et la gouvernance dans un espace isolé." },
-      { "title": "Ventes et Point de Vente (POS)", "desc": "Encaissez rapidement avec recherche produit, code-barres, paiements mixtes et reçus imprimables." },
-      { "title": "Gestion des produits", "desc": "Maintenez des catalogues SKU structurés, catégories, tarifs, suivi des coûts et fiches actives." },
-      { "title": "Gestion des stocks", "desc": "Suivez les quantités en temps réel, les alertes de rupture, les ajustements et les transferts entre succursales." },
-      { "title": "Gestion des clients", "desc": "Créez des profils clients vérifiés, suivez les créances, la fidélité et gérez les demandes." },
-      { "title": "Gestion des fournisseurs", "desc": "Suivez les contacts fournisseurs, l'historique des achats et les soldes dus sur toutes les succursales." },
-      { "title": "Gestion financière", "desc": "Enregistrez revenus, coûts des ventes, dépenses avec validation et rentabilité en temps réel." },
-      { "title": "Gestion des employés", "desc": "Affectez le personnel aux succursales avec des permissions par rôle (gérants, caissiers, comptables, stock)." },
-      { "title": "Gestion des succursales", "desc": "Pilotez plusieurs magasins sous un même compte avec séparation des stocks, ventes et équipes." },
-      { "title": "Gestion des commandes", "desc": "Recevez les commandes depuis l'annuaire public et suivez-les de la confirmation à la livraison." },
-      { "title": "Rapports et analyses", "desc": "Consultez les synthèses quotidiennes, mensuelles et annuelles, comparaisons et exports." },
-      { "title": "Communication d'entreprise", "desc": "Alignez vos équipes avec des canaux de messagerie internes et des annonces globales." },
-      { "title": "Gestion des tâches", "desc": "Assignez des tâches opérationnelles, fixez échéances et priorités et collaborez par commentaires." },
-      { "title": "Publicité promotionnelle", "desc": "Importez et publiez des vidéos promotionnelles liées aux produits sur votre vitrine publique." },
-      { "title": "Assistant IA d'entreprise", "desc": "Posez des questions en langage naturel basées sur vos propres ventes, stocks et succursales." },
-      { "title": "Notifications et alertes", "desc": "Soyez informé des stocks faibles, nouvelles commandes, validations de dépenses et alertes sécurité." }
+      {
+        "title": "Gestion d'entreprise",
+        "desc": "Organisez l'identité, les devises par défaut, les règles fiscales, les horaires et la gouvernance dans un espace isolé."
+      },
+      {
+        "title": "Point de vente (POS)",
+        "desc": "Encaissez rapidement avec recherche produit, code-barres, paiements mixtes et reçus imprimables."
+      },
+      {
+        "title": "Inventaire",
+        "desc": "Suivez les quantités en temps réel, les alertes de rupture, les ajustements et les transferts entre succursales."
+      },
+      {
+        "title": "Produits",
+        "desc": "Maintenez des catalogues SKU structurés, catégories, tarifs, suivi des coûts et fiches actives."
+      },
+      {
+        "title": "Finances",
+        "desc": "Enregistrez revenus, coûts des ventes, dépenses avec validation et rentabilité en temps réel."
+      },
+      {
+        "title": "Employés",
+        "desc": "Affectez le personnel aux succursales avec des permissions par rôle (gérants, caissiers, comptables, paie et stock)."
+      },
+      {
+        "title": "Succursales",
+        "desc": "Pilotez plusieurs magasins sous un même compte avec séparation des stocks, ventes et équipes."
+      },
+      {
+        "title": "Clients",
+        "desc": "Créez des profils clients vérifiés, suivez les créances, la fidélité et gérez les demandes."
+      },
+      {
+        "title": "Fournisseurs",
+        "desc": "Suivez les contacts fournisseurs, l'historique des achats et les soldes dus sur toutes les succursales."
+      },
+      {
+        "title": "Commandes",
+        "desc": "Recevez les commandes depuis l'annuaire public et suivez-les de la confirmation à la livraison."
+      },
+      {
+        "title": "Achats",
+        "desc": "Émettez des bons de commande fournisseurs, enregistrez les réceptions et réglez les factures fournisseurs."
+      },
+      {
+        "title": "Rapports",
+        "desc": "Consultez les synthèses quotidiennes, mensuelles et annuelles, comparaisons et exports."
+      },
+      {
+        "title": "Communication",
+        "desc": "Alignez vos équipes avec des canaux de messagerie internes et des annonces globales."
+      },
+      {
+        "title": "Tâches",
+        "desc": "Assignez des tâches opérationnelles, fixez échéances et priorités et collaborez par commentaires."
+      },
+      {
+        "title": "Publicité",
+        "desc": "Importez et publiez des vidéos promotionnelles liées aux produits sur votre vitrine publique."
+      },
+      {
+        "title": "Assistant IA",
+        "desc": "Posez des questions en langage naturel basées sur vos propres ventes, stocks et succursales."
+      },
+      {
+        "title": "Notifications",
+        "desc": "Soyez informé des stocks faibles, nouvelles commandes, validations de dépenses et alertes sécurité."
+      }
     ],
     "howEyebrow": "Comment fonctionne BizTrade Africa",
     "howTitle": "Une gouvernance structurée de l'intégration au commerce quotidien",
     "howDesc": "Les entreprises sont vérifiées et enregistrées par le Super Administrateur afin de garantir l'isolation des données et une visibilité fiable.",
     "workflowSteps": [
-      { "step": "01", "title": "Le Super Admin enregistre l'entreprise", "desc": "Collecte des informations vérifiées, configuration fiscale, abonnement et siège social." },
-      { "step": "02", "title": "L'Admin entreprise reçoit ses accès", "desc": "L'administrateur désigné reçoit un lien d'activation sécurisé, importe sa photo et définit son mot de passe." },
-      { "step": "03", "title": "Configuration des succursales, produits et employés", "desc": "Mise en place des magasins, catégories, stocks initiaux et comptes employés avec rôles." },
-      { "step": "04", "title": "Le personnel exécute les opérations quotidiennes", "desc": "Caissiers, magasiniers et comptables réalisent les ventes POS, transferts, achats et dépenses." },
-      { "step": "05", "title": "Suivi des rapports, bénéfices et activités", "desc": "Analyse des états financiers, performances par succursale, tâches et journaux d'audit." },
-      { "step": "06", "title": "Les clients parcourent, commandent et suivent", "desc": "Les clients explorent les catalogues publics, regardent les vidéos, commandent et suivent la livraison." }
+      {
+        "step": "01",
+        "title": "Le Super Admin enregistre l'entreprise",
+        "desc": "Collecte des informations vérifiées, configuration fiscale, abonnement et siège social."
+      },
+      {
+        "step": "02",
+        "title": "L'Admin entreprise reçoit ses accès",
+        "desc": "L'administrateur désigné reçoit un lien d'activation sécurisé, importe sa photo et définit son mot de passe."
+      },
+      {
+        "step": "03",
+        "title": "Configuration des succursales, produits et employés",
+        "desc": "Mise en place des magasins, catégories, stocks initiaux et comptes employés avec rôles."
+      },
+      {
+        "step": "04",
+        "title": "Le personnel exécute les opérations quotidiennes",
+        "desc": "Caissiers, magasiniers et comptables réalisent les ventes POS, transferts, achats et dépenses."
+      },
+      {
+        "step": "05",
+        "title": "Suivi des rapports, bénéfices et activités",
+        "desc": "Analyse des états financiers, performances par succursale, tâches et journaux d'audit."
+      },
+      {
+        "step": "06",
+        "title": "Les clients parcourent, commandent et suivent",
+        "desc": "Les clients explorent les catalogues publics, regardent les vidéos, commandent et suivent la livraison."
+      }
     ],
     "benefitsEyebrow": "Pourquoi choisir BizTrade Africa",
     "benefitsTitle": "Des avantages opérationnels concrets pour chaque succursale",
     "benefits": [
-      { "title": "Meilleure organisation", "desc": "Unifiez produits, succursales, fournisseurs, équipe et commandes dans un système structuré." },
-      { "title": "Suivi précis des ventes et stocks", "desc": "Chaque vente POS ou ajustement met à jour l'inventaire et le journal d'audit automatiquement." },
-      { "title": "Collaboration d'équipe améliorée", "desc": "Connectez les succursales via tâches assignées, messagerie interne et processus contrôlés." },
-      { "title": "Visibilité financière claire", "desc": "Suivez chiffre d'affaires, dépenses approuvées, créances, dettes et marges sans tableurs manuels." },
-      { "title": "Service client plus rapide", "desc": "Accélérez l'encaissement par code-barres, reçus imprimés et commandes en ligne." },
-      { "title": "Moins d'erreurs manuelles", "desc": "Remplacez les registres papier par des saisies validées et des calculs de taxes automatiques." },
-      { "title": "Contrôle multi-succursales centralisé", "desc": "Supervisez le siège et les agences régionales depuis un tableau de bord isolé et sécurisé." },
-      { "title": "Conçu pour une croissance durable", "desc": "Passez sans rupture d'une boutique unique à un réseau commercial multi-agences." }
+      {
+        "title": "Meilleure organisation",
+        "desc": "Unifiez produits, succursales, fournisseurs, équipe et commandes dans un système structuré."
+      },
+      {
+        "title": "Suivi précis des ventes et stocks",
+        "desc": "Chaque vente POS ou ajustement met à jour l'inventaire et le journal d'audit automatiquement."
+      },
+      {
+        "title": "Collaboration d'équipe améliorée",
+        "desc": "Connectez les succursales via tâches assignées, messagerie interne et processus contrôlés."
+      },
+      {
+        "title": "Visibilité financière claire",
+        "desc": "Suivez chiffre d'affaires, dépenses approuvées, créances, dettes et marges sans tableurs manuels."
+      },
+      {
+        "title": "Service client plus rapide",
+        "desc": "Accélérez l'encaissement par code-barres, reçus imprimés et commandes en ligne."
+      },
+      {
+        "title": "Moins d'erreurs manuelles",
+        "desc": "Remplacez les registres papier par des saisies validées et des calculs de taxes automatiques."
+      },
+      {
+        "title": "Contrôle multi-succursales centralisé",
+        "desc": "Supervisez le siège et les agences régionales depuis un tableau de bord isolé et sécurisé."
+      },
+      {
+        "title": "Conçu pour une croissance durable",
+        "desc": "Passez sans rupture d'une boutique unique à un réseau commercial multi-agences."
+      }
     ],
     "sectorsTitle": "Secteurs d'activité pris en charge",
     "sectorsDesc": "Adapté aux flux commerciaux de détail, de gros et de services.",
@@ -442,6 +567,7 @@
     "directorySubtitle": "Parcourez les entreprises vérifiées sur BizTrade Africa, explorez les catalogues et passez commande.",
     "searchBusinessesPlaceholder": "Rechercher une entreprise ou ville...",
     "allCategories": "Toutes les catégories",
+    "allLocations": "Toutes les localités",
     "noBusinessesMatch": "Aucune entreprise publique ne correspond",
     "noBusinessesMatchDesc": "Les entreprises apparaissent ici après enregistrement et activation par le Super Administrateur.",
     "productsCount": "produits",
@@ -491,12 +617,74 @@
     "featuresPageTitle": "Capacités opérationnelles complètes",
     "featuresPageSubtitle": "Conçu pour magasins d'électronique, supermarchés, pharmacies, quincailleries et services.",
     "featuresPageModules": [
-      { "title": "Point de vente (POS)", "desc": "Recherche instantanée et code-barres, remises autorisées, MTN MoMo, Airtel Money, espèces, carte, paiements partiels et reçus PDF." },
-      { "title": "Inventaire & Transferts", "desc": "Chaque changement écrit un historique immuable. Le verrouillage transactionnel empêche la survente." },
-      { "title": "Achats & Fournisseurs", "desc": "Émettez des bons de commande, suivez les soldes fournisseurs et mettez à jour le stock à la réception." },
-      { "title": "Gestion financière", "desc": "Suivez chiffre d'affaires, coût des ventes, marge brute, dépenses approuvées et trésorerie." },
-      { "title": "CRM & Commandes clients", "desc": "Gérez soldes clients, fidélité, réclamations et suivi de livraison en 7 étapes." },
-      { "title": "Employés, Tâches & Chat", "desc": "Invitez votre équipe avec rôles RBAC, assignez des tâches, publiez des annonces et discutez en direct." }
+      {
+        "title": "Gestion d'entreprise",
+        "desc": "Gouvernance centralisée multi-locataires : identité visuelle, devises régionales, règles de TVA, horaires et paramètres de sécurité."
+      },
+      {
+        "title": "Point de vente (POS)",
+        "desc": "Recherche instantanée et code-barres, remises autorisées, MTN MoMo, Airtel Money, espèces, carte, paiements partiels et reçus PDF."
+      },
+      {
+        "title": "Inventaire & Transferts de stock",
+        "desc": "Chaque changement écrit un historique immuable avec verrouillage transactionnel pour empêcher la survente."
+      },
+      {
+        "title": "Catalogue de produits",
+        "desc": "Gérez vos SKU, codes-barres, catégories, coûts et prix de vente, seuils d'alerte, photos et publications en ligne."
+      },
+      {
+        "title": "Finances & Contrôle des dépenses",
+        "desc": "Suivez chiffre d'affaires, coût des ventes, marge brute, revenus annexes, dépenses approuvées et trésorerie."
+      },
+      {
+        "title": "Employés & Paie",
+        "desc": "Invitez vos équipes avec rôles RBAC personnalisés, gérez les affectations et exécutez les versements de paie."
+      },
+      {
+        "title": "Opérations multi-succursales",
+        "desc": "Pilotez siège social et points de vente régionaux sous un seul compte avec séparation des stocks et rapports."
+      },
+      {
+        "title": "Gestion des clients (CRM)",
+        "desc": "Suivez les profils clients détail/gros, soldes de crédit, points de fidélité et historique d'assistance."
+      },
+      {
+        "title": "Gestion des fournisseurs",
+        "desc": "Centralisez les contacts fournisseurs, numéros fiscaux, historiques d'approvisionnement et soldes dus."
+      },
+      {
+        "title": "Gestion des commandes clients",
+        "desc": "Recevez les commandes en ligne de clients vérifiés et suivez chaque étape jusqu'à la livraison."
+      },
+      {
+        "title": "Achats & Réception de marchandises",
+        "desc": "Émettez des bons de commande, enregistrez les réceptions par succursale et réglez les factures fournisseurs."
+      },
+      {
+        "title": "Rapports & Exports CSV",
+        "desc": "Analysez les performances quotidiennes, mensuelles et annuelles et exportez vos rapports opérationnels."
+      },
+      {
+        "title": "Communication interne",
+        "desc": "Alignez vos équipes avec des canaux de messagerie par succursale et des annonces générales."
+      },
+      {
+        "title": "Gestion des tâches",
+        "desc": "Assignez les missions opérationnelles avec priorités, échéances, statuts et commentaires collaboratifs."
+      },
+      {
+        "title": "Publicité vidéo promotionnelle",
+        "desc": "Importez par morceaux résilients et publiez des vidéos promotionnelles liées à vos produits."
+      },
+      {
+        "title": "Assistant IA d'entreprise",
+        "desc": "Interrogez vos ventes, priorités de stock et tendances de succursale en langage naturel."
+      },
+      {
+        "title": "Notifications en temps réel",
+        "desc": "Alertes instantanées pour stocks faibles, nouvelles commandes, validations de dépenses et événements de sécurité."
+      }
     ],
     "pricingTitle": "Plans d'abonnement transparents en RWF",
     "pricingSubtitle": "Les entreprises sont intégrées et vérifiées par le Super Administrateur. Contactez notre équipe pour ouvrir votre espace.",
@@ -800,7 +988,10 @@
     "colOrders": "Commandes",
     "colLoyaltyPts": "Pts fidélité",
     "colOutstanding": "Solde dû",
-    "colTotalSpent": "Total dépensé"
+    "colTotalSpent": "Total dépensé",
+    "exportCsv": "Exporter tout en CSV",
+    "generatingCsv": "Génération CSV ({{progress}} %)",
+    "exportJobRunning": "Compilation du rapport en arrière-plan..."
   },
   "products": {
     "title": "Catalogue de produits",
@@ -1162,7 +1353,7 @@
     "subtitle": "Téléversez des vidéos MP4 ou WEBM promotionnelles pour vos produits et services, prévisualisez-les et publiez-les sur votre profil public.",
     "uploadVideoAd": "Téléverser une vidéo",
     "errFormat": "Format vidéo non pris en charge. Veuillez téléverser une vidéo MP4 ou WEBM.",
-    "errVideoSize": "Le fichier vidéo dépasse la limite maximale de 50 Mo.",
+    "errVideoSize": "Le fichier vidéo dépasse la limite maximale de 250 Mo.",
     "errThumbFormat": "La miniature doit être une image JPG, JPEG, PNG ou WEBP.",
     "errThumbSize": "L’image miniature dépasse 5 Mo.",
     "errMissingVideo": "Veuillez sélectionner un fichier vidéo MP4 ou WEBM à téléverser.",
@@ -1179,7 +1370,7 @@
     "deleteAria": "Supprimer la vidéo publicitaire",
     "editModalTitle": "Modifier la vidéo promotionnelle",
     "uploadModalTitle": "Téléverser une vidéo promotionnelle",
-    "modalFormatsHint": "Formats pris en charge : MP4, WEBM (max 50 Mo). Prévisualisez avant de publier.",
+    "modalFormatsHint": "Formats pris en charge : MP4, WEBM (jusqu'à 250 Mo, reprise sans limite de durée). Prévisualisez avant de publier.",
     "videoTitleLabel": "Titre de la vidéo *",
     "videoTitlePlaceholder": "ex. Démonstration machine à expresso Kigali",
     "descriptionLabel": "Description",
@@ -1200,7 +1391,23 @@
     "previewModalTitle": "Aperçu vidéo — {{title}}",
     "deleteModalTitle": "Supprimer la vidéo promotionnelle",
     "deleteConfirm": "Voulez-vous vraiment supprimer définitivement « {{title}} » ? Les clients ne verront plus cette publicité.",
-    "deleteVideo": "Supprimer la vidéo"
+    "deleteVideo": "Supprimer la vidéo",
+    "statusUploading": "Téléversement",
+    "statusProcessing": "Traitement",
+    "statusSaving": "Enregistrement",
+    "statusCompleted": "Terminé",
+    "statusFailed": "Échec",
+    "statusCancelled": "Annulé",
+    "completedSuccess": "Vidéo promotionnelle téléversée, vérifiée et enregistrée.",
+    "jobNotFoundErr": "La tâche de finalisation vidéo est introuvable.",
+    "jobFailedErr": "Le traitement de la vidéo a échoué.",
+    "uploadCancelledMsg": "Téléversement annulé et segments temporaires supprimés.",
+    "chunkRetryFailed": "Échec du transfert de segment après plusieurs tentatives.",
+    "reselectToResume": "Sélectionnez « {{name}} » ({{size}}) pour reprendre le téléversement interrompu.",
+    "cancelUploadBtn": "Annuler le téléversement",
+    "resumeBannerTitle": "Téléversement vidéo interrompu détecté",
+    "resumeUploadBtn": "Reprendre",
+    "discardUploadBtn": "Ignorer"
   },
   "onboarding": {
     "title": "Créer un espace d’entreprise",

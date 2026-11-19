@@ -85,11 +85,17 @@ export default function SuperAdminPage() {
   const [regStep, setRegStep] = useState(1);
   const [regForm, setRegForm] = useState(INITIAL_BIZ_FORM);
   const [regLogo, setRegLogo] = useState(null);
+  const [regLogoPreview, setRegLogoPreview] = useState('');
   const [submittingReg, setSubmittingReg] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [savingModal, setSavingModal] = useState(false);
+  const [busyAction, setBusyAction] = useState('');
+  const [bizLogoProgress, setBizLogoProgress] = useState(0);
 
   // Edit Business Modal
   const [editBiz, setEditBiz] = useState(null);
   const [editLogo, setEditLogo] = useState(null);
+  const [editLogoPreview, setEditLogoPreview] = useState('');
 
   // Assign / Replace Business Admin Modal
   const [assignAdminBiz, setAssignAdminBiz] = useState(null);
@@ -111,7 +117,9 @@ export default function SuperAdminPage() {
   // Platform settings & official logo upload
   const [platformSettings, setPlatformSettings] = useState({});
   const [platformLogoFile, setPlatformLogoFile] = useState(null);
+  const [platformLogoPreview, setPlatformLogoPreview] = useState('');
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [platformLogoProgress, setPlatformLogoProgress] = useState(0);
 
   // Credentials forms
   const [myCreds, setMyCreds] = useState({
@@ -162,10 +170,73 @@ export default function SuperAdminPage() {
     setTimeout(() => setNotice(''), 6000);
   };
 
+  useEffect(() => {
+    return () => {
+      if (regLogoPreview && regLogoPreview.startsWith('blob:')) URL.revokeObjectURL(regLogoPreview);
+    };
+  }, [regLogoPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (editLogoPreview && editLogoPreview.startsWith('blob:')) URL.revokeObjectURL(editLogoPreview);
+    };
+  }, [editLogoPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (platformLogoPreview && platformLogoPreview.startsWith('blob:')) URL.revokeObjectURL(platformLogoPreview);
+    };
+  }, [platformLogoPreview]);
+
+  const handleSelectBizLogo = (file, target) => {
+    setModalError('');
+    if (!file) {
+      if (target === 'reg') {
+        setRegLogo(null);
+        setRegLogoPreview('');
+      } else {
+        setEditLogo(null);
+        setEditLogoPreview(editBiz?.logo_url || '');
+      }
+      return;
+    }
+    if (file.size === 0) {
+      setModalError(t('validation.emptyFile'));
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isGenericMime = !file.type || file.type === 'application/octet-stream';
+    if (!allowed.includes(file.type) && !(isGenericMime && ['jpg', 'jpeg', 'png', 'webp'].includes(ext))) {
+      setModalError(t('validation.unsupportedImageFormat'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setModalError(t('validation.imageTooLarge'));
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    if (target === 'reg') {
+      setRegLogo(file);
+      setRegLogoPreview((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        return previewUrl;
+      });
+    } else {
+      setEditLogo(file);
+      setEditLogoPreview((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        return previewUrl;
+      });
+    }
+  };
+
   const handleRegisterBusiness = async (e) => {
     e.preventDefault();
-    setError('');
+    if (submittingReg) return;
+    setModalError('');
     setSubmittingReg(true);
+    setBizLogoProgress(0);
     try {
       const fd = new FormData();
       Object.entries(regForm).forEach(([k, v]) => {
@@ -174,12 +245,17 @@ export default function SuperAdminPage() {
       if (regLogo) fd.append('logo', regLogo);
 
       const res = await api.post('/admin/businesses', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (evt) => {
+          if (evt.total && regLogo) {
+            setBizLogoProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
       });
       setShowRegisterModal(false);
       setRegStep(1);
       setRegForm(INITIAL_BIZ_FORM);
       setRegLogo(null);
+      setRegLogoPreview('');
       showFlash(res.data.message);
       if (res.data.activation_url) {
         setActivationResult({
@@ -189,16 +265,19 @@ export default function SuperAdminPage() {
       }
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
     } finally {
       setSubmittingReg(false);
+      setBizLogoProgress(0);
     }
   };
 
   const handleEditBusiness = async (e) => {
     e.preventDefault();
-    if (!editBiz) return;
-    setError('');
+    if (!editBiz || savingModal) return;
+    setModalError('');
+    setSavingModal(true);
+    setBizLogoProgress(0);
     try {
       const fd = new FormData();
       const fields = [
@@ -215,32 +294,45 @@ export default function SuperAdminPage() {
       if (editLogo) fd.append('logo', editLogo);
 
       const res = await api.put(`/admin/businesses/${editBiz.id}`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (evt) => {
+          if (evt.total && editLogo) {
+            setBizLogoProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
       });
       setEditBiz(null);
       setEditLogo(null);
+      setEditLogoPreview('');
       showFlash(res.data.message);
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingModal(false);
+      setBizLogoProgress(0);
     }
   };
 
   const handleBusinessStatus = async (bizId, nextStatus) => {
+    if (busyAction) return;
     setError('');
+    setBusyAction(`biz-status-${bizId}`);
     try {
       const res = await api.patch(`/admin/businesses/${bizId}/status`, { status: nextStatus });
       showFlash(res.data.message);
       await loadOverview();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
   const handleAssignAdmin = async (e) => {
     e.preventDefault();
-    if (!assignAdminBiz) return;
-    setError('');
+    if (!assignAdminBiz || savingModal) return;
+    setModalError('');
+    setSavingModal(true);
     try {
       const res = await api.post(`/admin/businesses/${assignAdminBiz.id}/assign-admin`, assignForm);
       setAssignAdminBiz(null);
@@ -253,7 +345,9 @@ export default function SuperAdminPage() {
       }
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingModal(false);
     }
   };
 
@@ -276,8 +370,9 @@ export default function SuperAdminPage() {
 
   const handleDeleteBusiness = async (e) => {
     e.preventDefault();
-    if (!deleteBiz) return;
-    setError('');
+    if (!deleteBiz || savingModal) return;
+    setModalError('');
+    setSavingModal(true);
     try {
       const res = await api.delete(`/admin/businesses/${deleteBiz.id}`, {
         data: { reason: deleteReason || 'Controlled retention policy deactivation' },
@@ -287,13 +382,17 @@ export default function SuperAdminPage() {
       showFlash(res.data.message);
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingModal(false);
     }
   };
 
   const handleSaveSubscription = async (e) => {
     e.preventDefault();
-    if (!subDraft) return;
+    if (!subDraft || busyAction) return;
+    setError('');
+    setBusyAction('save-sub');
     try {
       const res = await api.patch(`/admin/businesses/${subDraft.businessId}/subscription`, {
         plan_id: Number(subDraft.plan_id),
@@ -306,6 +405,8 @@ export default function SuperAdminPage() {
       await loadOverview();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -369,7 +470,9 @@ export default function SuperAdminPage() {
 
   const handleSavePlan = async (e) => {
     e.preventDefault();
-    if (!planDraft) return;
+    if (!planDraft || busyAction) return;
+    setError('');
+    setBusyAction('save-plan');
     try {
       const res = await api.patch(`/admin/plans/${planDraft.id}`, {
         monthly_price_rwf: Number(planDraft.monthly_price_rwf),
@@ -385,10 +488,14 @@ export default function SuperAdminPage() {
       await loadOverview();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
   const handleUpdateTicket = async (id, status) => {
+    if (busyAction) return;
+    setBusyAction(`ticket-${id}`);
     try {
       const res = await api.patch(`/admin/tickets/${id}`, {
         status,
@@ -398,10 +505,14 @@ export default function SuperAdminPage() {
       await loadOverview();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
   const handleDeleteInquiry = async (inqId) => {
+    if (busyAction) return;
+    setBusyAction(`inq-${inqId}`);
     try {
       setError('');
       const res = await api.delete(`/admin/inquiries/${inqId}`);
@@ -409,12 +520,16 @@ export default function SuperAdminPage() {
       await loadOverview();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
   const handleSavePlatformSettings = async (e) => {
     e.preventDefault();
+    if (busyAction) return;
     setError('');
+    setBusyAction('save-settings');
     try {
       const res = await api.put('/admin/settings', platformSettings);
       setPlatformSettings(res.data.settings || platformSettings);
@@ -422,33 +537,76 @@ export default function SuperAdminPage() {
       showFlash(res.data.message);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
+  };
+
+  const handleSelectPlatformLogo = (file) => {
+    setError('');
+    if (!file) {
+      setPlatformLogoFile(null);
+      setPlatformLogoPreview('');
+      return;
+    }
+    if (file.size === 0) {
+      setError(t('validation.emptyFile'));
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/svg+xml'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isGenericMime = !file.type || file.type === 'application/octet-stream';
+    if (!allowed.includes(file.type) && !(isGenericMime && ['jpg', 'jpeg', 'png', 'webp', 'svg'].includes(ext))) {
+      setError(t('validation.unsupportedLogoFormat'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(t('validation.fileTooLarge'));
+      return;
+    }
+    setPlatformLogoFile(file);
+    setPlatformLogoPreview((prev) => {
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
   };
 
   const handleUploadPlatformLogo = async (e) => {
     e.preventDefault();
+    if (uploadingLogo) return;
     if (!platformLogoFile) {
       setError(t('superAdmin.selectLogoErr'));
       return;
     }
     setError('');
     setUploadingLogo(true);
+    setPlatformLogoProgress(0);
     try {
       const fd = new FormData();
       fd.append('logo', platformLogoFile);
-      const res = await api.post('/admin/platform-logo', fd);
+      const res = await api.post('/admin/platform-logo', fd, {
+        timeout: 0,
+        onUploadProgress: (evt) => {
+          if (evt.total) {
+            setPlatformLogoProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
+      });
       setPlatformSettings((prev) => ({ ...prev, platform_logo_url: res.data.platform_logo_url || '' }));
       setPlatformLogoFile(null);
+      setPlatformLogoPreview('');
       await refreshPlatformConfig();
       showFlash(res.data.message);
     } catch (err) {
       setError(err.message);
     } finally {
       setUploadingLogo(false);
+      setPlatformLogoProgress(0);
     }
   };
 
   const handleRemovePlatformLogo = async () => {
+    if (uploadingLogo) return;
     setError('');
     setUploadingLogo(true);
     try {
@@ -466,6 +624,8 @@ export default function SuperAdminPage() {
 
   const handleUpdateMyCredentials = async (e) => {
     e.preventDefault();
+    if (busyAction) return;
+    setBusyAction('update-creds');
     try {
       setError('');
       const res = await api.patch('/admin/credentials', myCreds);
@@ -475,11 +635,15 @@ export default function SuperAdminPage() {
       await loadOverview();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
   const handleCreateAdmin = async (e) => {
     e.preventDefault();
+    if (busyAction) return;
+    setBusyAction('create-admin');
     try {
       setError('');
       const res = await api.post('/admin/admins', newAdmin);
@@ -488,6 +652,8 @@ export default function SuperAdminPage() {
       await loadOverview();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -544,6 +710,9 @@ export default function SuperAdminPage() {
           <button
             type="button"
             onClick={() => {
+              setModalError('');
+              setRegLogo(null);
+              setRegLogoPreview('');
               setRegForm({ ...INITIAL_BIZ_FORM, plan_id: data.plans?.[1]?.id || data.plans?.[0]?.id || '' });
               setRegStep(1);
               setShowRegisterModal(true);
@@ -863,12 +1032,13 @@ export default function SuperAdminPage() {
                             >
                               {t('superAdmin.openWorkspace')}
                             </button>
-                            <button type="button" onClick={() => setEditBiz({ ...b })} className="font-medium text-slate-700 dark:text-slate-300 hover:underline">
+                            <button type="button" onClick={() => { setModalError(''); setEditLogo(null); setEditLogoPreview(b.logo_url || ''); setEditBiz({ ...b }); }} className="font-medium text-slate-700 dark:text-slate-300 hover:underline">
                               {t('common.edit')}
                             </button>
                             <button
                               type="button"
                               onClick={() => {
+                                setModalError('');
                                 setAssignAdminBiz(b);
                                 setAssignForm({ full_name: '', email: '', phone: '+250', replace_previous: true });
                               }}
@@ -927,7 +1097,7 @@ export default function SuperAdminPage() {
                             )}
                             <button
                               type="button"
-                              onClick={() => setDeleteBiz(b)}
+                              onClick={() => { setModalError(''); setDeleteReason(''); setDeleteBiz(b); }}
                               className="font-medium text-rose-700 dark:text-rose-400 hover:underline"
                             >
                               {t('common.delete')}
@@ -1227,9 +1397,9 @@ export default function SuperAdminPage() {
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-2">
               <div className="h-20 min-w-[160px] px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-                {platformSettings.platform_logo_url ? (
+                {(platformLogoPreview || platformSettings.platform_logo_url) ? (
                   <img
-                    src={platformSettings.platform_logo_url}
+                    src={platformLogoPreview || platformSettings.platform_logo_url}
                     alt={platformSettings.platform_name || 'BizTrade Africa'}
                     referrerPolicy="no-referrer"
                     className="max-h-14 max-w-[180px] object-contain"
@@ -1246,9 +1416,14 @@ export default function SuperAdminPage() {
                 <input
                   type="file"
                   accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/webp,image/svg+xml"
-                  onChange={(e) => setPlatformLogoFile(e.target.files?.[0] || null)}
+                  onChange={(e) => handleSelectPlatformLogo(e.target.files?.[0] || null)}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                 />
+                {uploadingLogo && platformLogoProgress > 0 && (
+                  <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-sky-600 transition-all duration-150" style={{ width: `${platformLogoProgress}%` }} />
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
                   <button
                     type="submit"
@@ -1579,6 +1754,12 @@ export default function SuperAdminPage() {
               </button>
             </div>
 
+            {modalError && (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-800 dark:text-rose-200">
+                {modalError}
+              </div>
+            )}
+
             <form onSubmit={handleRegisterBusiness} className="space-y-4 text-xs">
               {regStep === 1 && (
                 <div className="space-y-3">
@@ -1641,9 +1822,14 @@ export default function SuperAdminPage() {
                       <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.physicalAddrLabel')}</label>
                       <input required value={regForm.physical_address} onChange={(e) => setRegForm({ ...regForm, physical_address: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
                     </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.bizLogoOptLabel')}</label>
-                      <input type="file" accept="image/*" onChange={(e) => setRegLogo(e.target.files?.[0] || null)} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+                    <div className="space-y-1.5">
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300">{t('superAdmin.bizLogoOptLabel')}</label>
+                      <div className="flex items-center gap-2">
+                        {regLogoPreview && (
+                          <img src={regLogoPreview} alt="Logo" className="w-9 h-9 rounded object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
+                        )}
+                        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => handleSelectBizLogo(e.target.files?.[0] || null, 'reg')} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1764,6 +1950,11 @@ export default function SuperAdminPage() {
               <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('superAdmin.editBizTitle', { name: editBiz.name })}</h2>
               <button type="button" onClick={() => setEditBiz(null)} className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">{t('common.close')}</button>
             </div>
+            {modalError && (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-800 dark:text-rose-200">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleEditBusiness} className="space-y-3 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -1802,17 +1993,27 @@ export default function SuperAdminPage() {
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.opHoursLabel')}</label>
                 <input value={editBiz.operating_hours || ''} onChange={(e) => setEditBiz({ ...editBiz, operating_hours: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
               </div>
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.replaceLogoOptLabel')}</label>
-                <input type="file" accept="image/*" onChange={(e) => setEditLogo(e.target.files?.[0] || null)} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+              <div className="space-y-1.5">
+                <label className="block font-semibold text-slate-700 dark:text-slate-300">{t('superAdmin.replaceLogoOptLabel')}</label>
+                <div className="flex items-center gap-2.5">
+                  {editLogoPreview && (
+                    <img src={editLogoPreview} alt={editBiz.name} referrerPolicy="no-referrer" className="w-10 h-10 rounded object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
+                  )}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => handleSelectBizLogo(e.target.files?.[0] || null, 'edit')} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+                </div>
+                {savingModal && editLogo && bizLogoProgress > 0 && (
+                  <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-sky-600 transition-all duration-150" style={{ width: `${bizLogoProgress}%` }} />
+                  </div>
+                )}
               </div>
               <label className="flex items-center gap-2 pt-1 text-slate-700 dark:text-slate-300">
                 <input type="checkbox" checked={Boolean(editBiz.is_public_listed)} onChange={(e) => setEditBiz({ ...editBiz, is_public_listed: e.target.checked ? 1 : 0 })} />
                 <span>{t('superAdmin.publicListedLabel')}</span>
               </label>
               <div className="flex justify-end gap-2 pt-3">
-                <button type="button" onClick={() => setEditBiz(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('superAdmin.saveChangesBtn')}</button>
+                <button type="button" disabled={savingModal} onClick={() => setEditBiz(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={savingModal} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">{savingModal ? t('common.saving') : t('superAdmin.saveChangesBtn')}</button>
               </div>
             </form>
           </div>
@@ -1827,6 +2028,11 @@ export default function SuperAdminPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {t('superAdmin.assignAdminDesc')}
             </p>
+            {modalError && (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-800 dark:text-rose-200">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleAssignAdmin} className="space-y-3 text-xs">
               <input required placeholder={t('superAdmin.adminFullNamePlaceholder')} value={assignForm.full_name} onChange={(e) => setAssignForm({ ...assignForm, full_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <input required type="email" placeholder={t('superAdmin.adminEmailPlaceholder')} value={assignForm.email} onChange={(e) => setAssignForm({ ...assignForm, email: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
@@ -1836,8 +2042,8 @@ export default function SuperAdminPage() {
                 <span>{t('superAdmin.deactivatePrevAdminLabel')}</span>
               </label>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setAssignAdminBiz(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('superAdmin.assignIssueBtn')}</button>
+                <button type="button" disabled={savingModal} onClick={() => setAssignAdminBiz(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={savingModal} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">{savingModal ? t('common.saving') : t('superAdmin.assignIssueBtn')}</button>
               </div>
             </form>
           </div>
@@ -1852,6 +2058,11 @@ export default function SuperAdminPage() {
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               {t('superAdmin.deleteBizDesc', { days: platformSettings.business_retention_days || 365 })}
             </p>
+            {modalError && (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-800 dark:text-rose-200">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleDeleteBusiness} className="space-y-3 text-xs">
               <textarea
                 required
@@ -1862,8 +2073,8 @@ export default function SuperAdminPage() {
                 className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setDeleteBiz(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg">{t('superAdmin.confirmArchiveBtn')}</button>
+                <button type="button" disabled={savingModal} onClick={() => setDeleteBiz(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={savingModal} className="px-4 py-2 font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg disabled:opacity-60">{savingModal ? t('common.saving') : t('superAdmin.confirmArchiveBtn')}</button>
               </div>
             </form>
           </div>

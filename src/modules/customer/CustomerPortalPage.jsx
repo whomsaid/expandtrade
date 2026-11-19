@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Bell,
@@ -40,7 +40,7 @@ const TABS = [
 
 export default function CustomerPortalPage() {
   const { t } = useTranslation();
-  const { user, notifications, logout, refreshMe, refreshNotifications, savePreferences } = useAuth();
+  const { user, sessions, notifications, logout, refreshMe, refreshNotifications, savePreferences } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'businesses');
@@ -50,7 +50,6 @@ export default function CustomerPortalPage() {
   const [applications, setApplications] = useState([]);
   const [receipts, setReceipts] = useState([]);
   const [history, setHistory] = useState({ reviews: [], inquiries: [], logins: [] });
-  const [sessions, setSessions] = useState([]);
   const [profileForm, setProfileForm] = useState({
     full_name: user?.full_name || '',
     phone: user?.phone || '',
@@ -73,6 +72,8 @@ export default function CustomerPortalPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [dirError, setDirError] = useState('');
+  const [savingAction, setSavingAction] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -83,6 +84,7 @@ export default function CustomerPortalPage() {
   const [withdrawTarget, setWithdrawTarget] = useState(null);
   const [withdrawReason, setWithdrawReason] = useState('');
   const [previewDoc, setPreviewDoc] = useState(null);
+  const dirAbortRef = useRef(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 260);
@@ -91,25 +93,23 @@ export default function CustomerPortalPage() {
 
   const loadAccountPortalData = useCallback(async () => {
     try {
-      const [oRes, aRes, rRes, pRes, hRes, meRes] = await Promise.all([
+      const [oRes, aRes, rRes, pRes, hRes] = await Promise.all([
         api.get('/customer/orders'),
         api.get('/customer/applications'),
         api.get('/customer/receipts'),
         api.get('/customer/profile'),
         api.get('/customer/history'),
-        api.get('/auth/me'),
       ]);
       setOrders(oRes.data.orders || []);
       setApplications(aRes.data.applications || []);
       setReceipts(rRes.data.receipts || []);
       setHistory(hRes.data || { reviews: [], inquiries: [], logins: [] });
-      setSessions(meRes.data.sessions || []);
       if (pRes.data.user || pRes.data.profile) {
         setProfileForm({
           full_name: pRes.data.user?.full_name || '',
           phone: pRes.data.user?.phone || '',
-          bio: pRes.data.user?.bio || meRes.data.user?.bio || '',
-          location: pRes.data.user?.location || meRes.data.user?.location || '',
+          bio: pRes.data.user?.bio || user?.bio || '',
+          location: pRes.data.user?.location || user?.location || '',
           default_address: pRes.data.profile?.default_address || '',
           city: pRes.data.profile?.city || '',
           country: pRes.data.profile?.country || 'Rwanda',
@@ -120,21 +120,36 @@ export default function CustomerPortalPage() {
     } catch (err) {
       setError(err.message);
     }
-  }, []);
+  }, [user?.bio, user?.location]);
 
   const loadPublicDirectory = useCallback(async () => {
+    if (dirAbortRef.current) {
+      dirAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    dirAbortRef.current = controller;
     setLoading(true);
+    setDirError('');
     try {
       const [bRes, vRes] = await Promise.all([
-        api.get('/public/businesses', { params: { q: debouncedSearch.trim() || undefined } }),
-        api.get('/public/videos', { params: { q: debouncedSearch.trim() || undefined } }),
+        api.get('/public/businesses', {
+          params: { q: debouncedSearch.trim() || undefined },
+          signal: controller.signal,
+        }),
+        api.get('/public/videos', {
+          params: { q: debouncedSearch.trim() || undefined },
+          signal: controller.signal,
+        }),
       ]);
       setBusinesses(bRes.data.businesses || []);
       setVideos(vRes.data.videos || []);
     } catch (err) {
-      setError(err.message);
+      if (err.isCanceled) return;
+      setDirError(err.message);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [debouncedSearch]);
 
@@ -148,6 +163,11 @@ export default function CustomerPortalPage() {
 
   useEffect(() => {
     loadPublicDirectory();
+    return () => {
+      if (dirAbortRef.current) {
+        dirAbortRef.current.abort();
+      }
+    };
   }, [loadPublicDirectory]);
 
   const openApplicationDetail = useCallback(async (appId) => {
@@ -193,22 +213,27 @@ export default function CustomerPortalPage() {
   };
 
   const handleDiscardDraft = async (appId) => {
+    if (savingAction) return;
     setError('');
     setNotice('');
+    setSavingAction(`discard-${appId}`);
     try {
       const { data } = await api.delete(`/customer/applications/${appId}`);
       setNotice(data.message);
       await loadPortalData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleConfirmWithdraw = async (e) => {
     e.preventDefault();
-    if (!withdrawTarget) return;
+    if (!withdrawTarget || savingAction) return;
     setError('');
     setNotice('');
+    setSavingAction('withdraw');
     try {
       const { data } = await api.post(`/customer/applications/${withdrawTarget.id}/withdraw`, {
         reason: withdrawReason,
@@ -222,27 +247,31 @@ export default function CustomerPortalPage() {
       await loadPortalData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    if (savingAction) return;
     setError('');
     setNotice('');
+    setSavingAction('profile');
     try {
-      const [custRes] = await Promise.all([
-        api.put('/customer/profile', profileForm),
-        api.put('/auth/profile', {
-          full_name: profileForm.full_name,
-          phone: profileForm.phone,
-          bio: profileForm.bio,
-          location: profileForm.location,
-        }),
-      ]);
+      const custRes = await api.put('/customer/profile', profileForm);
+      await api.put('/auth/profile', {
+        full_name: profileForm.full_name,
+        phone: profileForm.phone,
+        bio: profileForm.bio,
+        location: profileForm.location,
+      });
       setNotice(custRes.data.message || t('customerPortal.profileUpdatedMsg'));
       await refreshMe();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
@@ -304,7 +333,7 @@ export default function CustomerPortalPage() {
     try {
       const { data } = await api.post('/auth/sessions/revoke-others');
       setNotice(data.message);
-      await loadAccountPortalData();
+      await refreshMe();
     } catch (err) {
       setError(err.message);
     }
@@ -397,7 +426,18 @@ export default function CustomerPortalPage() {
           </div>
         </div>
 
-        {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
+        {error && (
+          <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg flex items-center justify-between gap-2">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => { setError(''); loadAccountPortalData(); }}
+              className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100 dark:hover:bg-rose-900/40 shrink-0"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
         {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
 
         {/* Tabs */}
@@ -439,7 +479,18 @@ export default function CustomerPortalPage() {
               />
             </div>
 
-            {loading ? (
+            {dirError ? (
+              <div className="p-4 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center justify-between gap-3">
+                <span>{dirError}</span>
+                <button
+                  type="button"
+                  onClick={loadPublicDirectory}
+                  className="px-3 py-1.5 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/40 shrink-0"
+                >
+                  {t('common.retry')}
+                </button>
+              </div>
+            ) : loading ? (
               <div className="text-xs text-slate-500 dark:text-slate-400 py-8">{t('customerPortal.loadingBusinesses')}</div>
             ) : businesses.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 p-10 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
@@ -823,8 +874,8 @@ export default function CustomerPortalPage() {
                     <input value={profileForm.preferred_currency} onChange={(e) => setProfileForm({ ...profileForm, preferred_currency: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono" />
                   </div>
                 </div>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                  {t('customerPortal.saveProfile')}
+                <button type="submit" disabled={Boolean(savingAction)} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">
+                  {savingAction === 'profile' ? t('common.saving') : t('customerPortal.saveProfile')}
                 </button>
               </form>
             </div>
@@ -1095,9 +1146,10 @@ export default function CustomerPortalPage() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 font-semibold text-white bg-rose-600 rounded-lg hover:bg-rose-500"
+                disabled={Boolean(savingAction)}
+                className="px-4 py-2 font-semibold text-white bg-rose-600 rounded-lg hover:bg-rose-500 disabled:opacity-60"
               >
-                {t('customerPortal.confirmWithdrawal')}
+                {savingAction === 'withdraw' ? t('common.saving') : t('customerPortal.confirmWithdrawal')}
               </button>
             </div>
           </form>

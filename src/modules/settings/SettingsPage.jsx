@@ -67,6 +67,9 @@ export default function SettingsPage() {
 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [savingAction, setSavingAction] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoProgress, setLogoProgress] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -125,21 +128,27 @@ export default function SettingsPage() {
 
   const handleSavePersonal = async (e) => {
     e.preventDefault();
+    if (savingAction) return;
     setError('');
     setMessage('');
+    setSavingAction('personal');
     try {
       const { data } = await api.put('/auth/profile', personalForm);
       await refreshMe();
       setMessage(data.message || t('settings.personalUpdated'));
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleRequestEmailChange = async (e) => {
     e.preventDefault();
+    if (savingAction) return;
     setError('');
     setMessage('');
+    setSavingAction('emailRequest');
     try {
       const { data } = await api.post('/auth/request-email-change', {
         new_email: emailChange.new_email,
@@ -153,13 +162,17 @@ export default function SettingsPage() {
       setMessage(data.message);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleVerifyEmailChange = async (e) => {
     e.preventDefault();
+    if (savingAction) return;
     setError('');
     setMessage('');
+    setSavingAction('emailVerify');
     try {
       const { data } = await api.post('/auth/verify-email-change', {
         new_email: emailChange.new_email,
@@ -170,25 +183,33 @@ export default function SettingsPage() {
       setMessage(data.message);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleSaveDashPrefs = async (e) => {
     e.preventDefault();
+    if (savingAction) return;
     setError('');
     setMessage('');
+    setSavingAction('dashPrefs');
     try {
       const data = await savePreferences({ dashboard_preferences: dashPrefs });
       setMessage(data.message || t('settings.dashPrefsSaved'));
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    if (savingAction) return;
     setError('');
     setMessage('');
+    setSavingAction('business');
     try {
       await api.put('/businesses/current', profile);
       changeLanguage(profile.language);
@@ -196,34 +217,72 @@ export default function SettingsPage() {
       setMessage(t('settings.businessSaved'));
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleLogoUpload = async (file) => {
-    if (!file) return;
+    if (!file || uploadingLogo) return;
+    setError('');
+    setMessage('');
+    if (file.size === 0) {
+      setError(t('validation.emptyFile'));
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isGenericMime = !file.type || file.type === 'application/octet-stream';
+    if (!allowed.includes(file.type) && !(isGenericMime && ['jpg', 'jpeg', 'png', 'webp'].includes(ext))) {
+      setError(t('validation.unsupportedImageFormat'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(t('validation.imageTooLarge'));
+      return;
+    }
+    setUploadingLogo(true);
+    setLogoProgress(0);
     const fd = new FormData();
     fd.append('logo', file);
     try {
-      await api.post('/businesses/current/logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post('/businesses/current/logo', fd, {
+        timeout: 0,
+        onUploadProgress: (evt) => {
+          if (evt.total) {
+            setLogoProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
+      });
       await loadWorkspace(activeBusinessId);
       setMessage(t('settings.logoUploaded'));
     } catch (err) {
       setError(err.message);
+    } finally {
+      setUploadingLogo(false);
+      setLogoProgress(0);
     }
   };
 
   const handleSubscribe = async (planId) => {
+    if (savingAction) return;
+    setError('');
+    setMessage('');
+    setSavingAction(`subscribe-${planId}`);
     try {
       const { data } = await api.post('/subscriptions/subscribe', { plan_id: planId, billing_cycle: 'monthly', payment_method: 'mtn_momo' });
       setMessage(data.message);
       await loadSettingsData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (savingAction) return;
     setError('');
     setMessage('');
     const strengthErr = validatePasswordStrength(pwForm.new_password);
@@ -235,36 +294,47 @@ export default function SettingsPage() {
       setError(t('settings.passwordMismatch'));
       return;
     }
+    setSavingAction('password');
     try {
       const { data } = await api.post('/auth/change-password', pwForm);
       setMessage(data.message);
       setPwForm({ current_password: '', new_password: '', confirm_password: '' });
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleRevokeSession = async (sessionId) => {
+    if (savingAction) return;
     setError('');
     setMessage('');
+    setSavingAction(`revoke-${sessionId}`);
     try {
       const { data } = await api.delete(`/auth/sessions/${sessionId}`);
       setMessage(data.message);
       await loadSettingsData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
   const handleRevokeOtherSessions = async () => {
+    if (savingAction) return;
     setError('');
     setMessage('');
+    setSavingAction('revokeOthers');
     try {
       const { data } = await api.post('/auth/sessions/revoke-others');
       setMessage(data.message);
       await loadSettingsData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingAction('');
     }
   };
 
@@ -376,8 +446,8 @@ export default function SettingsPage() {
                           className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
                         />
                         <div className="flex gap-2">
-                          <button type="submit" className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
-                            {t('settings.sendOtpBtn')}
+                          <button type="submit" disabled={Boolean(savingAction)} className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg disabled:opacity-60">
+                            {savingAction === 'emailRequest' ? t('common.saving') : t('settings.sendOtpBtn')}
                           </button>
                           <button type="button" onClick={() => setEmailChange({ ...emailChange, open: false })} className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg">
                             {t('common.cancel')}
@@ -402,8 +472,8 @@ export default function SettingsPage() {
                           className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                         />
                         <div className="flex gap-2">
-                          <button type="submit" className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
-                            {t('settings.verifyUpdateEmail')}
+                          <button type="submit" disabled={Boolean(savingAction)} className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg disabled:opacity-60">
+                            {savingAction === 'emailVerify' ? t('common.saving') : t('settings.verifyUpdateEmail')}
                           </button>
                           <button type="button" onClick={() => setEmailChange({ ...emailChange, step: 'request' })} className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg">
                             {t('common.back')}
@@ -490,8 +560,8 @@ export default function SettingsPage() {
                   />
                 </label>
               </div>
-              <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                {t('settings.savePersonalBtn')}
+              <button type="submit" disabled={Boolean(savingAction)} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">
+                {savingAction === 'personal' ? t('common.saving') : t('settings.savePersonalBtn')}
               </button>
             </form>
           </div>
@@ -527,8 +597,8 @@ export default function SettingsPage() {
               onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })}
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             />
-            <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-              {t('settings.updatePasswordBtn')}
+            <button type="submit" disabled={Boolean(savingAction)} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">
+              {savingAction === 'password' ? t('common.saving') : t('settings.updatePasswordBtn')}
             </button>
           </form>
         </div>
@@ -599,8 +669,8 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-              {t('settings.savePrefsBtn')}
+            <button type="submit" disabled={Boolean(savingAction)} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">
+              {savingAction === 'dashPrefs' ? t('common.saving') : t('settings.savePrefsBtn')}
             </button>
           </form>
         </div>
@@ -608,7 +678,7 @@ export default function SettingsPage() {
 
       {tab === 'profile' && canManageBusiness && (
         <form onSubmit={handleSaveProfile} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5 text-xs max-w-4xl">
-          <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex flex-wrap items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
             {profile.logo_url ? (
               <img src={profile.logo_url} alt={t('settings.logoAlt')} referrerPolicy="no-referrer" className="w-14 h-14 rounded-lg object-cover border border-slate-200 dark:border-slate-700" />
             ) : (
@@ -616,11 +686,27 @@ export default function SettingsPage() {
                 {t('settings.logoBadge')}
               </div>
             )}
-            <label className="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700">
-              <Upload className="w-3.5 h-3.5" />
-              <span>{t('settings.uploadLogo')}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoUpload(e.target.files?.[0])} />
-            </label>
+            <div className="space-y-1.5">
+              <label className={`inline-flex items-center gap-2 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 rounded-lg ${uploadingLogo ? 'opacity-60 cursor-wait' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                <Upload className="w-3.5 h-3.5" />
+                <span>{uploadingLogo ? t('superAdmin.uploadingBtn') : t('settings.uploadLogo')}</span>
+                <input
+                  type="file"
+                  disabled={uploadingLogo}
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleLogoUpload(e.target.files?.[0]);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              {uploadingLogo && logoProgress > 0 && (
+                <div className="w-40 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-sky-600 transition-all duration-150" style={{ width: `${logoProgress}%` }} />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -698,8 +784,8 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <button type="submit" className="px-5 py-2.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-            {t('settings.saveConfigBtn')}
+          <button type="submit" disabled={Boolean(savingAction)} className="px-5 py-2.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">
+            {savingAction === 'business' ? t('common.saving') : t('settings.saveConfigBtn')}
           </button>
         </form>
       )}
@@ -733,10 +819,11 @@ export default function SettingsPage() {
                 </div>
                 <button
                   type="button"
+                  disabled={Boolean(savingAction)}
                   onClick={() => handleSubscribe(p.id)}
-                  className="w-full py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
+                  className="w-full py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
                 >
-                  {t('settings.selectPlan')}
+                  {savingAction === `subscribe-${p.id}` ? t('common.saving') : t('settings.selectPlan')}
                 </button>
               </div>
             ))}

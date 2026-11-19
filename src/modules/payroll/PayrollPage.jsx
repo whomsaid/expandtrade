@@ -43,6 +43,8 @@ export default function PayrollPage() {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [savingModal, setSavingModal] = useState(false);
   const [notice, setNotice] = useState('');
 
   const [selectedConfigIds, setSelectedConfigIds] = useState([]);
@@ -107,6 +109,7 @@ export default function PayrollPage() {
     if (!highlightConfigId || !overview?.configs?.length || !canPay) return;
     const match = overview.configs.find((c) => c.id === highlightConfigId && c.payroll_status === 'active');
     if (match) {
+      setModalError('');
       setAuthChecked(false);
       setAuthModal({ mode: 'individual', configs: [match] });
       const next = new URLSearchParams(searchParams);
@@ -148,6 +151,7 @@ export default function PayrollPage() {
 
   const openConfigureEmployee = (emp, existingConfig = null) => {
     setError('');
+    setModalError('');
     setNotice('');
     setConfigModal({
       business_member_id: emp.business_member_id,
@@ -165,9 +169,10 @@ export default function PayrollPage() {
 
   const handleSaveConfig = async (e) => {
     e.preventDefault();
-    if (!configModal) return;
-    setError('');
+    if (!configModal || savingModal) return;
+    setModalError('');
     setNotice('');
+    setSavingModal(true);
     try {
       const { data } = await api.post('/payroll/configs', {
         business_member_id: configModal.business_member_id,
@@ -185,7 +190,9 @@ export default function PayrollPage() {
       await loadPayroll();
       await refreshNotifications();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingModal(false);
     }
   };
 
@@ -217,8 +224,10 @@ export default function PayrollPage() {
 
   const handleTopup = async (e) => {
     e.preventDefault();
-    setError('');
+    if (savingModal) return;
+    setModalError('');
     setNotice('');
+    setSavingModal(true);
     try {
       const { data } = await api.post('/payroll/account/topup', {
         amount: Number(topupForm.amount),
@@ -230,14 +239,18 @@ export default function PayrollPage() {
       setTopupForm({ amount: '', reference: '', note: '' });
       await loadPayroll();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingModal(false);
     }
   };
 
   const handleSaveGateway = async (e) => {
     e.preventDefault();
-    setError('');
+    if (savingModal) return;
+    setModalError('');
     setNotice('');
+    setSavingModal(true);
     try {
       const payload = {
         default_provider: gatewayForm.default_provider,
@@ -264,12 +277,15 @@ export default function PayrollPage() {
       }));
       await loadPayroll();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingModal(false);
     }
   };
 
   const openIndividualAuth = (cfg) => {
     setError('');
+    setModalError('');
     setNotice('');
     setAuthChecked(false);
     setAuthModal({ mode: 'individual', configs: [cfg] });
@@ -278,6 +294,7 @@ export default function PayrollPage() {
   const openBulkAuth = (configsToPay) => {
     if (!configsToPay.length) return;
     setError('');
+    setModalError('');
     setNotice('');
     setAuthChecked(false);
     setAuthModal({ mode: 'bulk', configs: configsToPay });
@@ -285,9 +302,9 @@ export default function PayrollPage() {
 
   const handleConfirmPay = async (e) => {
     e.preventDefault();
-    if (!authModal || !authChecked) return;
+    if (!authModal || !authChecked || authSubmitting) return;
     setAuthSubmitting(true);
-    setError('');
+    setModalError('');
     setNotice('');
     try {
       if (authModal.mode === 'individual') {
@@ -295,14 +312,14 @@ export default function PayrollPage() {
         const { data } = await api.post('/payroll/pay/individual', {
           payroll_config_id: cfg.id,
           payment_period: cfg.due_period,
-          confirm_authorization: 'true',
+          confirm_authorization: true,
           idempotency_key: `ui-${cfg.id}-${cfg.due_period}-${Date.now()}`,
         });
         setNotice(data.message);
       } else {
         const { data } = await api.post('/payroll/pay/bulk', {
           payroll_config_ids: authModal.configs.map((c) => c.id),
-          confirm_authorization: 'true',
+          confirm_authorization: true,
         });
         setNotice(data.message);
         setSelectedConfigIds([]);
@@ -311,7 +328,7 @@ export default function PayrollPage() {
       await loadPayroll();
       await refreshNotifications();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
     } finally {
       setAuthSubmitting(false);
     }
@@ -437,7 +454,7 @@ export default function PayrollPage() {
           {canManage && (
             <button
               type="button"
-              onClick={() => setGatewayModal(true)}
+              onClick={() => { setModalError(''); setGatewayModal(true); }}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <Settings2 className="w-3.5 h-3.5" />
@@ -448,7 +465,7 @@ export default function PayrollPage() {
           {canPay && (
             <button
               type="button"
-              onClick={() => setTopupModal(true)}
+              onClick={() => { setModalError(''); setTopupModal(true); }}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-600 rounded-lg"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -983,10 +1000,16 @@ export default function PayrollPage() {
                   {configModal.employee_name} · {configModal.role_name}
                 </p>
               </div>
-              <button type="button" onClick={() => setConfigModal(null)} className="p-1 text-slate-400 hover:text-slate-700">
+              <button type="button" disabled={savingModal} onClick={() => setConfigModal(null)} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-50">
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {modalError && (
+              <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">
+                {modalError}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -1079,11 +1102,11 @@ export default function PayrollPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setConfigModal(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg">
+              <button type="button" disabled={savingModal} onClick={() => setConfigModal(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg disabled:opacity-50">
                 {t('common.cancel')}
               </button>
-              <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                {t('payroll.saveConfigBtn')}
+              <button type="submit" disabled={savingModal} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">
+                {savingModal ? t('common.saving') : t('payroll.saveConfigBtn')}
               </button>
             </div>
           </form>
@@ -1117,6 +1140,11 @@ export default function PayrollPage() {
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto">
+              {modalError && (
+                <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">
+                  {modalError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
                   <div className="text-slate-500 dark:text-slate-400">{t('payroll.kpiAvailableBalance')}</div>
@@ -1203,10 +1231,15 @@ export default function PayrollPage() {
           >
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('payroll.topupModalTitle')}</h2>
-              <button type="button" onClick={() => setTopupModal(false)} className="p-1 text-slate-400">
+              <button type="button" disabled={savingModal} onClick={() => setTopupModal(false)} className="p-1 text-slate-400 disabled:opacity-50">
                 <X className="w-4 h-4" />
               </button>
             </div>
+            {modalError && (
+              <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">
+                {modalError}
+              </div>
+            )}
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('payroll.amountLabel', { currency })}</label>
               <input
@@ -1238,11 +1271,11 @@ export default function PayrollPage() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setTopupModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg">
+              <button type="button" disabled={savingModal} onClick={() => setTopupModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg disabled:opacity-50">
                 {t('common.cancel')}
               </button>
-              <button type="submit" className="px-4 py-2 font-semibold text-white bg-emerald-700 hover:bg-emerald-600 rounded-lg">
-                {t('payroll.recordFunding')}
+              <button type="submit" disabled={savingModal} className="px-4 py-2 font-semibold text-white bg-emerald-700 hover:bg-emerald-600 rounded-lg disabled:opacity-50">
+                {savingModal ? t('common.saving') : t('payroll.recordFunding')}
               </button>
             </div>
           </form>
@@ -1263,10 +1296,16 @@ export default function PayrollPage() {
                   {t('payroll.gatewayModalSubtitle')}
                 </p>
               </div>
-              <button type="button" onClick={() => setGatewayModal(false)} className="p-1 text-slate-400">
+              <button type="button" disabled={savingModal} onClick={() => setGatewayModal(false)} className="p-1 text-slate-400 disabled:opacity-50">
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {modalError && (
+              <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">
+                {modalError}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -1364,11 +1403,11 @@ export default function PayrollPage() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setGatewayModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg">
+              <button type="button" disabled={savingModal} onClick={() => setGatewayModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg disabled:opacity-50">
                 {t('common.cancel')}
               </button>
-              <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
-                {t('payroll.saveGatewaySettings')}
+              <button type="submit" disabled={savingModal} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg disabled:opacity-50">
+                {savingModal ? t('common.saving') : t('payroll.saveGatewaySettings')}
               </button>
             </div>
           </form>

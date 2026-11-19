@@ -19,6 +19,12 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [creatingCat, setCreatingCat] = useState(false);
+  const [archivingId, setArchivingId] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [imagePreview, setImagePreview] = useState('');
   const [form, setForm] = useState({
     name: '',
     sku: '',
@@ -59,8 +65,19 @@ export default function ProductsPage() {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const openCreate = () => {
     setEditing(null);
+    setModalError('');
+    setUploadProgress(0);
+    setImagePreview('');
     setForm({
       name: '',
       sku: `SKU-${Date.now().toString().slice(-5)}`,
@@ -80,6 +97,9 @@ export default function ProductsPage() {
 
   const openEdit = (p) => {
     setEditing(p);
+    setModalError('');
+    setUploadProgress(0);
+    setImagePreview(p.image_url || '');
     setForm({
       name: p.name,
       sku: p.sku,
@@ -97,9 +117,41 @@ export default function ProductsPage() {
     setShowModal(true);
   };
 
+  const handleImageSelect = (file) => {
+    setModalError('');
+    if (!file) {
+      setForm((prev) => ({ ...prev, image: null }));
+      setImagePreview(editing?.image_url || '');
+      return;
+    }
+    if (file.size === 0) {
+      setModalError(t('validation.emptyFile'));
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isGenericMime = !file.type || file.type === 'application/octet-stream';
+    if (!allowed.includes(file.type) && !(isGenericMime && ['jpg', 'jpeg', 'png', 'webp'].includes(ext))) {
+      setModalError(t('validation.unsupportedImageFormat'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setModalError(t('validation.imageTooLarge'));
+      return;
+    }
+    setForm((prev) => ({ ...prev, image: file }));
+    setImagePreview((prev) => {
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  };
+
   const handleSaveProduct = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
+    setSaving(true);
+    setUploadProgress(0);
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
@@ -107,40 +159,56 @@ export default function ProductsPage() {
         else if (k !== 'image' && v !== null && v !== undefined) fd.append(k, v);
       });
 
+      const uploadConfig = {
+        onUploadProgress: (evt) => {
+          if (evt.total && form.image) {
+            setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
+      };
+
       if (editing) {
-        await api.put(`/products/${editing.id}`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.put(`/products/${editing.id}`, fd, uploadConfig);
       } else {
-        await api.post('/products', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.post('/products', fd, uploadConfig);
       }
       setShowModal(false);
       await loadData();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+      setUploadProgress(0);
     }
   };
 
   const handleCreateCategory = async (e) => {
     e.preventDefault();
-    if (!newCategoryName.trim()) return;
+    if (!newCategoryName.trim() || creatingCat) return;
+    setCreatingCat(true);
+    setError('');
     try {
       await api.post('/categories', { name: newCategoryName.trim() });
       setNewCategoryName('');
       await loadData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setCreatingCat(false);
     }
   };
 
   const handleArchive = async (id) => {
+    if (archivingId === id) return;
+    setArchivingId(id);
+    setError('');
     try {
       await api.delete(`/products/${id}`);
       await loadData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setArchivingId(null);
     }
   };
 
@@ -226,8 +294,8 @@ export default function ProductsPage() {
               placeholder={t('products.newCatPlaceholder')}
               className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
-            <button type="submit" className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700">
-              {t('products.addCategory')}
+            <button type="submit" disabled={creatingCat} className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-50">
+              {creatingCat ? t('common.saving') : t('products.addCategory')}
             </button>
           </form>
         )}
@@ -302,7 +370,7 @@ export default function ProductsPage() {
                       </button>
                     )}
                     {hasPermission('products.delete') && (
-                      <button type="button" onClick={() => handleArchive(p.id)} className="text-rose-600 dark:text-rose-400 hover:underline inline-flex items-center">
+                      <button type="button" disabled={archivingId === p.id} onClick={() => handleArchive(p.id)} className="text-rose-600 dark:text-rose-400 hover:underline inline-flex items-center disabled:opacity-40">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -319,6 +387,11 @@ export default function ProductsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in">
             <h2 className="text-lg font-bold text-[#0B192C] dark:text-slate-100">{editing ? t('products.editModalTitle') : t('products.createModalTitle')}</h2>
+            {modalError && (
+              <div className="p-2.5 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleSaveProduct} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -373,23 +446,41 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('products.productImage')}</label>
-                <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <Upload className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                  <span className="text-slate-600 dark:text-slate-300">{form.image ? form.image.name : t('products.chooseImage')}</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={(e) => setForm({ ...form, image: e.target.files?.[0] || null })}
-                  />
-                </label>
+              <div className="space-y-2">
+                <label className="block font-semibold text-slate-700 dark:text-slate-300">{t('products.productImage')}</label>
+                <div className="flex items-center gap-3">
+                  {imagePreview && (
+                    <img
+                      src={imagePreview}
+                      alt={form.name || t('products.productImage')}
+                      referrerPolicy="no-referrer"
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                    />
+                  )}
+                  <label className="flex-1 flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <Upload className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
+                    <span className="text-slate-600 dark:text-slate-300 truncate">{form.image ? form.image.name : t('products.chooseImage')}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        handleImageSelect(e.target.files?.[0] || null);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                {saving && form.image && uploadProgress > 0 && (
+                  <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-sky-600 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('products.saveProduct')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">{saving ? t('common.saving') : t('products.saveProduct')}</button>
               </div>
             </form>
           </div>

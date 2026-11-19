@@ -40,17 +40,22 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setUnverifiedEmail('');
     setSubmitting(true);
     try {
       const data = await login(email, password);
       navigate(getLandingRoute(data.user, data.memberships, redirectTarget), { replace: true });
     } catch (err) {
       setError(err.message);
+      if (err.code === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(email.trim().toLowerCase());
+      }
     } finally {
       setSubmitting(false);
     }
@@ -59,11 +64,11 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
           <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.loginTitle')}</h1>
+            <div className="space-y-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.loginTitle')}</h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {t('auth.loginSubtitle')}
               </p>
@@ -71,7 +76,21 @@ export function LoginPage() {
             <LanguageSelector compact className="shrink-0" />
           </div>
 
-          {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
+          {error && (
+            <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg space-y-2">
+              <div>{error}</div>
+              {unverifiedEmail && (
+                <Link
+                  to={`/register?verify_email=${encodeURIComponent(unverifiedEmail)}${
+                    redirectTarget ? `&redirect=${encodeURIComponent(redirectTarget)}` : ''
+                  }`}
+                  className="inline-flex items-center font-semibold text-sky-700 dark:text-sky-300 underline"
+                >
+                  {t('auth.verifyEmailNow')}
+                </Link>
+              )}
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -86,9 +105,9 @@ export function LoginPage() {
               />
             </div>
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between gap-2 mb-1">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">{t('auth.password')}</label>
-                <Link to="/forgot-password" className="text-xs text-sky-700 dark:text-sky-400 hover:underline">{t('auth.forgotPassword')}</Link>
+                <Link to="/forgot-password" className="text-xs text-sky-700 dark:text-sky-400 hover:underline whitespace-nowrap shrink-0">{t('auth.forgotPassword')}</Link>
               </div>
               <input
                 required
@@ -128,26 +147,150 @@ export function LoginPage() {
   );
 }
 
+function formatCountdownClock(totalSeconds) {
+  const safe = Math.max(0, Number(totalSeconds) || 0);
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 export function RegisterPage() {
   const { t } = useTranslation();
   const { completeSession, language } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTarget = sanitizeRedirect(searchParams.get('redirect'));
-  const [step, setStep] = useState('form');
+  const verifyEmailParam = (searchParams.get('verify_email') || '').trim().toLowerCase();
+
+  const [step, setStep] = useState(verifyEmailParam ? 'otp' : 'email');
+  const [otpMode, setOtpMode] = useState(verifyEmailParam ? 'legacy-verify' : 'pre-register');
   const [form, setForm] = useState({
     full_name: '',
-    email: '',
+    email: verifyEmailParam || '',
     phone: '+250',
     password: '',
     confirm_password: '',
   });
   const [otp, setOtp] = useState('');
-  const [devOtp, setDevOtp] = useState('');
-  const [pendingSession, setPendingSession] = useState(null);
+  const [verificationToken, setVerificationToken] = useState('');
+  const [expiresAt, setExpiresAt] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    if (!expiresAt && resendCooldown <= 0) return undefined;
+    const updateTimers = () => {
+      if (expiresAt > 0) {
+        setSecondsLeft(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
+      }
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    };
+    const timer = setInterval(updateTimers, 1000);
+    return () => clearInterval(timer);
+  }, [expiresAt, resendCooldown > 0]);
+
+  const applyOtpMetadata = (data, defaultExpires = 600, defaultCooldown = 60) => {
+    const ttl = Number(data?.expiresInSeconds || defaultExpires);
+    const cd = Number(data?.resendCooldownSeconds || defaultCooldown);
+    setExpiresAt(Date.now() + ttl * 1000);
+    setSecondsLeft(ttl);
+    setResendCooldown(cd);
+  };
+
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setNotice('');
+    setSubmitting(true);
+    try {
+      const normalizedEmail = form.email.trim().toLowerCase();
+      const { data } = await api.post('/auth/send-registration-otp', {
+        email: normalizedEmail,
+        preferred_language: language,
+      });
+      setForm((prev) => ({ ...prev, email: normalizedEmail }));
+      setOtpMode('pre-register');
+      setOtp('');
+      setVerificationToken('');
+      applyOtpMetadata(data);
+      setNotice(data.message);
+      setStep('otp');
+    } catch (err) {
+      if (err.response?.data?.retryAfterSeconds) {
+        setResendCooldown(Number(err.response.data.retryAfterSeconds));
+      }
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setNotice('');
+    if (!/^\d{6}$/.test(otp.trim())) {
+      setError(t('auth.otpPlaceholder'));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      if (otpMode === 'legacy-verify') {
+        const { data } = await api.post('/auth/verify-email', {
+          email: form.email.trim().toLowerCase(),
+          otp_code: otp.trim(),
+        });
+        if (data?.token && data?.user) {
+          await completeSession(data.token, data.user, data.memberships || []);
+          navigate(redirectTarget || '/customer', { replace: true });
+          return;
+        }
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      const { data } = await api.post('/auth/verify-registration-otp', {
+        email: form.email.trim().toLowerCase(),
+        otp_code: otp.trim(),
+      });
+      setVerificationToken(data.verification_token);
+      setNotice(data.message);
+      setStep('form');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setError('');
+    setNotice('');
+    setResending(true);
+    try {
+      const endpoint = otpMode === 'legacy-verify' ? '/auth/resend-verification' : '/auth/send-registration-otp';
+      const payload =
+        otpMode === 'legacy-verify'
+          ? { email: form.email.trim().toLowerCase() }
+          : { email: form.email.trim().toLowerCase(), preferred_language: language };
+      const { data } = await api.post(endpoint, payload);
+      setOtp('');
+      applyOtpMetadata(data);
+      setNotice(data.message);
+    } catch (err) {
+      if (err.response?.data?.retryAfterSeconds) {
+        setResendCooldown(Number(err.response.data.retryAfterSeconds));
+      }
+      setError(err.message);
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -166,41 +309,24 @@ export function RegisterPage() {
     try {
       const { data } = await api.post('/auth/register', {
         full_name: form.full_name,
-        email: form.email,
+        email: form.email.trim().toLowerCase(),
         phone: form.phone,
         password: form.password,
         confirm_password: form.confirm_password,
         preferred_language: language,
+        verification_token: verificationToken,
       });
-      setPendingSession(data);
-      if (data.devOtpPreview) setDevOtp(data.devOtpPreview);
-      setStep('verify');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  const handleResend = async () => {
-    setError('');
-    setNotice('');
-    try {
-      const { data } = await api.post('/auth/resend-verification', { email: form.email });
-      if (data.devOtpPreview) setDevOtp(data.devOtpPreview);
-      setNotice(data.message);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+      if (data?.requiresEmailVerification || !data?.token) {
+        setOtpMode('legacy-verify');
+        setOtp('');
+        applyOtpMetadata(data);
+        setNotice(data?.message || '');
+        setStep('otp');
+        return;
+      }
 
-  const handleVerify = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSubmitting(true);
-    try {
-      await api.post('/auth/verify-email', { email: form.email, otp_code: otp });
-      await completeSession(pendingSession.token, { ...pendingSession.user, is_email_verified: 1, preferred_language: language }, []);
+      await completeSession(data.token, data.user, data.memberships || []);
       navigate(redirectTarget || '/customer', { replace: true });
     } catch (err) {
       setError(err.message);
@@ -209,23 +335,172 @@ export function RegisterPage() {
     }
   };
 
+  const resetToEmailStep = () => {
+    setStep('email');
+    setOtpMode('pre-register');
+    setOtp('');
+    setVerificationToken('');
+    setExpiresAt(0);
+    setSecondsLeft(0);
+    setError('');
+    setNotice('');
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
-          {step === 'form' ? (
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
+          {step === 'email' && (
             <>
               <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.registerTitle')}</h1>
+                <div className="space-y-1 min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.registerTitle')}</h1>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t('auth.registerSubtitle')}
+                    {t('auth.verifyEmailStepSubtitle')}
                   </p>
                 </div>
                 <LanguageSelector compact className="shrink-0" />
               </div>
+
+              {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
               {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
+
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.emailAddress')}</label>
+                  <input
+                    required
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    placeholder={t('auth.emailPlaceholder')}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
+                >
+                  {submitting ? t('auth.sendingOtp') : t('auth.sendOtpCode')}
+                </button>
+              </form>
+
+              <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
+                {t('auth.alreadyRegistered')}{' '}
+                <Link
+                  to={redirectTarget ? `/login?redirect=${encodeURIComponent(redirectTarget)}` : '/login'}
+                  className="font-semibold text-sky-700 dark:text-sky-400 hover:underline"
+                >
+                  {t('auth.signIn')}
+                </Link>
+              </p>
+            </>
+          )}
+
+          {step === 'otp' && (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1 min-w-0">
+                  <h1 className="text-lg sm:text-xl font-bold text-[#0B192C] dark:text-white">{t('auth.verifyTitle')}</h1>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 break-words">
+                    {t('auth.verifySubtitle')} <span className="font-medium text-slate-700 dark:text-slate-200 break-all">{form.email}</span>. {t('auth.verifySubtitleEnd')}
+                  </p>
+                </div>
+                <LanguageSelector compact className="shrink-0" />
+              </div>
+
+              {expiresAt > 0 && (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs">
+                  <span className="text-slate-600 dark:text-slate-300">
+                    {secondsLeft > 0 ? t('auth.otpExpiresIn') : t('auth.otpExpiredNotice')}
+                  </span>
+                  {secondsLeft > 0 && (
+                    <span className="font-mono font-semibold text-[#0B192C] dark:text-sky-300 tabular-nums shrink-0">
+                      {formatCountdownClock(secondsLeft)}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
+              {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
+
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <input
+                  required
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder={t('auth.otpPlaceholder')}
+                  className="w-full px-3 py-2.5 text-center text-lg font-mono tracking-widest tabular-nums bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting || (expiresAt > 0 && secondsLeft === 0)}
+                  className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
+                >
+                  {submitting
+                    ? t('auth.verifying')
+                    : otpMode === 'legacy-verify'
+                      ? t('auth.verifyContinue')
+                      : t('auth.verifyOtpCode')}
+                </button>
+              </form>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0 || resending}
+                  className="font-medium text-sky-700 dark:text-sky-400 hover:underline disabled:opacity-50 disabled:no-underline tabular-nums"
+                >
+                  {resendCooldown > 0
+                    ? t('auth.resendInSeconds', { seconds: resendCooldown })
+                    : t('auth.resendCode')}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetToEmailStep}
+                  className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:underline"
+                >
+                  {t('auth.changeEmailAddress')}
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 'form' && (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1 min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.registerTitle')}</h1>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t('auth.completeRegistrationSubtitle')}
+                  </p>
+                </div>
+                <LanguageSelector compact className="shrink-0" />
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="min-w-0">
+                  <span className="text-emerald-800 dark:text-emerald-300 font-semibold">{t('auth.emailVerifiedLabel')}: </span>
+                  <span className="text-slate-800 dark:text-slate-100 break-all">{form.email}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetToEmailStep}
+                  className="text-sky-700 dark:text-sky-400 font-medium hover:underline whitespace-nowrap shrink-0"
+                >
+                  {t('auth.changeEmailAddress')}
+                </button>
+              </div>
+
+              {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
+
               <form onSubmit={handleRegister} className="space-y-3.5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.fullName')}</label>
@@ -238,17 +513,6 @@ export function RegisterPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.emailAddress')}</label>
-                  <input
-                    required
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
-                    placeholder={t('auth.emailPlaceholder')}
-                  />
-                </div>
-                <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.phoneWithHint')}</label>
                   <input
                     required
@@ -257,7 +521,7 @@ export function RegisterPage() {
                     className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.password')}</label>
                     <input
@@ -298,44 +562,6 @@ export function RegisterPage() {
                   {t('auth.signIn')}
                 </Link>
               </p>
-            </>
-          ) : (
-            <>
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('auth.verifyTitle')}</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t('auth.verifySubtitle')} <span className="font-medium text-slate-700 dark:text-slate-200">{form.email}</span>. {t('auth.verifySubtitleEnd')}
-                  </p>
-                </div>
-                <LanguageSelector compact className="shrink-0" />
-              </div>
-              {devOtp && (
-                <div className="p-3 bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 rounded-lg text-xs text-sky-900 dark:text-sky-200">
-                  {t('auth.otpPreview')} <span className="font-mono font-bold">{devOtp}</span>
-                </div>
-              )}
-              {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
-              {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
-              <form onSubmit={handleVerify} className="space-y-4">
-                <input
-                  required
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder={t('auth.otpPlaceholder')}
-                  className="w-full px-3 py-2.5 text-center text-lg font-mono tracking-widest bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg"
-                />
-                <button type="submit" disabled={submitting} className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                  {submitting ? t('auth.verifying') : t('auth.verifyContinue')}
-                </button>
-              </form>
-              <button
-                type="button"
-                onClick={handleResend}
-                className="w-full text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline"
-              >
-                {t('auth.resendCode')}
-              </button>
             </>
           )}
         </div>
@@ -465,11 +691,11 @@ export function ActivateAccountPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
           <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.activateTitle')}</h1>
+            <div className="space-y-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.activateTitle')}</h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {t('auth.activateSubtitle')}
               </p>
@@ -595,9 +821,9 @@ export function CompleteProfilePage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="animate-fade-up w-full max-w-lg bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="animate-fade-up w-full max-w-lg bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="space-y-1">
               <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('auth.completeProfileTitle')}</h1>
               <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -695,9 +921,9 @@ export function ForceChangePasswordPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="animate-fade-up w-full max-w-lg bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="animate-fade-up w-full max-w-lg bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="space-y-1">
               <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
                 <Lock className="w-3.5 h-3.5" />
@@ -789,63 +1015,65 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [devToken, setDevToken] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleRequest = async (e) => {
     e.preventDefault();
     setError('');
+    setMessage('');
+    setSubmitting(true);
     try {
-      const { data } = await api.post('/auth/forgot-password', { email });
+      const { data } = await api.post('/auth/forgot-password', { email: email.trim().toLowerCase() });
       setMessage(data.message);
-      if (data.devResetToken) setDevToken(data.devResetToken);
       setStep('reset');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleReset = async (e) => {
     e.preventDefault();
     setError('');
+    setMessage('');
+    setSubmitting(true);
     try {
-      const { data } = await api.post('/auth/reset-password', { reset_token: resetToken, new_password: newPassword });
+      const { data } = await api.post('/auth/reset-password', { reset_token: resetToken.trim(), new_password: newPassword });
       setMessage(data.message);
       setStep('done');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
           <div className="flex items-center justify-between gap-3">
-            <h1 className="text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.forgotTitle')}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.forgotTitle')}</h1>
             <LanguageSelector compact className="shrink-0" />
           </div>
           {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
           {message && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{message}</div>}
-          {devToken && (
-            <div className="p-3 text-xs bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-200 rounded-lg font-mono break-all">
-              {t('auth.recoveryTokenPreview')} {devToken}
-            </div>
-          )}
 
           {step === 'request' && (
             <form onSubmit={handleRequest} className="space-y-4">
               <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('auth.accountEmail')} className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
-              <button type="submit" className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">{t('auth.sendRecoveryToken')}</button>
+              <button type="submit" disabled={submitting} className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg disabled:opacity-60">{t('auth.sendRecoveryToken')}</button>
             </form>
           )}
           {step === 'reset' && (
             <form onSubmit={handleReset} className="space-y-4">
               <input required value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder={t('auth.pasteRecoveryToken')} className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono" />
               <input required minLength={8} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('auth.newPasswordPlaceholder')} className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
-              <button type="submit" className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">{t('auth.resetPassword')}</button>
+              <button type="submit" disabled={submitting} className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg disabled:opacity-60">{t('auth.resetPassword')}</button>
             </form>
           )}
           {step === 'done' && (

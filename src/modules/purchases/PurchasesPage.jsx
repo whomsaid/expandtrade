@@ -15,6 +15,8 @@ export default function PurchasesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ supplier_id: '', product_id: '', ordered_qty: '10', unit_cost: '', expected_delivery_date: '' });
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   const currency = workspace?.business?.currency_code || 'RWF';
@@ -41,7 +43,9 @@ export default function PurchasesPage() {
 
   const handleCreatePo = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
+    setSaving(true);
     try {
       await api.post('/purchases', {
         supplier_id: Number(form.supplier_id),
@@ -52,7 +56,9 @@ export default function PurchasesPage() {
       setMessage(t('purchases.poCreatedMsg'));
       await loadAll();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -84,6 +90,7 @@ export default function PurchasesPage() {
             type="button"
             onClick={() => {
               const firstProd = products[0];
+              setModalError('');
               setForm({
                 supplier_id: suppliers[0]?.id || '',
                 product_id: firstProd?.id || '',
@@ -162,6 +169,7 @@ export default function PurchasesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('purchases.modalTitle')}</h2>
+            {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
             <form onSubmit={handleCreatePo} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('purchases.supplier')}</label>
@@ -193,8 +201,8 @@ export default function PurchasesPage() {
                 <input type="date" value={form.expected_delivery_date} onChange={(e) => setForm({ ...form, expected_delivery_date: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('purchases.issuePo')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">{saving ? t('common.saving') : t('purchases.issuePo')}</button>
               </div>
             </form>
           </div>

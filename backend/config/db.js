@@ -7,6 +7,7 @@ import { env } from './env.js';
 let activeDialect = 'sqlite';
 let sqliteDb = null;
 let mysqlPool = null;
+let sqliteTxChain = Promise.resolve();
 
 const SQLITE_SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -1154,7 +1155,158 @@ CREATE TABLE IF NOT EXISTS payroll_due_alerts (
   FOREIGN KEY (employee_user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE(payroll_config_id, due_period)
 );
+
+CREATE TABLE IF NOT EXISTS video_upload_sessions (
+  upload_id TEXT PRIMARY KEY,
+  business_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  editing_video_id INTEGER NULL,
+  product_id INTEGER NULL,
+  title TEXT NOT NULL,
+  description TEXT NULL,
+  is_published INTEGER NOT NULL DEFAULT 0,
+  original_filename TEXT NOT NULL,
+  video_mime_type TEXT NOT NULL DEFAULT 'video/mp4',
+  total_size_bytes INTEGER NOT NULL,
+  chunk_size_bytes INTEGER NOT NULL,
+  total_chunks INTEGER NOT NULL,
+  uploaded_chunks_json TEXT NOT NULL DEFAULT '[]',
+  thumbnail_url TEXT NULL,
+  temp_dir TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'uploading',
+  job_id TEXT NULL,
+  video_id INTEGER NULL,
+  error_message TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS background_jobs (
+  id TEXT PRIMARY KEY,
+  business_id INTEGER NULL,
+  user_id INTEGER NOT NULL,
+  job_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued',
+  progress INTEGER NOT NULL DEFAULT 0,
+  stage_label TEXT NULL,
+  result_json TEXT NULL,
+  error_message TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS otp_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL,
+  user_id INTEGER NULL,
+  purpose TEXT NOT NULL DEFAULT 'registration',
+  otp_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 5,
+  ip_address TEXT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 `;
+
+async function ensureMySqlSchemaAndIndexes(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS video_upload_sessions (
+      upload_id VARCHAR(64) PRIMARY KEY,
+      business_id INT NOT NULL,
+      user_id INT NOT NULL,
+      editing_video_id INT NULL,
+      product_id INT NULL,
+      title VARCHAR(200) NOT NULL,
+      description TEXT NULL,
+      is_published TINYINT(1) NOT NULL DEFAULT 0,
+      original_filename VARCHAR(255) NOT NULL,
+      video_mime_type VARCHAR(100) NOT NULL DEFAULT 'video/mp4',
+      total_size_bytes BIGINT NOT NULL,
+      chunk_size_bytes INT NOT NULL,
+      total_chunks INT NOT NULL,
+      uploaded_chunks_json LONGTEXT NOT NULL,
+      thumbnail_url VARCHAR(500) NULL,
+      temp_dir VARCHAR(500) NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'uploading',
+      job_id VARCHAR(64) NULL,
+      video_id INT NULL,
+      error_message TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS background_jobs (
+      id VARCHAR(64) PRIMARY KEY,
+      business_id INT NULL,
+      user_id INT NOT NULL,
+      job_type VARCHAR(64) NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'queued',
+      progress INT NOT NULL DEFAULT 0,
+      stage_label VARCHAR(160) NULL,
+      result_json LONGTEXT NULL,
+      error_message TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      completed_at DATETIME NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS otp_tokens (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      email VARCHAR(190) NOT NULL,
+      user_id INT NULL,
+      purpose VARCHAR(40) NOT NULL DEFAULT 'registration',
+      otp_hash VARCHAR(128) NOT NULL,
+      attempts INT NOT NULL DEFAULT 0,
+      max_attempts INT NOT NULL DEFAULT 5,
+      ip_address VARCHAR(64) NULL,
+      expires_at VARCHAR(48) NOT NULL,
+      used_at VARCHAR(48) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  const indexes = [
+    ['businesses', 'idx_businesses_pub_cat_dist', 'status, is_public_listed, deleted_at, category, district, id DESC'],
+    ['products', 'idx_products_biz_status', 'business_id, status'],
+    ['inventory', 'idx_inventory_product', 'product_id'],
+    ['inventory', 'idx_inventory_biz_branch', 'business_id, branch_id'],
+    ['sale_items', 'idx_sale_items_sale', 'sale_id'],
+    ['sale_items', 'idx_sale_items_prod', 'product_id'],
+    ['expenses', 'idx_expenses_biz_status_branch', 'business_id, approval_status, branch_id'],
+    ['notifications', 'idx_notifications_user', 'user_id, id DESC'],
+    ['user_sessions', 'idx_sessions_user_revoked', 'user_id, is_revoked'],
+    ['activity_logs', 'idx_activity_biz', 'business_id, id DESC'],
+    ['business_activity_logs', 'idx_biz_activity_biz', 'business_id, id DESC'],
+    ['business_videos', 'idx_videos_pub', 'is_published, business_id, id DESC'],
+    ['video_upload_sessions', 'idx_vus_biz_user', 'business_id, user_id, status'],
+    ['background_jobs', 'idx_bg_jobs_user', 'user_id, status'],
+    ['otp_tokens', 'idx_otp_email_purpose', 'email, purpose, id DESC'],
+  ];
+
+  for (const [table, indexName, cols] of indexes) {
+    try {
+      const [existing] = await pool.query(
+        `SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? LIMIT 1`,
+        [table, indexName]
+      );
+      if (!existing.length) {
+        await pool.query(`CREATE INDEX ${indexName} ON ${table}(${cols})`);
+      }
+    } catch {
+      // Ignore if table not present yet in external schema
+    }
+  }
+}
 
 export async function initDatabase() {
   if (env.dbClient === 'mysql' && env.mysql.host) {
@@ -1166,10 +1318,17 @@ export async function initDatabase() {
         password: env.mysql.password,
         database: env.mysql.database,
         waitForConnections: true,
-        connectionLimit: 10,
+        connectionLimit: 25,
+        maxIdle: 10,
+        idleTimeout: 60_000,
+        queueLimit: 0,
+        connectTimeout: 10_000,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10_000,
         namedPlaceholders: false,
       });
       await mysqlPool.query('SELECT 1');
+      await ensureMySqlSchemaAndIndexes(mysqlPool);
       activeDialect = 'mysql';
       console.log('[DB] Connected to MySQL server:', env.mysql.host);
       return { dialect: activeDialect };
@@ -1182,14 +1341,18 @@ export async function initDatabase() {
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
-  const dbPath = path.join(dataDir, 'bizflow.sqlite');
+  const dbPath = process.env.SQLITE_PATH
+    ? path.resolve(process.env.SQLITE_PATH)
+    : path.join(dataDir, 'bizflow.sqlite');
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   sqliteDb = new DatabaseSync(dbPath);
   sqliteDb.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
     PRAGMA temp_store = MEMORY;
     PRAGMA cache_size = -64000;
-    PRAGMA busy_timeout = 5000;
+    PRAGMA wal_autocheckpoint = 1000;
+    PRAGMA busy_timeout = 15000;
   `);
   sqliteDb.exec(SQLITE_SCHEMA_SQL);
   const ensureColumn = (table, col, ddl) => {
@@ -1215,23 +1378,47 @@ export async function initDatabase() {
   ensureColumn('contact_inquiries', 'user_id', 'user_id INTEGER NULL');
   sqliteDb.exec(`
     CREATE INDEX IF NOT EXISTS idx_businesses_public ON businesses(status, is_public_listed, deleted_at, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_businesses_pub_cat_dist ON businesses(status, is_public_listed, deleted_at, category, district, id DESC);
     CREATE INDEX IF NOT EXISTS idx_businesses_category ON businesses(category);
     CREATE INDEX IF NOT EXISTS idx_businesses_district ON businesses(district);
+    CREATE INDEX IF NOT EXISTS idx_products_biz_status ON products(business_id, status);
+    CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory(product_id);
+    CREATE INDEX IF NOT EXISTS idx_inventory_biz_branch ON inventory(business_id, branch_id);
+    CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+    CREATE INDEX IF NOT EXISTS idx_sale_items_prod ON sale_items(product_id);
+    CREATE INDEX IF NOT EXISTS idx_videos_pub ON business_videos(is_published, business_id, id DESC);
     CREATE INDEX IF NOT EXISTS idx_branches_biz_active ON branches(business_id, is_active);
     CREATE INDEX IF NOT EXISTS idx_reviews_biz ON product_reviews(business_id);
+    CREATE INDEX IF NOT EXISTS idx_reviews_user ON product_reviews(user_id);
+    CREATE INDEX IF NOT EXISTS idx_inquiries_user ON contact_inquiries(user_id);
     CREATE INDEX IF NOT EXISTS idx_sales_biz_status_date ON sales(business_id, sale_status, created_at);
     CREATE INDEX IF NOT EXISTS idx_sessions_jti ON user_sessions(token_jti, user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user_revoked ON user_sessions(user_id, is_revoked);
     CREATE INDEX IF NOT EXISTS idx_bm_biz_status ON business_members(business_id, status);
     CREATE INDEX IF NOT EXISTS idx_bm_user_status ON business_members(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_ba_biz_primary ON business_admins(business_id, is_primary, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_ba_user ON business_admins(user_id);
+    CREATE INDEX IF NOT EXISTS idx_subs_biz ON subscriptions(business_id, id DESC);
     CREATE INDEX IF NOT EXISTS idx_orders_biz_created ON orders(business_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_orders_cust_user ON orders(customer_user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_idempotency ON orders(business_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_expenses_biz_status ON expenses(business_id, approval_status);
+    CREATE INDEX IF NOT EXISTS idx_expenses_biz_status_branch ON expenses(business_id, approval_status, branch_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_activity_biz ON activity_logs(business_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_biz_activity_biz ON business_activity_logs(business_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_email_ver_user ON email_verifications(user_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_vacancies_biz_status ON job_vacancies(business_id, status);
+    CREATE INDEX IF NOT EXISTS idx_job_apps_user ON job_applications(applicant_user_id);
     CREATE INDEX IF NOT EXISTS idx_payroll_cfg_biz_due ON employee_payroll_configs(business_id, payroll_status, next_payment_date);
     CREATE INDEX IF NOT EXISTS idx_payroll_cfg_user ON employee_payroll_configs(user_id);
     CREATE INDEX IF NOT EXISTS idx_payroll_tx_biz_status ON payroll_transactions(business_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_payroll_tx_emp ON payroll_transactions(employee_user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_payroll_alerts_biz ON payroll_due_alerts(business_id, status);
+    CREATE INDEX IF NOT EXISTS idx_vus_biz_user ON video_upload_sessions(business_id, user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_bg_jobs_user ON background_jobs(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_otp_email_purpose ON otp_tokens(email, purpose, id DESC);
   `);
   activeDialect = 'sqlite';
   console.log('[DB] Connected to persistent SQLite database at', dbPath);
@@ -1329,30 +1516,36 @@ export async function transaction(callback) {
     }
   }
 
-  sqliteDb.exec('BEGIN IMMEDIATE');
-  try {
-    const tx = {
-      query: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).all(...normalizeParams(params)),
-      queryOne: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).get(...normalizeParams(params)) || null,
-      execute: async (sql, params = []) => {
-        const res = sqliteDb.prepare(adaptSqlForDialect(sql)).run(...normalizeParams(params));
-        return {
-          insertId: Number(res.lastInsertRowid || 0),
-          affectedRows: Number(res.changes || 0),
-        };
-      },
-    };
-    const result = await callback(tx);
-    sqliteDb.exec('COMMIT');
-    return result;
-  } catch (err) {
+  const runSerialized = async () => {
+    sqliteDb.exec('BEGIN IMMEDIATE');
     try {
-      sqliteDb.exec('ROLLBACK');
-    } catch {
-      // ignore if already rolled back
+      const tx = {
+        query: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).all(...normalizeParams(params)),
+        queryOne: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).get(...normalizeParams(params)) || null,
+        execute: async (sql, params = []) => {
+          const res = sqliteDb.prepare(adaptSqlForDialect(sql)).run(...normalizeParams(params));
+          return {
+            insertId: Number(res.lastInsertRowid || 0),
+            affectedRows: Number(res.changes || 0),
+          };
+        },
+      };
+      const result = await callback(tx);
+      sqliteDb.exec('COMMIT');
+      return result;
+    } catch (err) {
+      try {
+        sqliteDb.exec('ROLLBACK');
+      } catch {
+        // ignore if already rolled back
+      }
+      throw err;
     }
-    throw err;
-  }
+  };
+
+  const pending = sqliteTxChain.then(runSerialized, runSerialized);
+  sqliteTxChain = pending.catch(() => {});
+  return pending;
 }
 
 export function roundMoney(val) {

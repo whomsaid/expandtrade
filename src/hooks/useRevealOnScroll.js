@@ -1,6 +1,6 @@
 import { createElement, useEffect, useRef, useState } from 'react';
 
-export function useRevealOnScroll({ threshold = 0.08, rootMargin = '0px 0px -32px 0px' } = {}) {
+export function useRevealOnScroll({ threshold = 0.01, rootMargin = '0px 0px 80px 0px' } = {}) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -18,7 +18,8 @@ export function useRevealOnScroll({ threshold = 0.08, rootMargin = '0px 0px -32p
     }
 
     const rect = el.getBoundingClientRect();
-    if (rect.top < window.innerHeight * 0.95) {
+    const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 900;
+    if (rect.top < viewportHeight * 1.05) {
       setIsVisible(true);
       return undefined;
     }
@@ -37,7 +38,15 @@ export function useRevealOnScroll({ threshold = 0.08, rootMargin = '0px 0px -32p
     );
 
     observer.observe(el);
-    return () => observer.disconnect();
+    const safetyTimer = setTimeout(() => {
+      setIsVisible(true);
+      observer.disconnect();
+    }, 650);
+
+    return () => {
+      clearTimeout(safetyTimer);
+      observer.disconnect();
+    };
   }, [isVisible, threshold, rootMargin]);
 
   return [ref, isVisible];

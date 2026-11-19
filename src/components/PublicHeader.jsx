@@ -144,15 +144,15 @@ export default function PublicHeader() {
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3">
         <Link
           to="/"
           onClick={(e) => handleNavClick(e, navItems[0])}
-          className="text-xl font-bold tracking-tight text-[#0B192C] dark:text-white whitespace-nowrap shrink-0"
+          className="text-base sm:text-xl font-bold tracking-tight text-[#0B192C] dark:text-white whitespace-nowrap min-w-0 shrink"
         >
           <BrandLogo
-            textClassName="text-xl font-bold tracking-tight text-[#0B192C] dark:text-white"
-            imgClassName="h-8 w-auto max-w-[140px] object-contain shrink-0"
+            textClassName="text-base sm:text-xl font-bold tracking-tight text-[#0B192C] dark:text-white truncate max-w-[140px] sm:max-w-none"
+            imgClassName="h-7 sm:h-8 w-auto max-w-[110px] sm:max-w-[140px] object-contain shrink-0"
           />
         </Link>
 
@@ -178,20 +178,22 @@ export default function PublicHeader() {
           })}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          <LanguageSelector compact />
-          <ThemeSelector compact />
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <div className="hidden sm:flex items-center gap-2">
+            <LanguageSelector compact />
+            <ThemeSelector compact />
+          </div>
           {user ? (
             <Link
               to={portalLink}
-              className="inline-flex items-center px-3.5 sm:px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center px-2.5 sm:px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors whitespace-nowrap shrink-0 max-w-[125px] sm:max-w-none truncate"
             >
               {portalLabel}
             </Link>
           ) : (
             <Link
               to="/login"
-              className="inline-flex items-center px-3.5 sm:px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center px-3 sm:px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors whitespace-nowrap shrink-0"
             >
               {t('nav.signIn')}
             </Link>
@@ -201,7 +203,7 @@ export default function PublicHeader() {
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-label={menuOpen ? t('nav.closeNav') : t('nav.openNav')}
             aria-expanded={menuOpen}
-            className="lg:hidden p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="lg:hidden p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
           >
             {menuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
@@ -222,7 +224,7 @@ export default function PublicHeader() {
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-3 py-2 text-sm rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-semibold border-l-2 border-sky-600 dark:border-sky-400'
+                      ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-semibold'
                       : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70'
                   }`}
                 >
@@ -236,16 +238,19 @@ export default function PublicHeader() {
               aria-current={activeKey === 'track-order' ? 'page' : undefined}
               className={`px-3 py-2 text-sm rounded-lg transition-colors ${
                 activeKey === 'track-order'
-                  ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-semibold border-l-2 border-sky-600 dark:border-sky-400'
+                  ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-semibold'
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70'
               }`}
             >
               {t('nav.trackOrder')}
             </Link>
           </nav>
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('language.label')}</span>
-            <LanguageSelector compact />
+          <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('language.label')}</span>
+              <LanguageSelector compact />
+            </div>
+            <ThemeSelector compact />
           </div>
         </div>
       )}

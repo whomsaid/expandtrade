@@ -18,6 +18,7 @@ export default function NotificationsPage() {
   });
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
+  const [busyAction, setBusyAction] = useState('');
 
   useEffect(() => {
     api.get('/notifications').then((res) => {
@@ -26,24 +27,32 @@ export default function NotificationsPage() {
   }, []);
 
   const handleMarkAll = async () => {
+    if (busyAction) return;
     setError('');
+    setBusyAction('markAll');
     try {
       await api.patch('/notifications/read-all');
       await refreshNotifications();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
   const handleSavePrefs = async (e) => {
     e.preventDefault();
+    if (busyAction) return;
     setError('');
     setSaved('');
+    setBusyAction('savePrefs');
     try {
       await api.put('/notifications/preferences', prefs);
       setSaved(t('notifications.prefsUpdated'));
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -52,7 +61,7 @@ export default function NotificationsPage() {
       <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <h1 className="text-lg font-bold text-[#0B192C] dark:text-slate-100">{t('notifications.title')}</h1>
-          <button type="button" onClick={handleMarkAll} className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline">
+          <button type="button" disabled={Boolean(busyAction)} onClick={handleMarkAll} className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline disabled:opacity-50">
             {t('notifications.markAllRead')}
           </button>
         </div>
@@ -99,8 +108,8 @@ export default function NotificationsPage() {
             </label>
           ))}
         </div>
-        <button type="submit" className="w-full py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
-          {t('notifications.savePrefs')}
+        <button type="submit" disabled={Boolean(busyAction)} className="w-full py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors disabled:opacity-60">
+          {busyAction === 'savePrefs' ? t('common.saving') : t('notifications.savePrefs')}
         </button>
       </form>
     </div>

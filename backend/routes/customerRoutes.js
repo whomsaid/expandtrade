@@ -89,47 +89,64 @@ router.get('/public/businesses', async (req, res, next) => {
 
     const listSql = `
       SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
-             b.country, b.province, b.district, b.physical_address, b.currency_code, b.operating_hours,
-             COALESCE(p_agg.product_count, 0) AS product_count,
-             COALESCE(b_agg.branch_count, 0) AS branch_count,
-             r_agg.avg_rating AS avg_rating,
-             COALESCE(r_agg.review_count, 0) AS review_count
+             b.country, b.province, b.district, b.physical_address, b.currency_code, b.operating_hours
       FROM businesses b
-      LEFT JOIN (
-        SELECT business_id, COUNT(*) AS product_count
-        FROM products
-        WHERE status = 'active'
-        GROUP BY business_id
-      ) p_agg ON p_agg.business_id = b.id
-      LEFT JOIN (
-        SELECT business_id, COUNT(*) AS branch_count
-        FROM branches
-        WHERE is_active = 1
-        GROUP BY business_id
-      ) b_agg ON b_agg.business_id = b.id
-      LEFT JOIN (
-        SELECT business_id, ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS review_count
-        FROM product_reviews
-        GROUP BY business_id
-      ) r_agg ON r_agg.business_id = b.id
       ${whereSql}
       ORDER BY b.id DESC
       LIMIT ? OFFSET ?
     `;
 
-    const [businesses, countRow, categories] = await Promise.all([
+    const [baseBusinesses, countRow, categories, districts] = await Promise.all([
       query(listSql, [...params, limit, offset]),
       queryOne(`SELECT COUNT(*) AS total FROM businesses b ${whereSql}`, params),
       query(
         `SELECT DISTINCT category FROM businesses WHERE status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL ORDER BY category ASC`
       ),
+      query(
+        `SELECT DISTINCT district FROM businesses WHERE status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL AND district IS NOT NULL AND district != '' ORDER BY district ASC`
+      ),
     ]);
+
+    let businesses = [];
+    if (baseBusinesses.length > 0) {
+      const ids = baseBusinesses.map((b) => b.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const [prodCounts, branchCounts, reviewAggs] = await Promise.all([
+        query(
+          `SELECT business_id, COUNT(*) AS product_count FROM products WHERE status = 'active' AND business_id IN (${placeholders}) GROUP BY business_id`,
+          ids
+        ),
+        query(
+          `SELECT business_id, COUNT(*) AS branch_count FROM branches WHERE is_active = 1 AND business_id IN (${placeholders}) GROUP BY business_id`,
+          ids
+        ),
+        query(
+          `SELECT business_id, ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS review_count FROM product_reviews WHERE business_id IN (${placeholders}) GROUP BY business_id`,
+          ids
+        ),
+      ]);
+      const pMap = new Map(prodCounts.map((r) => [r.business_id, Number(r.product_count || 0)]));
+      const bMap = new Map(branchCounts.map((r) => [r.business_id, Number(r.branch_count || 0)]));
+      const rMap = new Map(reviewAggs.map((r) => [r.business_id, { avg_rating: r.avg_rating, review_count: Number(r.review_count || 0) }]));
+
+      businesses = baseBusinesses.map((b) => {
+        const rev = rMap.get(b.id);
+        return {
+          ...b,
+          product_count: pMap.get(b.id) || 0,
+          branch_count: bMap.get(b.id) || 0,
+          avg_rating: rev?.avg_rating ?? null,
+          review_count: rev?.review_count || 0,
+        };
+      });
+    }
 
     const total = Number(countRow?.total || 0);
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const payload = {
       businesses,
       categories: categories.map((c) => c.category),
+      districts: districts.map((d) => d.district),
       total,
       page,
       limit,

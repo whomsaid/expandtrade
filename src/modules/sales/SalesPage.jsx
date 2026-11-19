@@ -19,6 +19,8 @@ export default function SalesPage() {
   const [refundSale, setRefundSale] = useState(null);
   const [refundReason, setRefundReason] = useState('');
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   const currency = workspace?.business?.currency_code || 'RWF';
@@ -50,20 +52,26 @@ export default function SalesPage() {
 
   const handleRecordPayment = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
+    setSaving(true);
     try {
       await api.post(`/sales/${paymentModalSale.id}/payments`, payForm);
       setPaymentModalSale(null);
       setMessage(t('sales.paymentRecorded'));
       await loadSales();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleRefund = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
+    setSaving(true);
     try {
       await api.post(`/sales/${refundSale.id}/refund`, { reason: refundReason, restock_items: true });
       setRefundSale(null);
@@ -71,7 +79,9 @@ export default function SalesPage() {
       setMessage(t('sales.refundProcessed'));
       await loadSales();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -153,6 +163,7 @@ export default function SalesPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          setModalError('');
                           setPaymentModalSale(s);
                           setPayForm({ amount: String(s.balance_due), payment_method: 'mtn_momo', external_reference: '' });
                         }}
@@ -165,7 +176,7 @@ export default function SalesPage() {
                     {hasPermission('sales.refund') && s.sale_status === 'completed' && (
                       <button
                         type="button"
-                        onClick={() => setRefundSale(s)}
+                        onClick={() => { setModalError(''); setRefundSale(s); }}
                         className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:underline font-medium"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -188,6 +199,7 @@ export default function SalesPage() {
             <p className="text-xs text-slate-600 dark:text-slate-300 tabular-nums">
               {t('sales.outstandingBalance')} <strong>{formatMoney(paymentModalSale.balance_due, currency)}</strong>
             </p>
+            {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
             <form onSubmit={handleRecordPayment} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('sales.amount')}</label>
@@ -204,8 +216,8 @@ export default function SalesPage() {
                 <input value={payForm.external_reference} onChange={(e) => setPayForm({ ...payForm, external_reference: e.target.value })} placeholder={t('sales.refPlaceholder')} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setPaymentModalSale(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('sales.savePayment')}</button>
+                <button type="button" disabled={saving} onClick={() => setPaymentModalSale(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">{saving ? t('common.saving') : t('sales.savePayment')}</button>
               </div>
             </form>
           </div>
@@ -220,11 +232,12 @@ export default function SalesPage() {
             <p className="text-xs text-slate-600 dark:text-slate-300">
               {t('sales.refundNote')}
             </p>
+            {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
             <form onSubmit={handleRefund} className="space-y-3 text-xs">
               <textarea required rows={3} value={refundReason} onChange={(e) => setRefundReason(e.target.value)} placeholder={t('sales.refundReasonPlaceholder')} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setRefundSale(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg">{t('sales.confirmRefund')}</button>
+                <button type="button" disabled={saving} onClick={() => setRefundSale(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg disabled:opacity-50">{saving ? t('common.saving') : t('sales.confirmRefund')}</button>
               </div>
             </form>
           </div>

@@ -19,6 +19,11 @@ export default function FinancePage() {
   const [expForm, setExpForm] = useState({ title: '', category_name: 'Rent & Utilities', amount: '', payment_method: 'mtn_momo', description: '', receipt: null });
   const [incForm, setIncForm] = useState({ category: 'Service Fee', source: '', amount: '', payment_method: 'cash', description: '' });
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [approvingId, setApprovingId] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [receiptPreview, setReceiptPreview] = useState('');
 
   const currency = workspace?.business?.currency_code || 'RWF';
 
@@ -43,43 +48,103 @@ export default function FinancePage() {
     loadFinance();
   }, [loadFinance]);
 
+  useEffect(() => {
+    return () => {
+      if (receiptPreview && receiptPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(receiptPreview);
+      }
+    };
+  }, [receiptPreview]);
+
+  const handleReceiptSelect = (file) => {
+    setModalError('');
+    if (!file) {
+      setExpForm((prev) => ({ ...prev, receipt: null }));
+      setReceiptPreview('');
+      return;
+    }
+    if (file.size === 0) {
+      setModalError(t('validation.emptyFile'));
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isGenericMime = !file.type || file.type === 'application/octet-stream';
+    if (!allowed.includes(file.type) && !(isGenericMime && ['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(ext))) {
+      setModalError(t('validation.unsupportedReceiptFormat'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setModalError(t('validation.fileTooLarge'));
+      return;
+    }
+    const isImage = file.type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
+    setExpForm((prev) => ({ ...prev, receipt: file }));
+    setReceiptPreview((prev) => {
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return isImage ? URL.createObjectURL(file) : '';
+    });
+  };
+
   const handleAddExpense = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
+    setSaving(true);
+    setUploadProgress(0);
     try {
       const fd = new FormData();
       Object.entries(expForm).forEach(([k, v]) => {
         if (k === 'receipt' && v) fd.append('receipt', v);
         else if (k !== 'receipt' && v) fd.append(k, v);
       });
-      await api.post('/finance/expenses', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post('/finance/expenses', fd, {
+        onUploadProgress: (evt) => {
+          if (evt.total && expForm.receipt) {
+            setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
+      });
       setShowExpenseModal(false);
       setExpForm({ title: '', category_name: 'Rent & Utilities', amount: '', payment_method: 'mtn_momo', description: '', receipt: null });
+      setReceiptPreview('');
       await loadFinance();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+      setUploadProgress(0);
     }
   };
 
   const handleAddIncome = async (e) => {
     e.preventDefault();
-    setError('');
+    if (saving) return;
+    setModalError('');
+    setSaving(true);
     try {
       await api.post('/finance/income', incForm);
       setShowIncomeModal(false);
       setIncForm({ category: 'Service Fee', source: '', amount: '', payment_method: 'cash', description: '' });
       await loadFinance();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleApproveExpense = async (id, decision) => {
+    if (approvingId === id) return;
+    setApprovingId(id);
+    setError('');
     try {
       await api.patch(`/finance/expenses/${id}/approval`, { decision });
       await loadFinance();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -92,11 +157,11 @@ export default function FinancePage() {
         </div>
         {hasPermission('finance.create') && (
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setShowIncomeModal(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+            <button type="button" onClick={() => { setModalError(''); setShowIncomeModal(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <Plus className="w-3.5 h-3.5" />
               {t('finance.recordIncome')}
             </button>
-            <button type="button" onClick={() => setShowExpenseModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
+            <button type="button" onClick={() => { setModalError(''); setUploadProgress(0); setReceiptPreview(''); setShowExpenseModal(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
               <Plus className="w-3.5 h-3.5" />
               {t('finance.recordExpense')}
             </button>
@@ -182,10 +247,10 @@ export default function FinancePage() {
                     <td className="py-3 px-4 text-right space-x-2">
                       {ex.approval_status === 'pending' && (
                         <>
-                          <button type="button" onClick={() => handleApproveExpense(ex.id, 'approved')} className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 hover:underline font-medium">
+                          <button type="button" disabled={approvingId === ex.id} onClick={() => handleApproveExpense(ex.id, 'approved')} className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 hover:underline font-medium disabled:opacity-40">
                             <Check className="w-3.5 h-3.5" /> {t('finance.approve')}
                           </button>
-                          <button type="button" onClick={() => handleApproveExpense(ex.id, 'rejected')} className="inline-flex items-center gap-0.5 text-rose-600 dark:text-rose-400 hover:underline font-medium">
+                          <button type="button" disabled={approvingId === ex.id} onClick={() => handleApproveExpense(ex.id, 'rejected')} className="inline-flex items-center gap-0.5 text-rose-600 dark:text-rose-400 hover:underline font-medium disabled:opacity-40">
                             <X className="w-3.5 h-3.5" /> {t('finance.reject')}
                           </button>
                         </>
@@ -236,6 +301,11 @@ export default function FinancePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('finance.expenseModalTitle')}</h2>
+            {modalError && (
+              <div className="p-2.5 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleAddExpense} className="space-y-3 text-xs">
               <input required placeholder={t('finance.expenseTitlePlaceholder')} value={expForm.title} onChange={(e) => setExpForm({ ...expForm, title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <select value={expForm.category_name} onChange={(e) => setExpForm({ ...expForm, category_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
@@ -250,14 +320,38 @@ export default function FinancePage() {
                 </select>
               </div>
               <textarea rows={2} placeholder={t('finance.descriptionPlaceholder')} value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300">
-                <Upload className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                <span>{expForm.receipt ? expForm.receipt.name : t('finance.uploadReceipt')}</span>
-                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setExpForm({ ...expForm, receipt: e.target.files?.[0] || null })} />
-              </label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  {receiptPreview && (
+                    <img
+                      src={receiptPreview}
+                      alt={expForm.receipt?.name || 'Receipt'}
+                      className="w-11 h-11 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                    />
+                  )}
+                  <label className="flex-1 flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <Upload className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
+                    <span className="truncate">{expForm.receipt ? expForm.receipt.name : t('finance.uploadReceipt')}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        handleReceiptSelect(e.target.files?.[0] || null);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                {saving && expForm.receipt && uploadProgress > 0 && (
+                  <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-sky-600 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
+              </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowExpenseModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('finance.submitExpense')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowExpenseModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">{saving ? t('common.saving') : t('finance.submitExpense')}</button>
               </div>
             </form>
           </div>
@@ -268,6 +362,11 @@ export default function FinancePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/75 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-[#0B192C] dark:text-slate-100">{t('finance.incomeModalTitle')}</h2>
+            {modalError && (
+              <div className="p-2.5 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleAddIncome} className="space-y-3 text-xs">
               <input required placeholder={t('finance.incomeCategoryPlaceholder')} value={incForm.category} onChange={(e) => setIncForm({ ...incForm, category: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <input required placeholder={t('finance.incomeSourcePlaceholder')} value={incForm.source} onChange={(e) => setIncForm({ ...incForm, source: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
@@ -278,8 +377,8 @@ export default function FinancePage() {
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowIncomeModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">{t('common.cancel')}</button>
-                <button type="submit" className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">{t('finance.saveIncome')}</button>
+                <button type="button" disabled={saving} onClick={() => setShowIncomeModal(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">{saving ? t('common.saving') : t('finance.saveIncome')}</button>
               </div>
             </form>
           </div>

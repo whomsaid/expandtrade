@@ -116,6 +116,7 @@ export default function PosPage() {
 
   const handleCheckout = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (cart.length === 0) return setError(t('pos.cartEmptyErr'));
     setError('');
     setSubmitting(true);

@@ -15,6 +15,7 @@ import customerRoutes from './routes/customerRoutes.js';
 import videoRoutes from './routes/videoRoutes.js';
 import recruitmentRoutes from './routes/recruitmentRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
+import jobRoutes from './routes/jobRoutes.js';
 
 export function createBackendApp() {
   const app = express();
@@ -24,6 +25,8 @@ export function createBackendApp() {
     helmet({
       contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: false,
+      crossOriginResourcePolicy: false,
       frameguard: false,
     })
   );
@@ -40,9 +43,12 @@ export function createBackendApp() {
 
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 300,
+    max: 1200,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) =>
+      req.path.startsWith('/ads/videos/uploads') ||
+      req.path.startsWith('/jobs/'),
   });
 
   app.use('/uploads', express.static(path.resolve(process.cwd(), 'backend', 'uploads'), { maxAge: '7d' }));
@@ -63,6 +69,7 @@ export function createBackendApp() {
 
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api', apiLimiter);
+  app.use('/api', jobRoutes);
   app.use('/api', payrollRoutes);
   app.use('/api', businessRoutes);
   app.use('/api', catalogRoutes);

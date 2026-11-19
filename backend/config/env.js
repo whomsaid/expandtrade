@@ -2,8 +2,28 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function resolvePort() {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i += 1) {
+    if ((args[i] === '--port' || args[i] === '-p') && args[i + 1]) {
+      const parsed = Number(args[i + 1]);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    } else if (args[i].startsWith('--port=')) {
+      const parsed = Number(args[i].split('=')[1]);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+  }
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const envPort = Number(process.env.PORT || 3000);
+  // In container dev environments PORT=8080 is bound by nginx proxy -> upstream 3000
+  if (nodeEnv !== 'production' && envPort === 8080 && !process.env.ALLOW_PORT_8080) {
+    return 3000;
+  }
+  return envPort;
+}
+
 export const env = {
-  port: Number(process.env.PORT || 3000),
+  port: resolvePort(),
   nodeEnv: process.env.NODE_ENV || 'development',
   appUrl: process.env.APP_URL || 'http://localhost:3000',
   jwtSecret: process.env.JWT_SECRET || 'biztrade_africa_dev_jwt_secret_change_in_prod_2026',
@@ -17,12 +37,15 @@ export const env = {
     database: process.env.MYSQL_DATABASE || 'biztrade_africa',
   },
   geminiApiKey: process.env.GEMINI_API_KEY || '',
+  otpSecret: process.env.OTP_SECRET || process.env.JWT_SECRET || 'biztrade_africa_dev_otp_secret_2026',
   smtp: {
+    provider: process.env.SMTP_PROVIDER || 'smtp',
     host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : Number(process.env.SMTP_PORT || 587) === 465,
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
-    from: process.env.SMTP_FROM || 'noreply@biztrade.africa',
+    from: process.env.SMTP_FROM || 'BizTrade Africa <noreply@biztrade.africa>',
   },
   superAdmin: {
     name: process.env.SUPER_ADMIN_NAME || 'Jean Claude Ndayisaba',

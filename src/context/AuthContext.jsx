@@ -1,24 +1,51 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import i18n, { normalizeLanguage } from '../i18n.js';
-import { api } from '../services/api.js';
+import {
+  api,
+  clearApiWorkspaceContext,
+  invalidateApiCache,
+  setApiWorkspaceContext,
+} from '../services/api.js';
 
 const AuthContext = createContext(null);
 
+function resolveTargetBusinessId(membershipsList = [], preferredId = null) {
+  if (!Array.isArray(membershipsList) || membershipsList.length === 0) return null;
+  const saved = Number(
+    preferredId ||
+      localStorage.getItem('biztrade_business_id') ||
+      localStorage.getItem('bizflow_business_id') ||
+      0
+  );
+  const matched = membershipsList.find((m) => Number(m.business_id) === saved);
+  return Number((matched || membershipsList[0]).business_id) || null;
+}
+
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token') || '');
+  const [token, setToken] = useState(() => {
+    const t = localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token') || '';
+    if (t) setApiWorkspaceContext({ token: t });
+    return t;
+  });
   const [user, setUser] = useState(null);
   const [memberships, setMemberships] = useState([]);
   const [activeBusinessId, setActiveBusinessId] = useState(() => {
     const saved = localStorage.getItem('biztrade_business_id') || localStorage.getItem('bizflow_business_id');
-    return saved ? Number(saved) : null;
+    const id = saved ? Number(saved) : null;
+    if (id) setApiWorkspaceContext({ businessId: id });
+    return id;
   });
   const [activeBranchId, setActiveBranchId] = useState(() => {
     const saved = localStorage.getItem('biztrade_branch_id') || localStorage.getItem('bizflow_branch_id');
-    return saved ? Number(saved) : null;
+    const id = saved ? Number(saved) : null;
+    if (id) setApiWorkspaceContext({ branchId: id });
+    return id;
   });
   const [workspace, setWorkspace] = useState(null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [language, setLanguage] = useState(() =>
     normalizeLanguage(localStorage.getItem('biztrade_lang') || localStorage.getItem('bizflow_lang') || i18n.language || 'en')
   );
@@ -39,37 +66,72 @@ export function AuthProvider({ children }) {
     return next;
   }, []);
 
-  const loadWorkspace = useCallback(async (bizId, branchIdOverride = null) => {
-    if (!bizId) {
+  const syncWorkspaceIds = useCallback((bizId, branchId = null) => {
+    const numericBiz = bizId ? Number(bizId) : null;
+    const numericBranch = branchId ? Number(branchId) : null;
+
+    if (!numericBiz) {
       localStorage.removeItem('biztrade_business_id');
       localStorage.removeItem('biztrade_branch_id');
       localStorage.removeItem('bizflow_business_id');
       localStorage.removeItem('bizflow_branch_id');
+      setApiWorkspaceContext({ businessId: '', branchId: '' });
       setActiveBusinessId(null);
       setActiveBranchId(null);
-      setWorkspace(null);
       return;
     }
-    localStorage.setItem('biztrade_business_id', String(bizId));
-    if (branchIdOverride) {
-      localStorage.setItem('biztrade_branch_id', String(branchIdOverride));
-    }
-    try {
-      const { data } = await api.get('/businesses/current', {
-        headers: {
-          'x-business-id': String(bizId),
-          ...(branchIdOverride ? { 'x-branch-id': String(branchIdOverride) } : {}),
-        },
-      });
-      setWorkspace(data);
-      setActiveBusinessId(bizId);
-      const nextBranch = data.activeBranchId || data.branches?.[0]?.id || null;
-      setActiveBranchId(nextBranch);
-      if (nextBranch) localStorage.setItem('biztrade_branch_id', String(nextBranch));
-    } catch {
-      setWorkspace(null);
+
+    localStorage.setItem('biztrade_business_id', String(numericBiz));
+    setApiWorkspaceContext({ businessId: numericBiz });
+    setActiveBusinessId(numericBiz);
+
+    if (numericBranch) {
+      localStorage.setItem('biztrade_branch_id', String(numericBranch));
+      setApiWorkspaceContext({ branchId: numericBranch });
+      setActiveBranchId(numericBranch);
+    } else if (branchId === null) {
+      localStorage.removeItem('biztrade_branch_id');
+      localStorage.removeItem('bizflow_branch_id');
+      setApiWorkspaceContext({ branchId: '' });
+      setActiveBranchId(null);
     }
   }, []);
+
+  const loadWorkspace = useCallback(
+    async (bizId, branchIdOverride = null) => {
+      if (!bizId) {
+        syncWorkspaceIds(null, null);
+        setWorkspace(null);
+        return null;
+      }
+
+      const numericBiz = Number(bizId);
+      const numericBranch = branchIdOverride ? Number(branchIdOverride) : null;
+      // Set business header synchronously BEFORE firing any workspace requests
+      syncWorkspaceIds(numericBiz, numericBranch || undefined);
+      setWorkspaceLoading(true);
+      try {
+        const { data } = await api.get('/businesses/current', {
+          headers: {
+            'x-business-id': String(numericBiz),
+            ...(numericBranch ? { 'x-branch-id': String(numericBranch) } : {}),
+          },
+        });
+        setWorkspace(data);
+        const resolvedBizId = Number(data?.business?.id || numericBiz);
+        const resolvedBranch = Number(data?.activeBranchId || data?.branches?.[0]?.id || numericBranch || 0) || null;
+        syncWorkspaceIds(resolvedBizId, resolvedBranch);
+        return data;
+      } catch {
+        // Keep activeBusinessId intact if user has a valid assigned membership so subsequent retries keep x-business-id
+        setWorkspace(null);
+        return null;
+      } finally {
+        setWorkspaceLoading(false);
+      }
+    },
+    [syncWorkspaceIds]
+  );
 
   const refreshNotifications = useCallback(async () => {
     if (!(localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token'))) return;
@@ -84,29 +146,38 @@ export function AuthProvider({ children }) {
   const refreshMe = useCallback(async () => {
     const activeToken = localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token');
     if (!activeToken) {
+      clearApiWorkspaceContext();
       setLoading(false);
-      return;
+      return null;
     }
     localStorage.setItem('biztrade_token', activeToken);
+    setApiWorkspaceContext({ token: activeToken });
     try {
       const { data } = await api.get('/auth/me');
+      const membershipsList = data.memberships || [];
       setUser(data.user);
+      setSessions(data.sessions || []);
       if (data.user?.preferred_language) {
         applyLanguageLocally(data.user.preferred_language);
       }
-      setMemberships(data.memberships || []);
-      setLoading(false);
+      setMemberships(membershipsList);
+
       if (!data.user?.must_change_password) {
-        const savedBiz = Number(localStorage.getItem('biztrade_business_id') || localStorage.getItem('bizflow_business_id'));
-        const matched = (data.memberships || []).find((m) => m.business_id === savedBiz);
-        const targetBiz = matched ? matched.business_id : data.memberships?.[0]?.business_id || null;
+        const targetBiz = resolveTargetBusinessId(membershipsList);
+        if (targetBiz) {
+          syncWorkspaceIds(targetBiz, undefined);
+        }
+        setLoading(false);
         await Promise.all([loadWorkspace(targetBiz), refreshNotifications()]);
       } else {
+        syncWorkspaceIds(null, null);
         setWorkspace(null);
         setNotifications([]);
+        setLoading(false);
       }
       return data;
     } catch {
+      clearApiWorkspaceContext();
       localStorage.removeItem('biztrade_token');
       localStorage.removeItem('biztrade_business_id');
       localStorage.removeItem('biztrade_branch_id');
@@ -115,12 +186,16 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('bizflow_branch_id');
       setToken('');
       setUser(null);
+      setSessions([]);
       setMemberships([]);
+      setActiveBusinessId(null);
+      setActiveBranchId(null);
       setWorkspace(null);
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [applyLanguageLocally, loadWorkspace, refreshNotifications]);
+  }, [applyLanguageLocally, loadWorkspace, refreshNotifications, syncWorkspaceIds]);
 
   useEffect(() => {
     refreshMe();
@@ -128,8 +203,10 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const onUnauthorized = () => {
+      clearApiWorkspaceContext();
       setToken('');
       setUser(null);
+      setSessions([]);
       setMemberships([]);
       setActiveBusinessId(null);
       setActiveBranchId(null);
@@ -168,16 +245,22 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
     localStorage.setItem('biztrade_token', data.token);
+    setApiWorkspaceContext({ token: data.token });
     setToken(data.token);
     setUser(data.user);
     if (data.user?.preferred_language) {
       applyLanguageLocally(data.user.preferred_language);
     }
-    setMemberships(data.memberships || []);
+    const membershipsList = data.memberships || [];
+    setMemberships(membershipsList);
+    invalidateApiCache();
+
     if (!data.user?.must_change_password) {
-      const firstBiz = data.memberships?.[0]?.business_id || null;
-      await Promise.all([loadWorkspace(firstBiz), refreshNotifications()]);
+      const targetBiz = resolveTargetBusinessId(membershipsList);
+      syncWorkspaceIds(targetBiz, undefined);
+      await Promise.all([loadWorkspace(targetBiz), refreshNotifications()]);
     } else {
+      syncWorkspaceIds(null, null);
       setWorkspace(null);
       setNotifications([]);
     }
@@ -186,15 +269,22 @@ export function AuthProvider({ children }) {
 
   const completeSession = async (newToken, newUser, newMemberships = []) => {
     localStorage.setItem('biztrade_token', newToken);
+    setApiWorkspaceContext({ token: newToken });
     setToken(newToken);
     setUser(newUser);
     if (newUser?.preferred_language) {
       applyLanguageLocally(newUser.preferred_language);
     }
     setMemberships(newMemberships);
+    invalidateApiCache();
+
     if (!newUser?.must_change_password) {
-      const firstBiz = newMemberships?.[0]?.business_id || null;
-      await Promise.all([loadWorkspace(firstBiz), refreshNotifications()]);
+      const targetBiz = resolveTargetBusinessId(newMemberships);
+      syncWorkspaceIds(targetBiz, undefined);
+      await Promise.all([loadWorkspace(targetBiz), refreshNotifications()]);
+    } else {
+      syncWorkspaceIds(null, null);
+      setWorkspace(null);
     }
   };
 
@@ -210,6 +300,8 @@ export function AuthProvider({ children }) {
       } catch {
         // ignore network/session expiry errors during cleanup
       } finally {
+        clearApiWorkspaceContext();
+        invalidateApiCache();
         localStorage.removeItem('biztrade_token');
         localStorage.removeItem('biztrade_business_id');
         localStorage.removeItem('biztrade_branch_id');
@@ -218,6 +310,7 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('bizflow_branch_id');
         setToken('');
         setUser(null);
+        setSessions([]);
         setMemberships([]);
         setActiveBusinessId(null);
         setActiveBranchId(null);
@@ -231,12 +324,16 @@ export function AuthProvider({ children }) {
   };
 
   const switchBusiness = async (bizId) => {
+    const numericBiz = Number(bizId);
+    if (!numericBiz) return;
+    invalidateApiCache();
     localStorage.removeItem('biztrade_branch_id');
     localStorage.removeItem('bizflow_branch_id');
-    await loadWorkspace(Number(bizId));
+    await loadWorkspace(numericBiz, null);
   };
 
   const switchBranch = async (branchId) => {
+    invalidateApiCache();
     await loadWorkspace(activeBusinessId, Number(branchId));
   };
 
@@ -289,10 +386,12 @@ export function AuthProvider({ children }) {
       value={{
         token,
         user,
+        sessions,
         memberships,
         activeBusinessId,
         activeBranchId,
         workspace,
+        workspaceLoading,
         notifications,
         language,
         socket,

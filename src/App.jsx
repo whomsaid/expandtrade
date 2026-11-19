@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Component, Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
@@ -52,6 +52,40 @@ const SuperAdminPage = lazy(() => import('./modules/admin/SuperAdminPage.jsx'));
 const AdvertisementsPage = lazy(() => import('./modules/ads/AdvertisementsPage.jsx'));
 const RecruitmentPage = lazy(() => import('./modules/recruitment/RecruitmentPage.jsx'));
 
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center space-y-4">
+            <h1 className="text-lg font-bold text-[#0B192C] dark:text-white">BizTrade Africa</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              A temporary display error occurred while loading this page.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AuthLoadingScreen() {
   const { t } = useTranslation();
   return (
@@ -85,12 +119,15 @@ function CompleteProfileProtectedRoute() {
 
 // Customers are strictly blocked from /app/* business administration routes
 function BusinessProtectedRoute({ children }) {
-  const { user, memberships, loading } = useAuth();
+  const { user, memberships, activeBusinessId, loading } = useAuth();
   if (loading) return <AuthLoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.must_change_password) return <Navigate to="/change-temporary-password" replace />;
   if (!user.is_platform_admin && (!memberships || memberships.length === 0)) {
     return <Navigate to="/customer" replace />;
+  }
+  if (memberships?.length > 0 && !activeBusinessId) {
+    return <AuthLoadingScreen />;
   }
   return children;
 }
@@ -123,7 +160,8 @@ export default function App() {
         <PlatformConfigProvider>
           <BrowserRouter>
             <GlobalWatermark />
-            <Suspense fallback={<AuthLoadingScreen />}>
+            <AppErrorBoundary>
+              <Suspense fallback={<AuthLoadingScreen />}>
               <Routes>
                 {/* Public Website Routes */}
                 <Route path="/" element={<HomePage />} />
@@ -221,6 +259,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
+            </AppErrorBoundary>
           </BrowserRouter>
         </PlatformConfigProvider>
       </ThemeProvider>

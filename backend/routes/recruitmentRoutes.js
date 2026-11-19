@@ -17,6 +17,7 @@ import {
   removeUploadedFile,
   verifyCertificateSignature,
   verifyCvSignature,
+  verifyFileNonEmpty,
 } from '../middleware/upload.js';
 import { createNotification, logAudit, notifyBusinessManagers } from '../services/auditService.js';
 
@@ -1448,10 +1449,10 @@ router.post(
       if (!req.file) {
         return res.status(400).json({ error: 'CV file (PDF or DOCX, max 10MB) is required.' });
       }
-      if (!verifyCvSignature(req.file.path, req.file.mimetype)) {
+      if (!verifyFileNonEmpty(req.file) || !verifyCvSignature(req.file.path, req.file.mimetype)) {
         cleanupMulterFiles(req);
         return res.status(400).json({
-          error: 'Invalid CV file content. Upload a genuine PDF or DOCX document.',
+          error: 'Invalid CV file content. Upload a genuine non-empty PDF or DOCX document.',
         });
       }
 
@@ -1474,6 +1475,16 @@ router.post(
         [application.id]
       );
 
+      const cvExt = path.extname(req.file.path || '').toLowerCase();
+      const canonicalCvMime =
+        cvExt === '.docx'
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : 'application/pdf';
+      const storedCvMime =
+        req.file.mimetype && req.file.mimetype !== 'application/octet-stream'
+          ? req.file.mimetype
+          : canonicalCvMime;
+
       const ins = await execute(
         `INSERT INTO application_documents (
           application_id, business_id, applicant_user_id, document_category, document_type,
@@ -1485,7 +1496,7 @@ router.post(
           req.user.id,
           req.file.originalname || 'cv',
           req.file.path,
-          req.file.mimetype,
+          storedCvMime,
           req.file.size || 0,
         ]
       );
@@ -1525,10 +1536,10 @@ router.post(
       if (!req.file) {
         return res.status(400).json({ error: 'Document file (PDF, JPG, JPEG, PNG, max 10MB) is required.' });
       }
-      if (!verifyCertificateSignature(req.file.path, req.file.mimetype)) {
+      if (!verifyFileNonEmpty(req.file) || !verifyCertificateSignature(req.file.path, req.file.mimetype)) {
         cleanupMulterFiles(req);
         return res.status(400).json({
-          error: 'Invalid document content. Upload a genuine PDF, JPG, JPEG, or PNG file.',
+          error: 'Invalid document content. Upload a genuine non-empty PDF, JPG, JPEG, or PNG file.',
         });
       }
 
@@ -1547,6 +1558,13 @@ router.post(
 
       const docType = String(req.body.document_type || 'Academic Certificate').trim().slice(0, 100);
       const docName = String(req.body.document_name || req.file.originalname || docType).trim().slice(0, 200);
+      const docExt = path.extname(req.file.path || '').toLowerCase();
+      const canonicalDocMime =
+        docExt === '.pdf' ? 'application/pdf' : docExt === '.png' ? 'image/png' : 'image/jpeg';
+      const storedDocMime =
+        req.file.mimetype && req.file.mimetype !== 'application/octet-stream'
+          ? req.file.mimetype
+          : canonicalDocMime;
 
       const ins = await execute(
         `INSERT INTO application_documents (
@@ -1561,7 +1579,7 @@ router.post(
           docName,
           req.file.originalname || docName,
           req.file.path,
-          req.file.mimetype,
+          storedDocMime,
           req.file.size || 0,
         ]
       );
@@ -1654,9 +1672,6 @@ router.post('/customer/applications/:id/submit', authenticate, requireProfileIma
     // Validate required personal fields
     if (!String(application.full_name || '').trim() || !String(application.phone || '').trim() || !String(application.email || '').trim()) {
       return res.status(400).json({ error: 'Step 1 (Personal Information): Full name, phone, and email are required.' });
-    }
-    if (!String(application.profile_photo_url || req.user.avatar_url || '').trim()) {
-      return res.status(400).json({ error: 'A profile image is required before submitting your application.' });
     }
 
     // Validate Step 2 Education

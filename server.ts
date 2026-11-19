@@ -3,7 +3,6 @@ import path from 'node:path';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { Server as SocketIOServer } from 'socket.io';
-import { createServer as createViteServer } from 'vite';
 import { env } from './backend/config/env.js';
 import { initDatabase, queryOne } from './backend/config/db.js';
 import { ensureSuperAdmin, removeLegacySeedAccounts, seedCoreRbacAndPlans } from './backend/config/rbac.js';
@@ -19,6 +18,10 @@ async function startServer() {
 
   const app = createBackendApp();
   const httpServer = http.createServer(app);
+  // Allow long/slow file and video uploads without an arbitrary 5-minute Node HTTP wall
+  httpServer.requestTimeout = 0;
+  httpServer.keepAliveTimeout = 65_000;
+  httpServer.headersTimeout = 66_000;
 
   const io = new SocketIOServer(httpServer, {
     cors: { origin: true, credentials: true },
@@ -44,7 +47,11 @@ async function startServer() {
     socket.on('business:join', async (businessId) => {
       const id = Number(businessId);
       if (!id) return;
-      const member = await queryOne(
+      const platformAdmin = await queryOne(
+        `SELECT id FROM users WHERE id = ? AND is_platform_admin = 1 AND is_active = 1`,
+        [userId]
+      );
+      const member = platformAdmin || await queryOne(
         `SELECT id FROM business_members WHERE business_id = ? AND user_id = ? AND status = 'active'`,
         [id, userId]
       );
@@ -61,8 +68,12 @@ async function startServer() {
   startPayrollScheduler(60_000);
 
   if (env.nodeEnv !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true, ws: { server: httpServer } },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

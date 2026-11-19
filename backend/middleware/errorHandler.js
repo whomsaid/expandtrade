@@ -36,6 +36,9 @@ export function errorHandler(err, req, res, _next) {
   } else if (
     err.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
     err.code === 'ER_DUP_ENTRY' ||
+    err.errcode === 2067 ||
+    err.errcode === 1555 ||
+    err.errcode === 2579 ||
     (err.message && /UNIQUE constraint failed/i.test(err.message))
   ) {
     status = 409;
@@ -44,6 +47,8 @@ export function errorHandler(err, req, res, _next) {
   } else if (
     err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' ||
     err.code === 'ER_NO_REFERENCED_ROW_2' ||
+    err.errcode === 787 ||
+    err.errcode === 1811 ||
     (err.message && /FOREIGN KEY constraint failed/i.test(err.message))
   ) {
     status = 400;
@@ -51,6 +56,8 @@ export function errorHandler(err, req, res, _next) {
     code = 'INVALID_REFERENCE';
   } else if (
     err.code === 'SQLITE_BUSY' ||
+    err.errcode === 5 ||
+    err.errcode === 6 ||
     err.code === 'ECONNREFUSED' ||
     err.code === 'PROTOCOL_CONNECTION_LOST' ||
     err.code === 'ETIMEDOUT'

@@ -151,9 +151,10 @@ export async function seedCoreRbacAndPlans() {
     ['enterprise', 'Enterprise', 'Regional retail chains & multi-country groups', 180000, 1800000, 250, 100, 100000, 102400, 10000, 1, 1],
   ];
 
+  const existingPlanRows = await query('SELECT code FROM subscription_plans');
+  const existingPlans = new Set(existingPlanRows.map((r) => r.code));
   for (const p of plans) {
-    const existing = await queryOne('SELECT id FROM subscription_plans WHERE code = ?', [p[0]]);
-    if (!existing) {
+    if (!existingPlans.has(p[0])) {
       await execute(
         `INSERT INTO subscription_plans
         (code, name, target_audience, monthly_price_rwf, annual_price_rwf, max_employees, max_branches, max_products, max_storage_mb, max_ai_requests_monthly, advanced_reports_enabled, integrations_enabled)
@@ -163,37 +164,43 @@ export async function seedCoreRbacAndPlans() {
     }
   }
 
+  const existingPermRows = await query('SELECT id, perm_key FROM permissions');
+  const permIdByKey = new Map(existingPermRows.map((r) => [r.perm_key, r.id]));
   for (const perm of ALL_PERMISSIONS) {
-    const existing = await queryOne('SELECT id FROM permissions WHERE perm_key = ?', [perm.key]);
-    if (!existing) {
-      await execute(
+    if (!permIdByKey.has(perm.key)) {
+      const res = await execute(
         'INSERT INTO permissions (perm_key, module, description) VALUES (?, ?, ?)',
         [perm.key, perm.module, perm.desc]
       );
+      permIdByKey.set(perm.key, res.insertId);
     }
   }
 
+  const existingRoleRows = await query('SELECT id, code FROM roles');
+  const roleIdByCode = new Map(existingRoleRows.map((r) => [r.code, r.id]));
+  const existingRolePermRows = await query('SELECT role_id, permission_id FROM role_permissions');
+  const rolePermSet = new Set(existingRolePermRows.map((r) => `${r.role_id}:${r.permission_id}`));
+
   for (const roleDef of ROLE_DEFINITIONS) {
-    let role = await queryOne('SELECT id FROM roles WHERE code = ?', [roleDef.code]);
-    if (!role) {
+    let roleId = roleIdByCode.get(roleDef.code);
+    if (!roleId) {
       const res = await execute(
         'INSERT INTO roles (code, name, description) VALUES (?, ?, ?)',
         [roleDef.code, roleDef.name, roleDef.description]
       );
-      role = { id: res.insertId };
+      roleId = res.insertId;
+      roleIdByCode.set(roleDef.code, roleId);
     }
     for (const permKey of roleDef.permissions) {
-      const perm = await queryOne('SELECT id FROM permissions WHERE perm_key = ?', [permKey]);
-      if (perm) {
-        const exists = await queryOne(
-          'SELECT role_id FROM role_permissions WHERE role_id = ? AND permission_id = ?',
-          [role.id, perm.id]
-        );
-        if (!exists) {
+      const permId = permIdByKey.get(permKey);
+      if (permId) {
+        const pairKey = `${roleId}:${permId}`;
+        if (!rolePermSet.has(pairKey)) {
           await execute(
             'INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)',
-            [role.id, perm.id]
+            [roleId, permId]
           );
+          rolePermSet.add(pairKey);
         }
       }
     }
@@ -222,9 +229,10 @@ export async function seedCoreRbacAndPlans() {
     ['business_retention_days', '365'],
     ['require_email_verification', '1'],
   ];
+  const existingSettingRows = await query('SELECT setting_key FROM platform_settings');
+  const existingSettings = new Set(existingSettingRows.map((r) => r.setting_key));
   for (const [key, val] of defaultSettings) {
-    const existing = await queryOne('SELECT id FROM platform_settings WHERE setting_key = ?', [key]);
-    if (!existing) {
+    if (!existingSettings.has(key)) {
       await execute('INSERT INTO platform_settings (setting_key, setting_value) VALUES (?, ?)', [key, val]);
     }
   }

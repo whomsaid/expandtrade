@@ -1,16 +1,74 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { body } from 'express-validator';
+import { env } from '../config/env.js';
 import { execute, query, queryOne, transaction } from '../config/db.js';
 import { authenticate, recordUserSession, signAccessToken } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { avatarUpload, removeUploadedFile, verifyImageSignature } from '../middleware/upload.js';
 import { logAudit } from '../services/auditService.js';
-import { sendMail } from '../services/mailService.js';
+import {
+  buildInvitationEmail,
+  buildOtpVerificationEmail,
+  buildPasswordResetEmail,
+  sendMail,
+} from '../services/mailService.js';
 import { validatePasswordStrength } from '../utils/passwordPolicy.js';
 
 const router = express.Router();
+
+const OTP_TTL_MINUTES = 10;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const OTP_MAX_ATTEMPTS = 5;
+
+const otpSendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification code requests. Please wait before requesting another code.' },
+});
+
+const otpVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many OTP verification attempts. Please wait before trying again.' },
+});
+
+function generateOtpCode() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtpCode(email, purpose, otpCode) {
+  const normalized = `${String(email || '').trim().toLowerCase()}:${String(purpose || 'registration')}:${String(otpCode || '').trim()}`;
+  return crypto.createHmac('sha256', env.otpSecret).update(normalized).digest('hex');
+}
+
+function verifyOtpHash(email, purpose, otpCode, expectedHash) {
+  if (!expectedHash) return false;
+  const candidate = Buffer.from(hashOtpCode(email, purpose, otpCode), 'hex');
+  const stored = Buffer.from(String(expectedHash), 'hex');
+  if (candidate.length === 0 || candidate.length !== stored.length) return false;
+  return crypto.timingSafeEqual(candidate, stored);
+}
+
+async function getCooldownRemainingSeconds(email, purpose) {
+  const latest = await queryOne(
+    `SELECT created_at FROM otp_tokens WHERE email = ? AND purpose = ? ORDER BY id DESC LIMIT 1`,
+    [email, purpose]
+  );
+  if (!latest?.created_at) return 0;
+  const iso = latest.created_at.includes('T') ? latest.created_at : `${latest.created_at.replace(' ', 'T')}Z`;
+  const createdMs = new Date(iso).getTime();
+  if (Number.isNaN(createdMs)) return 0;
+  const elapsedSec = Math.floor((Date.now() - createdMs) / 1000);
+  return Math.max(0, OTP_RESEND_COOLDOWN_SECONDS - elapsedSec);
+}
 
 function validateOptionalAvatarUpload(req, res, next) {
   if (!req.file) return next();
@@ -146,9 +204,162 @@ function resolveAccountCategory(user, memberships = []) {
   return 'customer';
 }
 
-// Public Customer Registration ONLY (profile image is optional — users receive default avatar and can upload later)
+// Step 1: Send real hashed OTP code to verify customer email before allowing registration to continue
+router.post(
+  '/send-registration-otp',
+  otpSendLimiter,
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email address is required'),
+    body('full_name').optional().trim().isLength({ max: 140 }),
+  ],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const { email, full_name = '' } = req.body;
+      const existing = await queryOne('SELECT id, is_email_verified FROM users WHERE email = ?', [email]);
+      if (existing) {
+        return res.status(409).json({
+          error: existing.is_email_verified
+            ? 'An account with this email already exists. Please sign in.'
+            : 'An account with this email already exists and awaits verification.',
+        });
+      }
+
+      const cooldown = await getCooldownRemainingSeconds(email, 'registration');
+      if (cooldown > 0) {
+        return res.status(429).json({
+          error: `Please wait ${cooldown} seconds before requesting a new verification code.`,
+          retryAfterSeconds: cooldown,
+        });
+      }
+
+      const otpCode = generateOtpCode();
+      const otpHash = hashOtpCode(email, 'registration', otpCode);
+      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
+
+      await execute(
+        `UPDATE otp_tokens SET used_at = datetime('now') WHERE email = ? AND purpose = 'registration' AND used_at IS NULL`,
+        [email]
+      );
+      const insertRes = await execute(
+        `INSERT INTO otp_tokens (email, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
+         VALUES (?, NULL, 'registration', ?, ?, ?, ?)`,
+        [email, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
+      );
+
+      const emailPayload = buildOtpVerificationEmail({
+        fullName: full_name.trim(),
+        otpCode,
+        expiresMinutes: OTP_TTL_MINUTES,
+        purposeLabel: 'account registration',
+      });
+      const mailResult = await sendMail({
+        to: email,
+        subject: emailPayload.subject,
+        text: emailPayload.text,
+        html: emailPayload.html,
+      });
+
+      if (!mailResult.delivered) {
+        await execute(`DELETE FROM otp_tokens WHERE id = ?`, [insertRes.insertId]);
+        return res.status(503).json({
+          error: mailResult.error || 'Unable to send verification email. Check SMTP server configuration and try again.',
+          code: mailResult.reason || 'EMAIL_DELIVERY_FAILED',
+        });
+      }
+
+      res.json({
+        message: `Verification code sent to ${email}. Check your inbox to continue.`,
+        email,
+        expiresInSeconds: OTP_TTL_MINUTES * 60,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Step 2: Verify pre-registration OTP code against stored HMAC-SHA256 hash
+router.post(
+  '/verify-registration-otp',
+  otpVerifyLimiter,
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email address is required'),
+    body('otp_code').trim().matches(/^\d{6}$/).withMessage('A valid 6-digit OTP code is required'),
+  ],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const { email, otp_code } = req.body;
+      const existing = await queryOne('SELECT id FROM users WHERE email = ?', [email]);
+      if (existing) {
+        return res.status(409).json({ error: 'An account with this email already exists.' });
+      }
+
+      const record = await queryOne(
+        `SELECT * FROM otp_tokens
+         WHERE email = ? AND purpose = 'registration' AND used_at IS NULL
+         ORDER BY id DESC LIMIT 1`,
+        [email]
+      );
+      if (!record) {
+        return res.status(400).json({ error: 'No active verification code found. Please request a new OTP.' });
+      }
+      if (new Date(record.expires_at).getTime() <= Date.now()) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+        return res.status(400).json({ error: 'Verification code has expired. Please request a new OTP.' });
+      }
+      if (Number(record.attempts || 0) >= Number(record.max_attempts || OTP_MAX_ATTEMPTS)) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+        return res.status(429).json({ error: 'Maximum verification attempts exceeded. Please request a new OTP.' });
+      }
+
+      const valid = verifyOtpHash(email, 'registration', otp_code, record.otp_hash);
+      if (!valid) {
+        const nextAttempts = Number(record.attempts || 0) + 1;
+        const maxAttempts = Number(record.max_attempts || OTP_MAX_ATTEMPTS);
+        if (nextAttempts >= maxAttempts) {
+          await execute(`UPDATE otp_tokens SET attempts = ?, used_at = datetime('now') WHERE id = ?`, [
+            nextAttempts,
+            record.id,
+          ]);
+          return res.status(429).json({ error: 'Too many invalid attempts. Please request a new OTP code.' });
+        }
+        await execute('UPDATE otp_tokens SET attempts = ? WHERE id = ?', [nextAttempts, record.id]);
+        return res.status(400).json({
+          error: `Invalid verification code. ${maxAttempts - nextAttempts} attempt(s) remaining.`,
+        });
+      }
+
+      await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+
+      const verificationToken = jwt.sign(
+        {
+          typ: 'email_verified_registration',
+          email,
+          otpTokenId: record.id,
+        },
+        env.otpSecret,
+        { expiresIn: '30m' }
+      );
+
+      res.json({
+        verified: true,
+        email,
+        verification_token: verificationToken,
+        message: 'Email verified successfully. You may now complete your account registration.',
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Public Customer Registration ONLY (requires verified email OTP before issuing authenticated session)
 router.post(
   '/register',
+  otpSendLimiter,
   avatarUpload.single('avatar'),
   validateOptionalAvatarUpload,
   [
@@ -168,18 +379,103 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
-      const { full_name, email, phone, password, preferred_language } = req.body;
+      const { full_name, email, phone, password, preferred_language, verification_token } = req.body;
       const safeLang = ['en', 'rw', 'fr'].includes(preferred_language) ? preferred_language : 'en';
-      const existing = await queryOne('SELECT id FROM users WHERE email = ?', [email]);
+      const existing = await queryOne('SELECT id, is_email_verified FROM users WHERE email = ?', [email]);
       if (existing) {
         if (req.file?.path) removeUploadedFile(req.file.path);
         return res.status(409).json({ error: 'An account with this email already exists' });
       }
 
+      let preVerified = false;
+      if (verification_token) {
+        try {
+          const decoded = jwt.verify(String(verification_token), env.otpSecret);
+          if (decoded?.typ !== 'email_verified_registration' || decoded?.email !== email) {
+            if (req.file?.path) removeUploadedFile(req.file.path);
+            return res.status(400).json({ error: 'Email verification token does not match this email address.' });
+          }
+          const otpRow = await queryOne(
+            `SELECT id, used_at FROM otp_tokens WHERE id = ? AND email = ? AND purpose = 'registration'`,
+            [decoded.otpTokenId, email]
+          );
+          if (!otpRow || !otpRow.used_at) {
+            if (req.file?.path) removeUploadedFile(req.file.path);
+            return res.status(400).json({ error: 'Email verification record could not be confirmed.' });
+          }
+          preVerified = true;
+        } catch {
+          if (req.file?.path) removeUploadedFile(req.file.path);
+          return res.status(400).json({ error: 'Email verification has expired. Please verify your email OTP again.' });
+        }
+      }
+
       const avatarUrl = req.file ? `/uploads/avatars/${req.file.filename}` : null;
       const passwordHash = await bcrypt.hash(password, 10);
-      const otpCode = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+      if (preVerified) {
+        const userId = await transaction(async (tx) => {
+          const uRes = await tx.execute(
+            `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, is_platform_admin, preferred_language)
+             VALUES (?, ?, ?, ?, ?, 1, 0, ?)`,
+            [full_name.trim(), email, phone.trim(), avatarUrl, passwordHash, safeLang]
+          );
+          const newUserId = uRes.insertId;
+          await tx.execute('INSERT INTO customer_profiles (user_id) VALUES (?)', [newUserId]);
+          await tx.execute('INSERT INTO notification_preferences (user_id) VALUES (?)', [newUserId]);
+          return newUserId;
+        });
+
+        const user = await queryOne(
+          `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
+                  must_change_password, is_email_verified, is_platform_admin, preferred_language, theme_preference
+           FROM users WHERE id = ?`,
+          [userId]
+        );
+        const { token, jti } = signAccessToken(user);
+        await recordUserSession(user.id, jti, req);
+
+        await logAudit({
+          userId: user.id,
+          action: 'customer.registered',
+          entityType: 'user',
+          entityId: user.id,
+          ipAddress: req.ip,
+        });
+
+        return res.status(201).json({
+          message: 'Email verified and customer account created successfully.',
+          token,
+          user: formatSafeUser(user, []),
+          memberships: [],
+        });
+      }
+
+      // Direct registration path without pre-verification: generate hashed OTP, deliver via real SMTP, and withhold session until verified
+      const otpCode = generateOtpCode();
+      const otpHash = hashOtpCode(email, 'registration', otpCode);
+      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
+
+      const emailPayload = buildOtpVerificationEmail({
+        fullName: full_name.trim(),
+        otpCode,
+        expiresMinutes: OTP_TTL_MINUTES,
+        purposeLabel: 'customer registration',
+      });
+      const mailResult = await sendMail({
+        to: email,
+        subject: emailPayload.subject,
+        text: emailPayload.text,
+        html: emailPayload.html,
+      });
+
+      if (!mailResult.delivered) {
+        if (req.file?.path) removeUploadedFile(req.file.path);
+        return res.status(503).json({
+          error: mailResult.error || 'Unable to deliver verification OTP email. Check SMTP configuration and try again.',
+          code: mailResult.reason || 'EMAIL_DELIVERY_FAILED',
+        });
+      }
 
       const userId = await transaction(async (tx) => {
         const uRes = await tx.execute(
@@ -191,44 +487,32 @@ router.post(
 
         await tx.execute('INSERT INTO customer_profiles (user_id) VALUES (?)', [newUserId]);
         await tx.execute(
-          'INSERT INTO email_verifications (user_id, otp_code, expires_at) VALUES (?, ?, ?)',
-          [newUserId, otpCode, expiresAt]
+          `UPDATE otp_tokens SET used_at = datetime('now') WHERE email = ? AND purpose = 'registration' AND used_at IS NULL`,
+          [email]
+        );
+        await tx.execute(
+          `INSERT INTO otp_tokens (email, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
+           VALUES (?, ?, 'registration', ?, ?, ?, ?)`,
+          [email, newUserId, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
         );
         await tx.execute('INSERT INTO notification_preferences (user_id) VALUES (?)', [newUserId]);
         return newUserId;
       });
 
-      const mailResult = await sendMail({
-        to: email,
-        subject: 'Verify your BizTrade Africa customer account',
-        text: `Your BizTrade Africa email verification code is: ${otpCode}. It expires in 30 minutes.`,
-      });
-
-      const user = await queryOne(
-        `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_platform_admin, preferred_language, theme_preference
-         FROM users WHERE id = ?`,
-        [userId]
-      );
-      const { token, jti } = signAccessToken(user);
-      await recordUserSession(user.id, jti, req);
-
       await logAudit({
-        userId: user.id,
-        action: 'customer.registered',
+        userId,
+        action: 'customer.registered_pending_otp',
         entityType: 'user',
-        entityId: user.id,
+        entityId: userId,
         ipAddress: req.ip,
       });
 
-      res.status(201).json({
-        message: mailResult.delivered
-          ? 'Customer account created. Check your email for the 6-digit OTP code.'
-          : 'Customer account created. Verify your email using the 6-digit OTP code.',
-        token,
-        user: formatSafeUser(user, []),
-        memberships: [],
-        devOtpPreview: !mailResult.delivered || process.env.NODE_ENV !== 'production' ? otpCode : undefined,
+      return res.status(201).json({
+        requiresEmailVerification: true,
+        email,
+        expiresInSeconds: OTP_TTL_MINUTES * 60,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+        message: `Verification OTP sent to ${email}. Verify your email code to complete registration.`,
       });
     } catch (err) {
       if (req.file?.path) removeUploadedFile(req.file.path);
@@ -239,31 +523,74 @@ router.post(
 
 router.post(
   '/verify-email',
+  otpVerifyLimiter,
   [
     body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
-    body('otp_code').trim().isLength({ min: 4, max: 10 }).withMessage('Verification code required'),
+    body('otp_code').trim().matches(/^\d{6}$/).withMessage('A valid 6-digit verification code is required'),
   ],
   validateRequest,
   async (req, res, next) => {
     try {
       const { email, otp_code } = req.body;
-      const user = await queryOne('SELECT id, is_email_verified FROM users WHERE email = ?', [email]);
+      const user = await queryOne(
+        `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
+                must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+         FROM users WHERE email = ?`,
+        [email]
+      );
       if (!user) return res.status(404).json({ error: 'Account not found' });
 
       const record = await queryOne(
-        `SELECT * FROM email_verifications
-         WHERE user_id = ? AND otp_code = ? AND verified_at IS NULL
+        `SELECT * FROM otp_tokens
+         WHERE email = ? AND purpose = 'registration' AND used_at IS NULL
          ORDER BY id DESC LIMIT 1`,
-        [user.id, otp_code]
+        [email]
       );
-      if (!record || new Date(record.expires_at).getTime() < Date.now()) {
-        return res.status(400).json({ error: 'Invalid or expired verification code' });
+      if (!record) {
+        return res.status(400).json({ error: 'No active verification code found. Request a new code.' });
+      }
+      if (new Date(record.expires_at).getTime() <= Date.now()) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+        return res.status(400).json({ error: 'Verification code has expired. Please request a new OTP.' });
+      }
+      if (Number(record.attempts || 0) >= Number(record.max_attempts || OTP_MAX_ATTEMPTS)) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+        return res.status(429).json({ error: 'Maximum verification attempts exceeded. Please request a new OTP.' });
       }
 
-      await execute(`UPDATE email_verifications SET verified_at = datetime('now') WHERE id = ?`, [record.id]);
-      await execute('UPDATE users SET is_email_verified = 1 WHERE id = ?', [user.id]);
+      const valid = verifyOtpHash(email, 'registration', otp_code, record.otp_hash);
+      if (!valid) {
+        const nextAttempts = Number(record.attempts || 0) + 1;
+        const maxAttempts = Number(record.max_attempts || OTP_MAX_ATTEMPTS);
+        if (nextAttempts >= maxAttempts) {
+          await execute(`UPDATE otp_tokens SET attempts = ?, used_at = datetime('now') WHERE id = ?`, [
+            nextAttempts,
+            record.id,
+          ]);
+          return res.status(429).json({ error: 'Too many invalid attempts. Please request a new OTP.' });
+        }
+        await execute('UPDATE otp_tokens SET attempts = ? WHERE id = ?', [nextAttempts, record.id]);
+        return res.status(400).json({
+          error: `Invalid verification code. ${maxAttempts - nextAttempts} attempt(s) remaining.`,
+        });
+      }
 
-      res.json({ message: 'Email verified successfully' });
+      await transaction(async (tx) => {
+        await tx.execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+        await tx.execute(`UPDATE users SET is_email_verified = 1, updated_at = datetime('now') WHERE id = ?`, [user.id]);
+      });
+
+      const refreshedUser = { ...user, is_email_verified: 1 };
+      const memberships = await getUserMemberships(user.id, Boolean(user.is_platform_admin));
+      const { token, jti } = signAccessToken(refreshedUser);
+      await recordUserSession(user.id, jti, req);
+
+      res.json({
+        message: 'Email verified successfully',
+        token,
+        user: formatSafeUser(refreshedUser, memberships),
+        memberships,
+      });
     } catch (err) {
       next(err);
     }
@@ -272,31 +599,64 @@ router.post(
 
 router.post(
   '/resend-verification',
+  otpSendLimiter,
   [body('email').isEmail().normalizeEmail().withMessage('Valid email required')],
   validateRequest,
   async (req, res, next) => {
     try {
-      const user = await queryOne('SELECT id, email, is_email_verified FROM users WHERE email = ?', [req.body.email]);
+      const user = await queryOne('SELECT id, full_name, email, is_email_verified FROM users WHERE email = ?', [
+        req.body.email,
+      ]);
       if (!user) return res.status(404).json({ error: 'Account not found' });
       if (user.is_email_verified) return res.json({ message: 'Email is already verified' });
 
-      const otpCode = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-      await execute('INSERT INTO email_verifications (user_id, otp_code, expires_at) VALUES (?, ?, ?)', [
-        user.id,
-        otpCode,
-        expiresAt,
-      ]);
+      const cooldown = await getCooldownRemainingSeconds(user.email, 'registration');
+      if (cooldown > 0) {
+        return res.status(429).json({
+          error: `Please wait ${cooldown} seconds before requesting a new verification code.`,
+          retryAfterSeconds: cooldown,
+        });
+      }
 
+      const otpCode = generateOtpCode();
+      const otpHash = hashOtpCode(user.email, 'registration', otpCode);
+      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
+
+      await execute(
+        `UPDATE otp_tokens SET used_at = datetime('now') WHERE email = ? AND purpose = 'registration' AND used_at IS NULL`,
+        [user.email]
+      );
+      const insertRes = await execute(
+        `INSERT INTO otp_tokens (email, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
+         VALUES (?, ?, 'registration', ?, ?, ?, ?)`,
+        [user.email, user.id, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
+      );
+
+      const emailPayload = buildOtpVerificationEmail({
+        fullName: user.full_name,
+        otpCode,
+        expiresMinutes: OTP_TTL_MINUTES,
+        purposeLabel: 'account verification',
+      });
       const mailResult = await sendMail({
         to: user.email,
-        subject: 'Your BizTrade Africa verification code',
-        text: `Your verification code is: ${otpCode}. It expires in 30 minutes.`,
+        subject: emailPayload.subject,
+        text: emailPayload.text,
+        html: emailPayload.html,
       });
 
+      if (!mailResult.delivered) {
+        await execute(`DELETE FROM otp_tokens WHERE id = ?`, [insertRes.insertId]);
+        return res.status(503).json({
+          error: mailResult.error || 'Unable to deliver verification email via SMTP.',
+          code: mailResult.reason || 'EMAIL_DELIVERY_FAILED',
+        });
+      }
+
       res.json({
-        message: 'A new verification code has been issued.',
-        devOtpPreview: !mailResult.delivered || process.env.NODE_ENV !== 'production' ? otpCode : undefined,
+        message: `A new verification code has been sent to ${user.email}.`,
+        expiresInSeconds: OTP_TTL_MINUTES * 60,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
       });
     } catch (err) {
       next(err);
@@ -569,11 +929,19 @@ router.post(
         return res.status(403).json({ error: 'Your account has been deactivated' });
       }
 
+      const memberships = await getUserMemberships(user.id, Boolean(user.is_platform_admin));
+      if (!user.is_platform_admin && !user.is_email_verified && memberships.length === 0) {
+        return res.status(403).json({
+          error: 'Please verify your email address with your OTP verification code before signing in.',
+          code: 'EMAIL_NOT_VERIFIED',
+          email: user.email,
+        });
+      }
+
       const { token, jti } = signAccessToken(user);
-      const [, , memberships] = await Promise.all([
+      await Promise.all([
         execute(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?`, [user.id]),
         recordUserSession(user.id, jti, req),
-        getUserMemberships(user.id, Boolean(user.is_platform_admin)),
         logAudit({
           userId: user.id,
           action: 'user.login',
@@ -711,13 +1079,13 @@ router.delete('/avatar', authenticate, async (req, res, next) => {
 
 router.post(
   '/forgot-password',
+  otpSendLimiter,
   [body('email').isEmail().normalizeEmail().withMessage('Valid email required')],
   validateRequest,
   async (req, res, next) => {
     try {
       const { email } = req.body;
-      const user = await queryOne('SELECT id, email FROM users WHERE email = ?', [email]);
-      let devResetToken;
+      const user = await queryOne('SELECT id, full_name, email FROM users WHERE email = ?', [email]);
       if (user) {
         const token = crypto.randomBytes(24).toString('hex');
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -725,18 +1093,26 @@ router.post(
           'INSERT INTO password_resets (user_id, reset_token, expires_at) VALUES (?, ?, ?)',
           [user.id, token, expiresAt]
         );
+        const resetMail = buildPasswordResetEmail({
+          fullName: user.full_name,
+          resetToken: token,
+          expiresMinutes: 60,
+        });
         const mailResult = await sendMail({
           to: email,
-          subject: 'BizTrade Africa Password Recovery',
-          text: `Use this recovery token to reset your password: ${token}`,
+          subject: resetMail.subject,
+          text: resetMail.text,
+          html: resetMail.html,
         });
-        if (!mailResult.delivered || process.env.NODE_ENV !== 'production') {
-          devResetToken = token;
+        if (!mailResult.delivered) {
+          return res.status(503).json({
+            error: mailResult.error || 'Unable to deliver password recovery email via SMTP.',
+            code: mailResult.reason || 'EMAIL_DELIVERY_FAILED',
+          });
         }
       }
       res.json({
-        message: 'If an account matches that email, password recovery instructions have been sent.',
-        devResetToken,
+        message: 'If an account matches that email, password recovery instructions have been sent to the inbox.',
       });
     } catch (err) {
       next(err);
@@ -953,6 +1329,7 @@ router.put(
 router.post(
   '/request-email-change',
   authenticate,
+  otpSendLimiter,
   [
     body('new_email').isEmail().normalizeEmail().withMessage('Valid new email address is required'),
     body('current_password').notEmpty().withMessage('Current password is required to change your email'),
@@ -961,7 +1338,7 @@ router.post(
   async (req, res, next) => {
     try {
       const { new_email, current_password } = req.body;
-      const user = await queryOne('SELECT id, email, password_hash FROM users WHERE id = ?', [req.user.id]);
+      const user = await queryOne('SELECT id, full_name, email, password_hash FROM users WHERE id = ?', [req.user.id]);
       const valid = user ? await bcrypt.compare(current_password, user.password_hash) : false;
       if (!valid) {
         return res.status(403).json({ error: 'Current password verification failed.' });
@@ -974,24 +1351,53 @@ router.post(
         return res.status(409).json({ error: 'This email address is already registered to another account.' });
       }
 
-      const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+      const cooldown = await getCooldownRemainingSeconds(new_email, 'email_change');
+      if (cooldown > 0) {
+        return res.status(429).json({
+          error: `Please wait ${cooldown} seconds before requesting another email change code.`,
+          retryAfterSeconds: cooldown,
+        });
+      }
+
+      const otpCode = generateOtpCode();
+      const otpHash = hashOtpCode(new_email, 'email_change', otpCode);
       const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+
       await execute(
-        'INSERT INTO email_change_requests (user_id, new_email, otp_code, expires_at) VALUES (?, ?, ?, ?)',
-        [req.user.id, new_email, otpCode, expiresAt]
+        `UPDATE otp_tokens SET used_at = datetime('now') WHERE email = ? AND purpose = 'email_change' AND used_at IS NULL`,
+        [new_email]
+      );
+      const insertRes = await execute(
+        `INSERT INTO otp_tokens (email, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
+         VALUES (?, ?, 'email_change', ?, ?, ?, ?)`,
+        [new_email, req.user.id, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
       );
 
+      const emailPayload = buildOtpVerificationEmail({
+        fullName: user.full_name,
+        otpCode,
+        expiresMinutes: 20,
+        purposeLabel: 'email address update',
+      });
       const mailResult = await sendMail({
         to: new_email,
-        subject: 'BizTrade Africa Email Change Verification',
-        text: `Your verification code to change your BizTrade Africa email to ${new_email} is: ${otpCode}. It expires in 20 minutes.`,
+        subject: emailPayload.subject,
+        text: emailPayload.text,
+        html: emailPayload.html,
       });
 
+      if (!mailResult.delivered) {
+        await execute(`DELETE FROM otp_tokens WHERE id = ?`, [insertRes.insertId]);
+        return res.status(503).json({
+          error: mailResult.error || 'Unable to deliver verification email to the new address.',
+          code: mailResult.reason || 'EMAIL_DELIVERY_FAILED',
+        });
+      }
+
       res.json({
-        message: mailResult.delivered
-          ? `A 6-digit verification OTP has been sent to ${new_email}.`
-          : `Verification OTP generated for ${new_email}. Enter the 6-digit code to confirm.`,
-        devOtpPreview: !mailResult.delivered || process.env.NODE_ENV !== 'production' ? otpCode : undefined,
+        message: `A 6-digit verification OTP has been sent to ${new_email}.`,
+        expiresInSeconds: 20 * 60,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
       });
     } catch (err) {
       next(err);
@@ -1002,30 +1408,45 @@ router.post(
 router.post(
   '/verify-email-change',
   authenticate,
+  otpVerifyLimiter,
   [
     body('new_email').isEmail().normalizeEmail().withMessage('Valid new email required'),
-    body('otp_code').trim().isLength({ min: 4, max: 10 }).withMessage('OTP code required'),
+    body('otp_code').trim().matches(/^\d{6}$/).withMessage('6-digit OTP code required'),
   ],
   validateRequest,
   async (req, res, next) => {
     try {
       const { new_email, otp_code } = req.body;
       const reqRow = await queryOne(
-        `SELECT * FROM email_change_requests
-         WHERE user_id = ? AND new_email = ? AND otp_code = ? AND verified_at IS NULL
+        `SELECT * FROM otp_tokens
+         WHERE user_id = ? AND email = ? AND purpose = 'email_change' AND used_at IS NULL
          ORDER BY id DESC LIMIT 1`,
-        [req.user.id, new_email, otp_code]
+        [req.user.id, new_email]
       );
-      if (!reqRow || new Date(reqRow.expires_at).getTime() < Date.now()) {
-        return res.status(400).json({ error: 'Invalid or expired email verification code.' });
+      if (!reqRow) {
+        return res.status(400).json({ error: 'No active verification code found. Please request a new OTP.' });
       }
+      if (new Date(reqRow.expires_at).getTime() <= Date.now()) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [reqRow.id]);
+        return res.status(400).json({ error: 'Verification code expired. Please request a new OTP.' });
+      }
+      if (Number(reqRow.attempts || 0) >= Number(reqRow.max_attempts || OTP_MAX_ATTEMPTS)) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [reqRow.id]);
+        return res.status(429).json({ error: 'Maximum verification attempts reached. Request a new code.' });
+      }
+      if (!verifyOtpHash(new_email, 'email_change', otp_code, reqRow.otp_hash)) {
+        const nextAttempts = Number(reqRow.attempts || 0) + 1;
+        await execute('UPDATE otp_tokens SET attempts = ? WHERE id = ?', [nextAttempts, reqRow.id]);
+        return res.status(400).json({ error: 'Invalid verification code.' });
+      }
+
       const taken = await queryOne('SELECT id FROM users WHERE email = ? AND id != ?', [new_email, req.user.id]);
       if (taken) {
         return res.status(409).json({ error: 'This email address is already in use.' });
       }
 
       await transaction(async (tx) => {
-        await tx.execute(`UPDATE email_change_requests SET verified_at = datetime('now') WHERE id = ?`, [reqRow.id]);
+        await tx.execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [reqRow.id]);
         await tx.execute(`UPDATE users SET email = ?, is_email_verified = 1, updated_at = datetime('now') WHERE id = ?`, [
           new_email,
           req.user.id,

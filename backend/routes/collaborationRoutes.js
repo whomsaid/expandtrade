@@ -9,8 +9,15 @@ import { cleanupMulterFiles, imageUpload, platformLogoUpload, removeUploadedFile
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, emitToBusiness, logAudit } from '../services/auditService.js';
 import { queryBusinessAssistant } from '../services/aiService.js';
-import { sendMail } from '../services/mailService.js';
+import {
+  buildInvitationEmail,
+  buildNotificationEmail,
+  buildPasswordResetEmail,
+  sendMail,
+  verifySmtpConnection,
+} from '../services/mailService.js';
 import { getCached, invalidateCache, invalidatePrefix, setCached } from '../services/cacheService.js';
+import { createBackgroundJob, updateBackgroundJob } from '../services/jobService.js';
 
 const router = express.Router();
 
@@ -247,10 +254,21 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
     const canViewFinance = ['business_owner', 'business_admin'].includes(req.membership.role_code) || req.permissions.includes('finance.view');
     const canViewPayroll = ['business_owner', 'business_admin'].includes(req.membership.role_code) || req.permissions.includes('payroll.view');
 
+    const now = new Date();
+    const todayIso = now.toISOString().slice(0, 10);
+    const todayStart = `${todayIso} 00:00:00`;
+    const monthStart = `${todayIso.slice(0, 7)}-01 00:00:00`;
+    const yearStart = `${todayIso.slice(0, 4)}-01-01 00:00:00`;
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 86400 * 1000).toISOString().slice(0, 10) + ' 00:00:00';
+
+    const salesPeriodParams = filterBranchId
+      ? [req.businessId, yearStart, filterBranchId]
+      : [req.businessId, yearStart];
+
     const [
+      salesYearSummary,
       today,
       month,
-      year,
       exp,
       cogs,
       invStats,
@@ -262,22 +280,24 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
       salesByCategory,
       salesByBranch,
       recentActivities,
-      payrollSummary,
+      payrollCfgAgg,
+      payrollTxAgg,
+      payrollAcct,
     ] = await Promise.all([
       queryOne(
         `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-         FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND date(created_at) = date('now')${branchFilter}`,
-        baseParams
+         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}`,
+        salesPeriodParams
       ),
       queryOne(
         `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-         FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')${branchFilter}`,
-        baseParams
+         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}`,
+        filterBranchId ? [req.businessId, todayStart, filterBranchId] : [req.businessId, todayStart]
       ),
       queryOne(
         `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-         FROM sales WHERE business_id = ? AND sale_status != 'cancelled' AND sale_status != 'refunded' AND strftime('%Y', created_at) = strftime('%Y', 'now')${branchFilter}`,
-        baseParams
+         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}`,
+        filterBranchId ? [req.businessId, monthStart, filterBranchId] : [req.businessId, monthStart]
       ),
       queryOne(
         `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE business_id = ? AND approval_status = 'approved'${branchFilter}`,
@@ -286,7 +306,7 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
       queryOne(
         `SELECT COALESCE(SUM(si.quantity * si.unit_cost), 0) AS total
          FROM sale_items si JOIN sales s ON s.id = si.sale_id
-         WHERE s.business_id = ? AND s.sale_status != 'cancelled' AND s.sale_status != 'refunded'${filterBranchId ? ' AND s.branch_id = ?' : ''}`,
+         WHERE s.business_id = ? AND s.sale_status NOT IN ('cancelled', 'refunded')${filterBranchId ? ' AND s.branch_id = ?' : ''}`,
         baseParams
       ),
       queryOne(
@@ -311,10 +331,10 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
         [req.businessId]
       ),
       query(
-        `SELECT date(created_at) AS day, COALESCE(SUM(total_amount), 0) AS revenue, COUNT(*) AS transactions
-         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded')${branchFilter}
-         GROUP BY date(created_at) ORDER BY day DESC LIMIT 14`,
-        baseParams
+        `SELECT SUBSTR(created_at, 1, 10) AS day, COALESCE(SUM(total_amount), 0) AS revenue, COUNT(*) AS transactions
+         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}
+         GROUP BY SUBSTR(created_at, 1, 10) ORDER BY day DESC LIMIT 14`,
+        filterBranchId ? [req.businessId, twoWeeksAgo, filterBranchId] : [req.businessId, twoWeeksAgo]
       ),
       query(
         `SELECT si.product_name, SUM(si.quantity) AS qty, SUM(si.line_total) AS revenue
@@ -350,17 +370,40 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
       canViewPayroll
         ? queryOne(
             `SELECT
-               (SELECT COUNT(*) FROM employee_payroll_configs WHERE business_id = ? AND payroll_status = 'active') AS active_employees,
-               (SELECT COUNT(*) FROM employee_payroll_configs WHERE business_id = ?) AS configured_employees,
-               (SELECT COUNT(*) FROM employee_payroll_configs WHERE business_id = ? AND payroll_status = 'active' AND next_payment_date <= date('now')) AS due_count,
-               (SELECT COALESCE(SUM(salary_amount), 0) FROM employee_payroll_configs WHERE business_id = ? AND payroll_status = 'active' AND next_payment_date <= date('now')) AS due_amount,
-               (SELECT COUNT(*) FROM payroll_transactions WHERE business_id = ? AND status IN ('pending', 'processing')) AS pending_count,
-               (SELECT COUNT(*) FROM payroll_transactions WHERE business_id = ? AND status = 'paid') AS paid_count,
-               (SELECT COALESCE(available_balance, 0) FROM business_payroll_accounts WHERE business_id = ?) AS available_balance`,
-            [req.businessId, req.businessId, req.businessId, req.businessId, req.businessId, req.businessId, req.businessId]
+               COUNT(*) AS configured_employees,
+               SUM(CASE WHEN payroll_status = 'active' THEN 1 ELSE 0 END) AS active_employees,
+               SUM(CASE WHEN payroll_status = 'active' AND next_payment_date <= ? THEN 1 ELSE 0 END) AS due_count,
+               COALESCE(SUM(CASE WHEN payroll_status = 'active' AND next_payment_date <= ? THEN salary_amount ELSE 0 END), 0) AS due_amount
+             FROM employee_payroll_configs WHERE business_id = ?`,
+            [todayIso, todayIso, req.businessId]
           )
         : Promise.resolve(null),
+      canViewPayroll
+        ? queryOne(
+            `SELECT
+               SUM(CASE WHEN status IN ('pending', 'processing') THEN 1 ELSE 0 END) AS pending_count,
+               SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paid_count
+             FROM payroll_transactions WHERE business_id = ?`,
+            [req.businessId]
+          )
+        : Promise.resolve(null),
+      canViewPayroll
+        ? queryOne(`SELECT COALESCE(available_balance, 0) AS available_balance FROM business_payroll_accounts WHERE business_id = ?`, [req.businessId])
+        : Promise.resolve(null),
     ]);
+
+    const year = salesYearSummary;
+    const payrollSummary = canViewPayroll
+      ? {
+          active_employees: Number(payrollCfgAgg?.active_employees || 0),
+          configured_employees: Number(payrollCfgAgg?.configured_employees || 0),
+          due_count: Number(payrollCfgAgg?.due_count || 0),
+          due_amount: Number(payrollCfgAgg?.due_amount || 0),
+          pending_count: Number(payrollTxAgg?.pending_count || 0),
+          paid_count: Number(payrollTxAgg?.paid_count || 0),
+          available_balance: Number(payrollAcct?.available_balance || 0),
+        }
+      : null;
 
     const grossProfit = roundMoney(Number(year.total) - Number(cogs.total));
     const netProfit = roundMoney(grossProfit - Number(exp.total));
@@ -427,6 +470,108 @@ router.get('/reports/analytics', authenticate, requireBusiness, requirePermissio
       [req.businessId]
     );
     res.json({ salesByEmployee, paymentBreakdown, topCustomers });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/reports/export-job', authenticate, requireBusiness, requirePermission('reports.view'), async (req, res, next) => {
+  try {
+    const job = await createBackgroundJob({
+      businessId: req.businessId,
+      userId: req.user.id,
+      jobType: 'report_export',
+      stageLabel: 'queued',
+    });
+
+    const businessId = req.businessId;
+    const branchId = req.branchId || 0;
+    const businessName = req.business?.name || 'Business';
+    const currencyCode = req.business?.currency_code || 'RWF';
+
+    setImmediate(async () => {
+      try {
+        await updateBackgroundJob(job.id, { status: 'processing', progress: 25, stageLabel: 'collecting_sales' });
+        const [salesRows, expenseRows, inventoryRows] = await Promise.all([
+          query(
+            `SELECT s.reference_number, s.total_amount, s.amount_paid, s.payment_status, s.sale_status, s.created_at,
+                    b.name AS branch_name, u.full_name AS cashier_name
+             FROM sales s
+             LEFT JOIN branches b ON b.id = s.branch_id
+             LEFT JOIN users u ON u.id = s.cashier_user_id
+             WHERE s.business_id = ?
+             ORDER BY s.id DESC LIMIT 2000`,
+            [businessId]
+          ),
+          query(
+            `SELECT title, category_name, amount, payment_method, approval_status, expense_date
+             FROM expenses
+             WHERE business_id = ?
+             ORDER BY id DESC LIMIT 2000`,
+            [businessId]
+          ),
+          query(
+            `SELECT p.name, p.sku, p.purchase_price, p.selling_price, p.min_stock, COALESCE(i.quantity, 0) AS quantity
+             FROM products p
+             LEFT JOIN inventory i ON i.product_id = p.id AND i.branch_id = ?
+             WHERE p.business_id = ? AND p.status != 'archived'
+             ORDER BY p.name ASC`,
+            [branchId, businessId]
+          ),
+        ]);
+
+        await updateBackgroundJob(job.id, { status: 'processing', progress: 75, stageLabel: 'compiling_csv' });
+        const lines = [
+          `"BizTrade Africa Executive Report","${businessName.replace(/"/g, '""')}","${currencyCode}","${new Date().toISOString()}"`,
+          '',
+          '"SALES SUMMARY"',
+          'Reference,Date,Branch,Cashier,TotalAmount,AmountPaid,PaymentStatus,SaleStatus',
+          ...salesRows.map((s) =>
+            [s.reference_number, s.created_at, s.branch_name || '', s.cashier_name || '', s.total_amount, s.amount_paid, s.payment_status, s.sale_status]
+              .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
+              .join(',')
+          ),
+          '',
+          '"EXPENSES"',
+          'Title,Category,Amount,PaymentMethod,ApprovalStatus,Date',
+          ...expenseRows.map((e) =>
+            [e.title, e.category_name, e.amount, e.payment_method, e.approval_status, e.expense_date]
+              .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
+              .join(',')
+          ),
+          '',
+          '"INVENTORY VALUATION"',
+          'Product,SKU,PurchasePrice,SellingPrice,MinStock,Quantity',
+          ...inventoryRows.map((p) =>
+            [p.name, p.sku, p.purchase_price, p.selling_price, p.min_stock, p.quantity]
+              .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
+              .join(',')
+          ),
+        ];
+        const csvContent = lines.join('\n');
+
+        await updateBackgroundJob(job.id, {
+          status: 'completed',
+          progress: 100,
+          stageLabel: 'completed',
+          result: {
+            filename: `${businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-report-${new Date().toISOString().slice(0, 10)}.csv`,
+            salesCount: salesRows.length,
+            expensesCount: expenseRows.length,
+            productsCount: inventoryRows.length,
+            csvContent,
+          },
+        });
+      } catch (err) {
+        await updateBackgroundJob(job.id, {
+          status: 'failed',
+          stageLabel: 'failed',
+          errorMessage: err.message || 'Report generation failed',
+        });
+      }
+    });
+
+    res.status(202).json({ jobId: job.id, job });
   } catch (err) {
     next(err);
   }
@@ -548,7 +693,7 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
   try {
     const [
       stats,
-      businesses,
+      businessesRaw,
       rawUsers,
       admins,
       plans,
@@ -557,6 +702,12 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
       activityLogs,
       loginAttempts,
       settingsRows,
+      bizEmpCounts,
+      bizBranchCounts,
+      bizSalesCounts,
+      userEmpCounts,
+      userAdminCounts,
+      userSessionCounts,
     ] = await Promise.all([
       queryOne(
         `SELECT (SELECT COUNT(*) FROM businesses WHERE status != 'deleted' AND deleted_at IS NULL) AS total_businesses,
@@ -587,10 +738,7 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
                 ba.status AS admin_activation_status,
                 ba.activation_token AS admin_activation_token,
                 ba.activated_at AS admin_activated_at,
-                p.id AS plan_id, p.name AS plan_name, s.status AS subscription_status, s.billing_cycle, s.ends_at AS subscription_ends_at,
-                (SELECT COUNT(*) FROM business_members bm WHERE bm.business_id = b.id AND bm.status = 'active') AS employee_count,
-                (SELECT COUNT(*) FROM branches br WHERE br.business_id = b.id) AS branch_count,
-                (SELECT COUNT(*) FROM sales sl WHERE sl.business_id = b.id AND sl.sale_status NOT IN ('cancelled', 'refunded')) AS sales_count
+                p.id AS plan_id, p.name AS plan_name, s.status AS subscription_status, s.billing_cycle, s.ends_at AS subscription_ends_at
          FROM businesses b
          JOIN users u ON u.id = b.owner_user_id
          LEFT JOIN business_admins ba ON ba.id = (
@@ -604,10 +752,7 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
       query(
         `SELECT u.id, u.full_name, u.email, u.phone, u.avatar_url, u.is_email_verified, u.is_active, u.is_platform_admin,
                 u.last_login_at, u.created_at,
-                cp.city AS customer_city, cp.country AS customer_country, cp.loyalty_tier,
-                (SELECT COUNT(*) FROM business_members bm JOIN businesses b ON b.id = bm.business_id WHERE bm.user_id = u.id AND bm.status = 'active' AND b.deleted_at IS NULL) AS business_count,
-                (SELECT COUNT(*) FROM business_admins ba JOIN businesses b ON b.id = ba.business_id WHERE ba.user_id = u.id AND b.deleted_at IS NULL) AS admin_business_count,
-                (SELECT COUNT(*) FROM user_sessions us WHERE us.user_id = u.id AND us.is_revoked = 0) AS active_sessions
+                cp.city AS customer_city, cp.country AS customer_country, cp.loyalty_tier
          FROM users u
          LEFT JOIN customer_profiles cp ON cp.user_id = u.id
          ORDER BY u.is_platform_admin DESC, u.id DESC LIMIT 300`
@@ -643,14 +788,37 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
       ),
       query('SELECT * FROM login_attempts ORDER BY id DESC LIMIT 100'),
       query('SELECT setting_key, setting_value FROM platform_settings ORDER BY id ASC'),
+      query(`SELECT business_id, COUNT(*) AS cnt FROM business_members WHERE status = 'active' GROUP BY business_id`),
+      query(`SELECT business_id, COUNT(*) AS cnt FROM branches GROUP BY business_id`),
+      query(`SELECT business_id, COUNT(*) AS cnt FROM sales WHERE sale_status NOT IN ('cancelled', 'refunded') GROUP BY business_id`),
+      query(`SELECT bm.user_id, COUNT(*) AS cnt FROM business_members bm JOIN businesses b ON b.id = bm.business_id WHERE bm.status = 'active' AND b.deleted_at IS NULL GROUP BY bm.user_id`),
+      query(`SELECT ba.user_id, COUNT(*) AS cnt FROM business_admins ba JOIN businesses b ON b.id = ba.business_id WHERE b.deleted_at IS NULL GROUP BY ba.user_id`),
+      query(`SELECT user_id, COUNT(*) AS cnt FROM user_sessions WHERE is_revoked = 0 GROUP BY user_id`),
     ]);
 
+    const bizEmpMap = new Map(bizEmpCounts.map((r) => [r.business_id, Number(r.cnt || 0)]));
+    const bizBranchMap = new Map(bizBranchCounts.map((r) => [r.business_id, Number(r.cnt || 0)]));
+    const bizSalesMap = new Map(bizSalesCounts.map((r) => [r.business_id, Number(r.cnt || 0)]));
+    const businesses = businessesRaw.map((b) => ({
+      ...b,
+      employee_count: bizEmpMap.get(b.id) || 0,
+      branch_count: bizBranchMap.get(b.id) || 0,
+      sales_count: bizSalesMap.get(b.id) || 0,
+    }));
+
+    const userEmpMap = new Map(userEmpCounts.map((r) => [r.user_id, Number(r.cnt || 0)]));
+    const userAdminMap = new Map(userAdminCounts.map((r) => [r.user_id, Number(r.cnt || 0)]));
+    const userSessMap = new Map(userSessionCounts.map((r) => [r.user_id, Number(r.cnt || 0)]));
+
     const users = rawUsers.map((u) => {
+      const business_count = userEmpMap.get(u.id) || 0;
+      const admin_business_count = userAdminMap.get(u.id) || 0;
+      const active_sessions = userSessMap.get(u.id) || 0;
       let account_category = 'customer';
       if (u.is_platform_admin) account_category = 'platform_super_admin';
-      else if (Number(u.admin_business_count) > 0) account_category = 'business_admin';
-      else if (Number(u.business_count) > 0) account_category = 'employee';
-      return { ...u, account_category };
+      else if (admin_business_count > 0) account_category = 'business_admin';
+      else if (business_count > 0) account_category = 'employee';
+      return { ...u, business_count, admin_business_count, active_sessions, account_category };
     });
 
     const platformSettings = settingsRows.reduce((acc, row) => {
@@ -852,10 +1020,18 @@ router.post(
       });
 
       const activationUrl = `/activate-account?token=${activationToken}`;
+      const inviteMail = buildInvitationEmail({
+        fullName: admin_full_name.trim(),
+        businessName: name.trim(),
+        roleName: 'Business Admin',
+        activationPath: activationUrl,
+        isBusinessAdmin: true,
+      });
       const mailResult = await sendMail({
         to: admin_email,
-        subject: `Activate your Business Admin account for ${name.trim()}`,
-        text: `Hello ${admin_full_name.trim()}, Platform Super Admin registered ${name.trim()} (${businessCode}) on BizTrade Africa and assigned you as Business Admin. Open ${activationUrl} to verify your email, upload your profile photo, and set your permanent password. If you sign in with the temporary initial password, you will be required to change it immediately before accessing the business dashboard. For security, passwords are never sent via email.`,
+        subject: inviteMail.subject,
+        text: inviteMail.text,
+        html: inviteMail.html,
       });
 
       await logAudit({
@@ -1164,10 +1340,18 @@ router.post(
       });
 
       const activationUrl = `/activate-account?token=${activationToken}`;
+      const inviteMail = buildInvitationEmail({
+        fullName: full_name.trim(),
+        businessName: biz.name,
+        roleName: 'Business Admin',
+        activationPath: activationUrl,
+        isBusinessAdmin: true,
+      });
       const mailResult = await sendMail({
         to: email,
-        subject: `Business Admin assignment for ${biz.name}`,
-        text: `Hello ${full_name.trim()}, you have been assigned as Business Admin for ${biz.name}. Open ${activationUrl} to upload your profile photo, set your permanent password, and activate access. Note: Any temporary initial password must be changed immediately on first login. For security, passwords are never sent via email.`,
+        subject: inviteMail.subject,
+        text: inviteMail.text,
+        html: inviteMail.html,
       });
 
       await logAudit({
@@ -1216,10 +1400,16 @@ router.post('/admin/businesses/:id/reset-admin-access', authenticate, requirePla
       expiresAt,
     ]);
 
+    const resetMail = buildPasswordResetEmail({
+      fullName: primaryAdmin.full_name,
+      resetToken: token,
+      expiresMinutes: 60,
+    });
     const mailResult = await sendMail({
       to: primaryAdmin.email,
-      subject: `Account Access Reset for ${biz.name} — BizTrade Africa`,
-      text: `Platform Super Admin initiated an account access reset for ${biz.name}. Use recovery token ${token} on the Forgot Password page to set a new password.`,
+      subject: resetMail.subject,
+      text: resetMail.text,
+      html: resetMail.html,
     });
 
     await logAudit({
@@ -1233,7 +1423,10 @@ router.post('/admin/businesses/:id/reset-admin-access', authenticate, requirePla
     });
 
     res.json({
-      message: `Revoked active sessions and sent recovery instructions to ${primaryAdmin.email}.`,
+      message: mailResult.delivered
+        ? `Revoked active sessions and sent recovery email to ${primaryAdmin.email}.`
+        : `Revoked active sessions. Recovery email could not be delivered (${mailResult.error || 'SMTP unconfigured'}).`,
+      emailDelivered: mailResult.delivered,
       devResetToken: !mailResult.delivered || process.env.NODE_ENV !== 'production' ? token : undefined,
     });
   } catch (err) {
@@ -1768,6 +1961,15 @@ router.delete('/admin/inquiries/:id', authenticate, requirePlatformAdmin, async 
   }
 });
 
+router.get('/admin/smtp-status', authenticate, requirePlatformAdmin, async (_req, res, next) => {
+  try {
+    const status = await verifySmtpConnection();
+    res.json(status);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Public Contact Form — saves to DB, notifies Super Admins, and sends inquiry email to allofme140@gmail.com
 router.post(
   '/public/contact',
@@ -1805,11 +2007,17 @@ router.post(
         cleanMsg,
       ].join('\n');
 
+      const contactSubject = `BizTrade Africa Inquiry from ${cleanName}${business_name ? ` (${business_name})` : ''}`;
       void sendMail({
         to: recipients,
         replyTo: cleanEmail,
-        subject: `BizTrade Africa Inquiry from ${cleanName}${business_name ? ` (${business_name})` : ''}`,
+        subject: contactSubject,
         text: emailBody,
+        html: buildNotificationEmail({
+          title: contactSubject,
+          message: emailBody,
+          replyNote: `Reply directly to ${cleanEmail} to respond to this inquiry.`,
+        }),
       });
 
       void Promise.all(

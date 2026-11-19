@@ -176,6 +176,10 @@ export default function AppLayout() {
         </div>
 
         <div className="p-3 border-t border-slate-800 space-y-2">
+          <div className="sm:hidden flex items-center justify-between gap-2 pb-2 border-b border-slate-800">
+            <LanguageSelector compact />
+            <ThemeSelector compact />
+          </div>
           <button
             type="button"
             onClick={() => setLogoutConfirmOpen(true)}
@@ -193,12 +197,12 @@ export default function AppLayout() {
       {/* Main Column */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 lg:px-6 py-3 flex items-center justify-between gap-4 no-print">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-4 lg:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4 no-print">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg border border-slate-200 dark:border-slate-700"
+              className="lg:hidden p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg border border-slate-200 dark:border-slate-700 shrink-0"
               aria-label={t('nav.openMenu')}
             >
               <Menu className="w-4 h-4" />
@@ -206,13 +210,13 @@ export default function AppLayout() {
 
             {/* Business Switcher */}
             {memberships.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <Building2 className="w-4 h-4 text-slate-400 shrink-0 hidden sm:block" />
                 <select
                   aria-label={t('nav.switchBusiness')}
                   value={activeBusinessId || ''}
                   onChange={(e) => switchBusiness(e.target.value)}
-                  className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 max-w-[200px] truncate"
+                  className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 sm:px-2.5 py-1.5 min-w-0 max-w-[125px] sm:max-w-[200px] truncate"
                 >
                   {memberships.map((m) => (
                     <option key={m.business_id} value={m.business_id}>
@@ -229,7 +233,7 @@ export default function AppLayout() {
                 aria-label={t('nav.selectBranch')}
                 value={activeBranchId || ''}
                 onChange={(e) => switchBranch(e.target.value)}
-                className="text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 max-w-[160px] truncate"
+                className="text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 sm:px-2.5 py-1.5 min-w-0 max-w-[95px] sm:max-w-[160px] truncate"
               >
                 {workspace.branches.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -241,8 +245,10 @@ export default function AppLayout() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <LanguageSelector compact />
-            <ThemeSelector compact />
+            <div className="hidden sm:flex items-center gap-2">
+              <LanguageSelector compact />
+              <ThemeSelector compact />
+            </div>
 
             {/* Notifications */}
             <div className="relative">
@@ -261,7 +267,7 @@ export default function AppLayout() {
               </button>
 
               {notifOpen && (
-                <div className="animate-slide-down absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
+                <div className="animate-slide-down absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-sm sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
                   <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/70">
                     <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{t('nav.notifications')}</span>
                     <button
@@ -317,7 +323,7 @@ export default function AppLayout() {
         </header>
 
         {/* Main Viewport */}
-        <main className="flex-1 p-4 lg:p-6 max-w-[1440px] w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1440px] w-full mx-auto min-w-0">
           <Outlet />
         </main>
       </div>

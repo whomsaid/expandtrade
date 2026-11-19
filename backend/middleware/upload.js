@@ -8,9 +8,12 @@ const AVATAR_DIR = path.join(UPLOAD_ROOT, 'avatars');
 export const PLATFORM_DIR = path.join(UPLOAD_ROOT, 'platform');
 export const VIDEO_THUMB_DIR = path.join(UPLOAD_ROOT, 'video-thumbnails');
 export const VIDEO_STORAGE_DIR = path.resolve(process.cwd(), 'backend', 'storage', 'videos');
+export const VIDEO_CHUNKS_DIR = path.join(VIDEO_STORAGE_DIR, '.chunks');
 export const RECRUITMENT_DIR = path.resolve(process.cwd(), 'backend', 'storage', 'recruitment');
 
-for (const dir of [UPLOAD_ROOT, AVATAR_DIR, PLATFORM_DIR, VIDEO_THUMB_DIR, VIDEO_STORAGE_DIR, RECRUITMENT_DIR]) {
+export const MAX_VIDEO_FILE_BYTES = 250 * 1024 * 1024; // 250MB storage/file-size cap
+
+for (const dir of [UPLOAD_ROOT, AVATAR_DIR, PLATFORM_DIR, VIDEO_THUMB_DIR, VIDEO_STORAGE_DIR, VIDEO_CHUNKS_DIR, RECRUITMENT_DIR]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -47,13 +50,23 @@ const storage = multer.diskStorage({
   },
 });
 
+function isMimeOrGenericExtOk(mimetype, ext, allowedMimeMapOrSet, allowedExts) {
+  const mime = String(mimetype || '').toLowerCase();
+  const isGenericMime = !mime || mime === 'application/octet-stream';
+  const extOk = ext ? allowedExts.has(ext) : !isGenericMime;
+  const mimeOk = Array.isArray(allowedMimeMapOrSet) || allowedMimeMapOrSet instanceof Set
+    ? allowedMimeMapOrSet.has(mime)
+    : Boolean(allowedMimeMapOrSet[mime]);
+  return extOk && (mimeOk || (isGenericMime && Boolean(ext)));
+}
+
 export const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const extOk = !ext || new Set(['.jpg', '.jpeg', '.png', '.webp', '.pdf']).has(ext);
-    if (!ALLOWED_MIME.has(file.mimetype) || !extOk) {
+    const ok = isMimeOrGenericExtOk(file.mimetype, ext, ALLOWED_MIME, new Set(['.jpg', '.jpeg', '.png', '.webp', '.pdf']));
+    if (!ok) {
       const err = new Error('Unsupported file type. Allowed: JPG, JPEG, PNG, WebP, PDF (max 5MB).');
       err.statusCode = 400;
       return cb(err);
@@ -67,9 +80,8 @@ export const imageUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const mimeOk = Boolean(AVATAR_MIME_TO_EXT[file.mimetype]);
-    const extOk = !ext || AVATAR_ALLOWED_EXT.has(ext);
-    if (!mimeOk || !extOk) {
+    const ok = isMimeOrGenericExtOk(file.mimetype, ext, AVATAR_MIME_TO_EXT, AVATAR_ALLOWED_EXT);
+    if (!ok) {
       const err = new Error('Unsupported image format. Allowed: JPG, JPEG, PNG, and WEBP (max 5MB).');
       err.statusCode = 400;
       return cb(err);
@@ -92,9 +104,8 @@ export const avatarUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const mimeOk = Boolean(AVATAR_MIME_TO_EXT[file.mimetype]);
-    const extOk = !ext || AVATAR_ALLOWED_EXT.has(ext);
-    if (!mimeOk || !extOk) {
+    const ok = isMimeOrGenericExtOk(file.mimetype, ext, AVATAR_MIME_TO_EXT, AVATAR_ALLOWED_EXT);
+    if (!ok) {
       const err = new Error('Unsupported profile image format. Allowed: JPG, JPEG, PNG, and WEBP (max 5MB).');
       err.statusCode = 400;
       return cb(err);
@@ -121,23 +132,21 @@ const adMediaStorage = multer.diskStorage({
 
 export const adVideoUpload = multer({
   storage: adMediaStorage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max video size
+  limits: { fileSize: MAX_VIDEO_FILE_BYTES },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
     if (file.fieldname === 'video') {
-      const mimeOk = Boolean(VIDEO_MIME_TO_EXT[file.mimetype]);
-      const extOk = !ext || VIDEO_ALLOWED_EXT.has(ext);
-      if (!mimeOk || !extOk) {
-        const err = new Error('Unsupported video format. Allowed formats: MP4 and WEBM (max 50MB).');
+      const ok = isMimeOrGenericExtOk(file.mimetype, ext, VIDEO_MIME_TO_EXT, VIDEO_ALLOWED_EXT);
+      if (!ok) {
+        const err = new Error('Unsupported video format. Allowed formats: MP4 and WEBM (max 250MB).');
         err.statusCode = 400;
         return cb(err);
       }
       return cb(null, true);
     }
     if (file.fieldname === 'thumbnail') {
-      const mimeOk = Boolean(AVATAR_MIME_TO_EXT[file.mimetype]);
-      const extOk = !ext || AVATAR_ALLOWED_EXT.has(ext);
-      if (!mimeOk || !extOk) {
+      const ok = isMimeOrGenericExtOk(file.mimetype, ext, AVATAR_MIME_TO_EXT, AVATAR_ALLOWED_EXT);
+      if (!ok) {
         const err = new Error('Unsupported thumbnail format. Allowed: JPG, JPEG, PNG, and WEBP (max 5MB).');
         err.statusCode = 400;
         return cb(err);
@@ -148,6 +157,52 @@ export const adVideoUpload = multer({
     err.statusCode = 400;
     return cb(err);
   },
+});
+
+const thumbOnlyStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, VIDEO_THUMB_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const safeExt = AVATAR_ALLOWED_EXT.has(ext) ? ext : AVATAR_MIME_TO_EXT[file.mimetype] || '.jpg';
+    cb(null, `${crypto.randomUUID()}${safeExt}`);
+  },
+});
+
+export const videoThumbUpload = multer({
+  storage: thumbOnlyStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const ok = isMimeOrGenericExtOk(file.mimetype, ext, AVATAR_MIME_TO_EXT, AVATAR_ALLOWED_EXT);
+    if (!ok) {
+      const err = new Error('Unsupported thumbnail format. Allowed: JPG, JPEG, PNG, and WEBP (max 5MB).');
+      err.statusCode = 400;
+      return cb(err);
+    }
+    return cb(null, true);
+  },
+});
+
+const videoChunkStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const targetDir = req.uploadSession?.temp_dir;
+    if (!targetDir || !targetDir.startsWith(VIDEO_CHUNKS_DIR + path.sep)) {
+      return cb(new Error('Invalid upload session storage directory.'));
+    }
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    cb(null, targetDir);
+  },
+  filename: (req, _file, cb) => {
+    const idx = Number(req.params.chunkIndex);
+    cb(null, `chunk_${idx}_${crypto.randomBytes(4).toString('hex')}.tmp`);
+  },
+});
+
+export const videoChunkUpload = multer({
+  storage: videoChunkStorage,
+  limits: { fileSize: 16 * 1024 * 1024 }, // Individual chunk safety cap (default 2MB chunks)
 });
 
 const PLATFORM_LOGO_MIME_TO_EXT = {
@@ -175,9 +230,8 @@ export const platformLogoUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const mimeOk = Boolean(PLATFORM_LOGO_MIME_TO_EXT[file.mimetype]);
-    const extOk = !ext || PLATFORM_LOGO_ALLOWED_EXT.has(ext);
-    if (!mimeOk || !extOk) {
+    const ok = isMimeOrGenericExtOk(file.mimetype, ext, PLATFORM_LOGO_MIME_TO_EXT, PLATFORM_LOGO_ALLOWED_EXT);
+    if (!ok) {
       const err = new Error('Unsupported logo format. Allowed: PNG, JPG, JPEG, SVG, and WEBP (max 5MB).');
       err.statusCode = 400;
       return cb(err);
@@ -298,9 +352,8 @@ export const cvUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const mimeOk = CV_ALLOWED_MIME.has(file.mimetype);
-    const extOk = !ext || CV_ALLOWED_EXT.has(ext);
-    if (!mimeOk || !extOk) {
+    const ok = isMimeOrGenericExtOk(file.mimetype, ext, CV_ALLOWED_MIME, CV_ALLOWED_EXT);
+    if (!ok) {
       const err = new Error('Unsupported CV format. Allowed formats: PDF and DOCX (max 10MB).');
       err.statusCode = 400;
       return cb(err);
@@ -314,9 +367,8 @@ export const certificateUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const mimeOk = CERT_ALLOWED_MIME.has(file.mimetype);
-    const extOk = !ext || CERT_ALLOWED_EXT.has(ext);
-    if (!mimeOk || !extOk) {
+    const ok = isMimeOrGenericExtOk(file.mimetype, ext, CERT_ALLOWED_MIME, CERT_ALLOWED_EXT);
+    if (!ok) {
       const err = new Error('Unsupported certificate format. Allowed formats: PDF, JPG, JPEG, and PNG (max 10MB).');
       err.statusCode = 400;
       return cb(err);
@@ -404,6 +456,19 @@ export function removeUploadedFile(filePathOrUrl) {
     if (!allowedRoots.some((root) => target.startsWith(root))) return;
     if (fs.existsSync(target) && fs.statSync(target).isFile()) {
       fs.unlinkSync(target);
+    }
+  } catch {
+    // ignore cleanup errors
+  }
+}
+
+export function removeChunkSessionDir(dirPath) {
+  if (!dirPath) return;
+  try {
+    const resolved = path.resolve(dirPath);
+    if (!resolved.startsWith(VIDEO_CHUNKS_DIR + path.sep)) return;
+    if (fs.existsSync(resolved)) {
+      fs.rmSync(resolved, { recursive: true, force: true });
     }
   } catch {
     // ignore cleanup errors

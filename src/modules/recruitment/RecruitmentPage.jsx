@@ -97,11 +97,13 @@ export default function RecruitmentPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
   const [notice, setNotice] = useState('');
 
   // Detail modal states
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [savingAction, setSavingAction] = useState(false);
   const [statusUpdate, setStatusUpdate] = useState({ status: 'under_review', note: '' });
   const [interviewForm, setInterviewForm] = useState({
     interview_date: '',
@@ -152,6 +154,7 @@ export default function RecruitmentPage() {
   const openApplicationDetail = useCallback(async (appId) => {
     setLoadingDetail(true);
     setError('');
+    setModalError('');
     try {
       const { data } = await api.get(`/recruitment/applications/${appId}`);
       setSelectedDetail(data);
@@ -181,9 +184,10 @@ export default function RecruitmentPage() {
 
   const handleStatusUpdate = async (e) => {
     e.preventDefault();
-    if (!selectedDetail?.application?.id) return;
-    setError('');
+    if (!selectedDetail?.application?.id || savingAction) return;
+    setModalError('');
     setNotice('');
+    setSavingAction(true);
     try {
       const { data } = await api.patch(
         `/recruitment/applications/${selectedDetail.application.id}/status`,
@@ -193,15 +197,18 @@ export default function RecruitmentPage() {
       await openApplicationDetail(selectedDetail.application.id);
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingAction(false);
     }
   };
 
   const handleScheduleInterview = async (e) => {
     e.preventDefault();
-    if (!selectedDetail?.application?.id) return;
-    setError('');
+    if (!selectedDetail?.application?.id || savingAction) return;
+    setModalError('');
     setNotice('');
+    setSavingAction(true);
     try {
       const { data } = await api.post(
         `/recruitment/applications/${selectedDetail.application.id}/interviews`,
@@ -219,13 +226,17 @@ export default function RecruitmentPage() {
       await openApplicationDetail(selectedDetail.application.id);
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingAction(false);
     }
   };
 
   const handleUpdateInterview = async (interviewId, payload) => {
-    setError('');
+    if (savingAction) return;
+    setModalError('');
     setNotice('');
+    setSavingAction(true);
     try {
       const { data } = await api.patch(`/recruitment/interviews/${interviewId}`, payload);
       setNotice(data.message);
@@ -234,14 +245,17 @@ export default function RecruitmentPage() {
       }
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingAction(false);
     }
   };
 
   const handleAddInternalNote = async (e) => {
     e.preventDefault();
-    if (!selectedDetail?.application?.id || !noteInput.trim()) return;
-    setError('');
+    if (!selectedDetail?.application?.id || !noteInput.trim() || savingAction) return;
+    setModalError('');
+    setSavingAction(true);
     try {
       const { data } = await api.post(
         `/recruitment/applications/${selectedDetail.application.id}/notes`,
@@ -251,11 +265,14 @@ export default function RecruitmentPage() {
       setNotice(data.message);
       await openApplicationDetail(selectedDetail.application.id);
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
+    } finally {
+      setSavingAction(false);
     }
   };
 
   const openCreateVacancy = () => {
+    setModalError('');
     setVacancyForm({
       ...EMPTY_VACANCY,
       location: workspace?.business?.district ? `${workspace.business.district}, ${workspace.business.country || 'Rwanda'}` : '',
@@ -264,6 +281,7 @@ export default function RecruitmentPage() {
   };
 
   const openEditVacancy = (v) => {
+    setModalError('');
     setVacancyForm({
       id: v.id,
       title: v.title || '',
@@ -293,8 +311,9 @@ export default function RecruitmentPage() {
 
   const handleSaveVacancy = async (e) => {
     e.preventDefault();
+    if (savingVacancy) return;
     setSavingVacancy(true);
-    setError('');
+    setModalError('');
     setNotice('');
     try {
       const payload = {
@@ -316,7 +335,7 @@ export default function RecruitmentPage() {
       setVacancyModalOpen(false);
       await loadOverview();
     } catch (err) {
-      setError(err.message);
+      setModalError(err.message);
     } finally {
       setSavingVacancy(false);
     }
@@ -681,6 +700,7 @@ export default function RecruitmentPage() {
               <div className="p-10 text-center text-xs text-slate-500">{t('recruitment.loadingProfileDetail')}</div>
             ) : selectedDetail && (
               <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+                {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left 7 cols: Profile, Education, Experience, Skills, Answers, Docs */}
                   <div className="lg:col-span-7 space-y-5">
@@ -831,8 +851,8 @@ export default function RecruitmentPage() {
                           placeholder={t('recruitment.applicantNotePlaceholder')}
                           className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
                         />
-                        <button type="submit" className="w-full py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-                          {t('recruitment.saveStatusNotify')}
+                        <button type="submit" disabled={savingAction} className="w-full py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">
+                          {savingAction ? t('common.saving') : t('recruitment.saveStatusNotify')}
                         </button>
                       </form>
                     )}
@@ -924,8 +944,8 @@ export default function RecruitmentPage() {
                             placeholder={t('recruitment.interviewerPlaceholder')}
                             className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
                           />
-                          <button type="submit" className="w-full py-1.5 font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-500">
-                            {t('recruitment.scheduleNotifyBtn')}
+                          <button type="submit" disabled={savingAction} className="w-full py-1.5 font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-500 disabled:opacity-50">
+                            {savingAction ? t('common.saving') : t('recruitment.scheduleNotifyBtn')}
                           </button>
                         </form>
                       )}
@@ -945,8 +965,8 @@ export default function RecruitmentPage() {
                             placeholder={t('recruitment.addNotePlaceholder')}
                             className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-lg"
                           />
-                          <button type="submit" className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg">
-                            {t('recruitment.addBtn')}
+                          <button type="submit" disabled={savingAction} className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg disabled:opacity-50">
+                            {savingAction ? t('common.saving') : t('recruitment.addBtn')}
                           </button>
                         </form>
                       )}
@@ -1008,6 +1028,7 @@ export default function RecruitmentPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {modalError && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{modalError}</div>}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('recruitment.jobTitleLabel')}</label>

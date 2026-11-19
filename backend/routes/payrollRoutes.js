@@ -715,7 +715,9 @@ router.post(
   requirePermission('payroll.pay'),
   [
     body('payroll_config_id').isInt({ gt: 0 }).withMessage('Payroll configuration ID required'),
-    body('confirm_authorization').equals('true').withMessage('Explicit administrator authorization confirmation is required'),
+    body('confirm_authorization')
+      .custom((v) => v === true || v === 'true')
+      .withMessage('Explicit administrator authorization confirmation is required'),
   ],
   validateRequest,
   async (req, res, next) => {
@@ -895,7 +897,9 @@ router.post(
   requirePermission('payroll.pay'),
   [
     body('payroll_config_ids').isArray({ min: 1 }).withMessage('Select at least one employee for bulk payroll'),
-    body('confirm_authorization').equals('true').withMessage('Explicit administrator authorization confirmation is required'),
+    body('confirm_authorization')
+      .custom((v) => v === true || v === 'true')
+      .withMessage('Explicit administrator authorization confirmation is required'),
   ],
   validateRequest,
   async (req, res, next) => {

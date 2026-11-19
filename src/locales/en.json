@@ -59,6 +59,10 @@
     "softworld": "softworld",
     "allRightsReserved": "All rights reserved.",
     "requestTimeout": "Request timed out. Please check your connection and try again.",
+    "networkError": "Unable to connect to the server. Check your connection and retry.",
+    "retry": "Retry",
+    "previous": "Previous",
+    "pageOf": "Page {{page}} of {{total}}",
     "requestFailed": "Request failed"
   },
   "theme": {
@@ -227,7 +231,13 @@
     "newPasswordsMismatch": "New password and confirmation do not match",
     "selectProfileImage": "Please select a profile image (JPG, JPEG, PNG, or WEBP).",
     "unsupportedImageFormat": "Unsupported file format. Please upload a JPG, JPEG, PNG, or WEBP image.",
-    "imageTooLarge": "Image file is too large. Maximum allowed size is 5MB."
+    "imageTooLarge": "Image file is too large. Maximum allowed size is 5MB.",
+    "unsupportedReceiptFormat": "Unsupported file format. Please upload a JPG, JPEG, PNG, WEBP image or PDF document.",
+    "unsupportedLogoFormat": "Unsupported logo format. Please upload a PNG, JPG, JPEG, SVG, or WEBP file.",
+    "fileTooLarge": "Selected file is too large. Maximum allowed size is 5MB.",
+    "emptyFile": "Selected file is empty (0 bytes). Please choose a valid file.",
+    "unsupportedDocFormat": "Unsupported document format. Allowed: PDF, DOCX, JPG, JPEG, or PNG (max 10MB).",
+    "documentTooLarge": "Document file exceeds the 10MB maximum limit."
   },
   "components": {
     "logoutTitle": "Confirm Logout",
@@ -303,6 +313,17 @@
     "verifying": "Verifying...",
     "verifyContinue": "Verify & Continue",
     "resendCode": "Resend verification code",
+    "sendOtpCode": "Send Verification Code",
+    "sendingOtp": "Sending Code...",
+    "otpExpiresIn": "Code expires in",
+    "otpExpiredNotice": "Verification code expired. Request a new code below.",
+    "resendInSeconds": "Resend code in {{seconds}}s",
+    "verifyOtpCode": "Verify Code",
+    "emailVerifiedLabel": "Verified email",
+    "changeEmailAddress": "Use another email",
+    "verifyEmailStepSubtitle": "Enter your email address first to receive a real single-use 6-digit verification code.",
+    "completeRegistrationSubtitle": "Your email is verified. Complete your customer profile details below.",
+    "verifyEmailNow": "Verify Email with OTP",
     "activateTitle": "Activate Business Account",
     "activateSubtitle": "Verify your invitation and set a secure password to open your workspace. Profile photo is optional.",
     "validatingInvite": "Validating activation invitation...",
@@ -370,48 +391,152 @@
     "productivityDesc": "Improves accountability with role-based permissions, audit logs, task assignments, and clear daily profit and operational visibility.",
     "readFullAbout": "Read full About Us & Developer Profile",
     "featuresEyebrow": "Platform Capabilities",
-    "featuresTitle": "Sixteen integrated modules for complete commercial operations",
-    "featuresDesc": "Every department—from front-counter sales and warehouse inventory to finance, staff tasks, and customer ordering—operates on shared, consistent data.",
+    "featuresTitle": "Seventeen integrated modules for complete commercial operations",
+    "featuresDesc": "Every department—from front-counter sales, purchasing, and warehouse inventory to finance, staff tasks, and customer ordering—operates on shared, consistent data.",
+    "viewMore": "View More",
+    "viewLess": "View Less",
+    "viewAllFeatures": "View All Features",
+    "showingModulesCount": "Showing {{shown}} of {{total}} modules",
     "features": [
-      { "title": "Business Management", "desc": "Organize company identity, currency defaults, tax rules, operating hours, and daily governance in one isolated workspace." },
-      { "title": "Sales and Point of Sale (POS)", "desc": "Process counter sales quickly with product search, barcode lookup, split payments, and printable customer receipts." },
-      { "title": "Product Management", "desc": "Maintain structured SKU catalogs, categories, pricing tiers, cost tracking, and active product listings." },
-      { "title": "Inventory Management", "desc": "Track real-time stock quantities, low-stock alerts, stock adjustments, and inter-branch inventory transfers." },
-      { "title": "Customer Management", "desc": "Build verified customer profiles, monitor receivables and loyalty records, and manage customer inquiries cleanly." },
-      { "title": "Supplier Management", "desc": "Track vendor contacts, purchase histories, and outstanding supplier payables across all business branches." },
-      { "title": "Financial Management", "desc": "Record revenue, cost of goods sold, operating expenses with approval workflows, and live profit visibility." },
-      { "title": "Employee Management", "desc": "Assign staff to branches with role-based permissions covering managers, cashiers, accountants, and inventory teams." },
-      { "title": "Branch Management", "desc": "Run multiple store locations under one business account with branch-level inventory, sales, and staff separation." },
-      { "title": "Order Management", "desc": "Receive customer orders from the public directory and guide them smoothly from confirmation through delivery." },
-      { "title": "Reports and Analytics", "desc": "Review daily, monthly, and yearly performance summaries, branch comparisons, and exportable operational reports." },
-      { "title": "Business Communication", "desc": "Keep employees aligned with internal branch messaging channels and business-wide announcements." },
-      { "title": "Task Management", "desc": "Assign operational tasks to team members, set deadlines and priorities, and collaborate via task comments." },
-      { "title": "Promotional Advertising", "desc": "Upload and publish promotional videos with product links and thumbnails directly to your public storefront." },
-      { "title": "AI Business Assistant", "desc": "Ask natural business questions grounded in your own operational sales, stock, and branch records." },
-      { "title": "Notifications and Alerts", "desc": "Stay informed about low inventory, incoming customer orders, expense approvals, and security updates." }
+      {
+        "title": "Business Management",
+        "desc": "Organize company identity, currency defaults, tax rules, operating hours, and daily governance in one isolated workspace."
+      },
+      {
+        "title": "POS",
+        "desc": "Process counter sales quickly with product search, barcode lookup, split payments, and printable customer receipts."
+      },
+      {
+        "title": "Inventory",
+        "desc": "Track real-time stock quantities, low-stock alerts, stock adjustments, and inter-branch inventory transfers."
+      },
+      {
+        "title": "Products",
+        "desc": "Maintain structured SKU catalogs, categories, pricing tiers, cost tracking, and active product listings."
+      },
+      {
+        "title": "Finance",
+        "desc": "Record revenue, cost of goods sold, operating expenses with approval workflows, and live profit visibility."
+      },
+      {
+        "title": "Employees",
+        "desc": "Assign staff to branches with role-based permissions covering managers, cashiers, accountants, payroll, and inventory teams."
+      },
+      {
+        "title": "Branches",
+        "desc": "Run multiple store locations under one business account with branch-level inventory, sales, and staff separation."
+      },
+      {
+        "title": "Customers",
+        "desc": "Build verified customer profiles, monitor receivables and loyalty records, and manage customer inquiries cleanly."
+      },
+      {
+        "title": "Suppliers",
+        "desc": "Track vendor contacts, purchase histories, and outstanding supplier payables across all business branches."
+      },
+      {
+        "title": "Orders",
+        "desc": "Receive customer orders from the public directory and guide them smoothly from confirmation through delivery."
+      },
+      {
+        "title": "Purchases",
+        "desc": "Issue supplier purchase orders, log partial or full deliveries, verify stock intake, and settle supplier invoices cleanly."
+      },
+      {
+        "title": "Reports",
+        "desc": "Review daily, monthly, and yearly performance summaries, branch comparisons, and exportable operational reports."
+      },
+      {
+        "title": "Communication",
+        "desc": "Keep employees aligned with internal branch messaging channels and business-wide announcements."
+      },
+      {
+        "title": "Tasks",
+        "desc": "Assign operational tasks to team members, set deadlines and priorities, and collaborate via task comments."
+      },
+      {
+        "title": "Advertising",
+        "desc": "Upload and publish promotional videos with product links and thumbnails directly to your public storefront."
+      },
+      {
+        "title": "AI Assistant",
+        "desc": "Ask natural business questions grounded in your own operational sales, stock, and branch records."
+      },
+      {
+        "title": "Notifications",
+        "desc": "Stay informed about low inventory, incoming customer orders, expense approvals, and security updates."
+      }
     ],
     "howEyebrow": "How BizTrade Africa Works",
     "howTitle": "Structured governance from onboarding to daily trade",
     "howDesc": "Businesses are verified and registered by the Platform Super Admin so every workspace starts with clean isolation, assigned leadership, and verified customer visibility.",
     "workflowSteps": [
-      { "step": "01", "title": "Platform Super Admin registers a business", "desc": "The Super Admin collects verified business profile details, tax configuration, subscription plan, and headquarters setup." },
-      { "step": "02", "title": "Assigned Business Admin receives activation credentials", "desc": "The designated Business Admin receives a secure activation link, completes profile photo upload, and sets a permanent password." },
-      { "step": "03", "title": "Business Admin sets up branches, products, and employees", "desc": "Configure store branches, categories, products, opening inventory, and staff accounts with role-specific permissions." },
-      { "step": "04", "title": "Staff run daily business operations", "desc": "Cashiers, inventory managers, and accountants execute POS sales, stock transfers, purchase orders, and expense tracking." },
-      { "step": "05", "title": "Business Admin monitors reports, profits, and team activities", "desc": "Review financial statements, branch performance charts, employee tasks, and audit logs from a unified dashboard." },
-      { "step": "06", "title": "Customers browse businesses, order products, and track orders", "desc": "Registered customers explore public catalogs, watch promotional videos, place orders, and follow fulfillment live." }
+      {
+        "step": "01",
+        "title": "Platform Super Admin registers a business",
+        "desc": "The Super Admin collects verified business profile details, tax configuration, subscription plan, and headquarters setup."
+      },
+      {
+        "step": "02",
+        "title": "Assigned Business Admin receives activation credentials",
+        "desc": "The designated Business Admin receives a secure activation link, completes profile photo upload, and sets a permanent password."
+      },
+      {
+        "step": "03",
+        "title": "Business Admin sets up branches, products, and employees",
+        "desc": "Configure store branches, categories, products, opening inventory, and staff accounts with role-specific permissions."
+      },
+      {
+        "step": "04",
+        "title": "Staff run daily business operations",
+        "desc": "Cashiers, inventory managers, and accountants execute POS sales, stock transfers, purchase orders, and expense tracking."
+      },
+      {
+        "step": "05",
+        "title": "Business Admin monitors reports, profits, and team activities",
+        "desc": "Review financial statements, branch performance charts, employee tasks, and audit logs from a unified dashboard."
+      },
+      {
+        "step": "06",
+        "title": "Customers browse businesses, order products, and track orders",
+        "desc": "Registered customers explore public catalogs, watch promotional videos, place orders, and follow fulfillment live."
+      }
     ],
     "benefitsEyebrow": "Why Businesses Choose BizTrade Africa",
     "benefitsTitle": "Practical operational benefits across every branch",
     "benefits": [
-      { "title": "Better Business Organization", "desc": "Unify products, branches, suppliers, staff, and customer orders in a single structured system." },
-      { "title": "Accurate Sales & Stock Tracking", "desc": "Every POS transaction and stock adjustment updates branch inventory and audit logs automatically." },
-      { "title": "Improved Team Collaboration", "desc": "Connect branch teams with assigned tasks, internal messaging, and role-controlled workflows." },
-      { "title": "Clear Financial Visibility", "desc": "Monitor sales revenue, approved expenses, receivables, payables, and gross margins without manual spreadsheets." },
-      { "title": "Faster Customer Service", "desc": "Accelerate checkout with barcode search, printed receipts, and online customer order fulfillment." },
-      { "title": "Reduced Manual Errors", "desc": "Replace error-prone paper books with validated entries, automated tax totals, and stock movement records." },
-      { "title": "Centralized Multi-Branch Control", "desc": "Oversee headquarters and regional branches from one dashboard with strict tenant data isolation." },
-      { "title": "Built for Sustainable Growth", "desc": "Scale seamlessly from a single neighborhood store into a multi-branch retail or wholesale operation." }
+      {
+        "title": "Better Business Organization",
+        "desc": "Unify products, branches, suppliers, staff, and customer orders in a single structured system."
+      },
+      {
+        "title": "Accurate Sales & Stock Tracking",
+        "desc": "Every POS transaction and stock adjustment updates branch inventory and audit logs automatically."
+      },
+      {
+        "title": "Improved Team Collaboration",
+        "desc": "Connect branch teams with assigned tasks, internal messaging, and role-controlled workflows."
+      },
+      {
+        "title": "Clear Financial Visibility",
+        "desc": "Monitor sales revenue, approved expenses, receivables, payables, and gross margins without manual spreadsheets."
+      },
+      {
+        "title": "Faster Customer Service",
+        "desc": "Accelerate checkout with barcode search, printed receipts, and online customer order fulfillment."
+      },
+      {
+        "title": "Reduced Manual Errors",
+        "desc": "Replace error-prone paper books with validated entries, automated tax totals, and stock movement records."
+      },
+      {
+        "title": "Centralized Multi-Branch Control",
+        "desc": "Oversee headquarters and regional branches from one dashboard with strict tenant data isolation."
+      },
+      {
+        "title": "Built for Sustainable Growth",
+        "desc": "Scale seamlessly from a single neighborhood store into a multi-branch retail or wholesale operation."
+      }
     ],
     "sectorsTitle": "Supported Business Sectors",
     "sectorsDesc": "Built to adapt to commercial workflows across diverse retail, wholesale, and service industries.",
@@ -442,6 +567,7 @@
     "directorySubtitle": "Browse verified businesses on BizTrade Africa, explore published catalogs, and place customer orders.",
     "searchBusinessesPlaceholder": "Search businesses or cities...",
     "allCategories": "All Categories",
+    "allLocations": "All Locations",
     "noBusinessesMatch": "No publicly listed businesses match yet",
     "noBusinessesMatchDesc": "Businesses appear here once registered and activated by the Platform Super Admin.",
     "productsCount": "products",
@@ -491,12 +617,74 @@
     "featuresPageTitle": "Complete Operational Capabilities",
     "featuresPageSubtitle": "Designed for electronics stores, supermarkets, pharmacies, hardware suppliers, and service businesses.",
     "featuresPageModules": [
-      { "title": "Point of Sale (POS)", "desc": "Instant search & barcode scanning, authorized discounts, MTN MoMo, Airtel Money, Cash, Card, partial payments, and PDF receipts." },
-      { "title": "Inventory & Transfers", "desc": "Every stock change writes an immutable stock_movements record. Atomic row locking prevents simultaneous overselling." },
-      { "title": "Purchases & Suppliers", "desc": "Issue purchase orders, track supplier balances, and update branch inventory only when physical goods are received." },
-      { "title": "Financial Management", "desc": "Track sales revenue, COGS, gross profit, operating expenses with manager approval workflows, and cash flow." },
-      { "title": "CRM & Customer Orders", "desc": "Manage retail/wholesale customer balances, loyalty points, complaints, and 7-stage delivery order tracking." },
-      { "title": "Employees, Tasks & Chat", "desc": "Invite staff with custom RBAC roles, assign branch tasks, broadcast announcements, and chat in real time." }
+      {
+        "title": "Business Management",
+        "desc": "Centralized multi-tenant workspace governance covering company branding, RWF/regional currencies, VAT rules, operating hours, and security settings."
+      },
+      {
+        "title": "Point of Sale (POS)",
+        "desc": "Instant product search & barcode lookup, authorized discounts, MTN MoMo, Airtel Money, Cash, Card, partial payments, and printable receipts."
+      },
+      {
+        "title": "Inventory & Stock Transfers",
+        "desc": "Every stock change writes an immutable stock movement record with transactional locking to prevent overselling across branches."
+      },
+      {
+        "title": "Product Catalog Management",
+        "desc": "Manage SKUs, barcodes, categories, cost and retail prices, minimum stock thresholds, product photography, and catalog publication."
+      },
+      {
+        "title": "Finance & Expense Control",
+        "desc": "Track sales revenue, COGS, gross profit, non-sales income, operating expenses with manager approval workflows, and cash flow."
+      },
+      {
+        "title": "Employees & Payroll",
+        "desc": "Invite staff with custom RBAC permissions, manage branch assignments, configure recurring salary schedules, and process payroll payouts."
+      },
+      {
+        "title": "Multi-Branch Operations",
+        "desc": "Operate headquarters and regional retail outlets under one account with isolated branch stock, cashiers, and manager reporting."
+      },
+      {
+        "title": "Customer Management (CRM)",
+        "desc": "Maintain verified retail and wholesale customer profiles, track credit balances, loyalty points, and customer service notes."
+      },
+      {
+        "title": "Supplier Management",
+        "desc": "Centralize vendor directories, contact persons, tax identifiers, supply history, and outstanding supplier payables."
+      },
+      {
+        "title": "Customer Order Fulfillment",
+        "desc": "Receive online directory orders from verified customers and track status progression cleanly through confirmation and delivery."
+      },
+      {
+        "title": "Purchases & Goods Receiving",
+        "desc": "Create purchase orders for suppliers, log physical goods received per branch, update weighted stock costs, and record supplier payments."
+      },
+      {
+        "title": "Reports & Data Exports",
+        "desc": "Analyze daily, monthly, and annual P&L trends, top-selling products, branch breakdowns, and export full CSV operational reports."
+      },
+      {
+        "title": "Internal Business Communication",
+        "desc": "Coordinate branch teams with real-time workspace messaging channels, shift handovers, and company-wide announcements."
+      },
+      {
+        "title": "Operational Task Management",
+        "desc": "Delegate branch operational tasks with priority levels, due dates, progress tracking, and team comment threads."
+      },
+      {
+        "title": "Promotional Video Advertising",
+        "desc": "Upload and publish chunk-resilient promotional videos linked to store products directly to the public BizTrade Africa showcase."
+      },
+      {
+        "title": "AI Business Assistant",
+        "desc": "Query operational trends, low-stock priorities, and sales performance using natural language grounded in live workspace data."
+      },
+      {
+        "title": "Real-Time Notifications",
+        "desc": "Instant alerts for low inventory thresholds, new online customer orders, expense approvals, tasks, and account security events."
+      }
     ],
     "pricingTitle": "Transparent RWF Subscription Plans",
     "pricingSubtitle": "Businesses are onboarded and verified by Platform Super Admin. Contact our team to provision your business workspace.",
@@ -800,7 +988,10 @@
     "colOrders": "Orders",
     "colLoyaltyPts": "Loyalty Pts",
     "colOutstanding": "Outstanding",
-    "colTotalSpent": "Total Spent"
+    "colTotalSpent": "Total Spent",
+    "exportCsv": "Export Full CSV",
+    "generatingCsv": "Generating CSV ({{progress}}%)",
+    "exportJobRunning": "Compiling report in background..."
   },
   "products": {
     "title": "Product Catalog",
@@ -1162,7 +1353,7 @@
     "subtitle": "Upload promotional MP4 or WEBM videos for your products and services, preview before publishing, and feature them on your public business profile.",
     "uploadVideoAd": "Upload Video Ad",
     "errFormat": "Unsupported video format. Please upload an MP4 or WEBM video.",
-    "errVideoSize": "Video file exceeds the 50MB maximum limit.",
+    "errVideoSize": "Video file exceeds the 250MB maximum storage limit.",
     "errThumbFormat": "Thumbnail must be a JPG, JPEG, PNG, or WEBP image.",
     "errThumbSize": "Thumbnail image exceeds 5MB.",
     "errMissingVideo": "Please select an MP4 or WEBM video file to upload.",
@@ -1179,7 +1370,7 @@
     "deleteAria": "Delete video advertisement",
     "editModalTitle": "Edit Promotional Video",
     "uploadModalTitle": "Upload Promotional Video",
-    "modalFormatsHint": "Supported formats: MP4, WEBM (max 50MB). Preview your video before publishing.",
+    "modalFormatsHint": "Supported formats: MP4, WEBM (up to 250MB, resumable with no time limit). Preview your video before publishing.",
     "videoTitleLabel": "Video Title *",
     "videoTitlePlaceholder": "e.g. Kigali Fresh Espresso Machine Showcase",
     "descriptionLabel": "Description",
@@ -1200,7 +1391,23 @@
     "previewModalTitle": "Video Preview — {{title}}",
     "deleteModalTitle": "Delete Promotional Video",
     "deleteConfirm": "Are you sure you want to permanently delete \"{{title}}\"? Customers will no longer see this advertisement.",
-    "deleteVideo": "Delete Video"
+    "deleteVideo": "Delete Video",
+    "statusUploading": "Uploading",
+    "statusProcessing": "Processing",
+    "statusSaving": "Saving",
+    "statusCompleted": "Completed",
+    "statusFailed": "Failed",
+    "statusCancelled": "Cancelled",
+    "completedSuccess": "Promotional video uploaded, verified, and saved.",
+    "jobNotFoundErr": "Video finalization job could not be found.",
+    "jobFailedErr": "Video processing failed.",
+    "uploadCancelledMsg": "Upload cancelled and temporary chunks cleaned up.",
+    "chunkRetryFailed": "Chunk transfer failed after multiple retries.",
+    "reselectToResume": "Select \"{{name}}\" ({{size}}) to resume your interrupted upload.",
+    "cancelUploadBtn": "Cancel Upload",
+    "resumeBannerTitle": "Interrupted Video Upload Detected",
+    "resumeUploadBtn": "Resume Upload",
+    "discardUploadBtn": "Discard"
   },
   "onboarding": {
     "title": "Create Business Workspace",

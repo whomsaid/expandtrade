@@ -39,12 +39,54 @@ export async function requireBusiness(req, res, next) {
       req.query.businessId ||
       req.body?.business_id;
 
-    const businessId = Number(rawBusinessId);
-    if (!businessId || Number.isNaN(businessId)) {
-      return res.status(400).json({ error: 'Active business workspace header (x-business-id) is required' });
-    }
+    const hasExplicitBusinessId =
+      rawBusinessId !== undefined &&
+      rawBusinessId !== null &&
+      String(rawBusinessId).trim() !== '';
 
     const isSuperAdmin = Boolean(req.user?.is_platform_admin);
+
+    let businessId = hasExplicitBusinessId ? Number(rawBusinessId) : 0;
+    if (hasExplicitBusinessId && (!businessId || Number.isNaN(businessId) || businessId < 1)) {
+      return res.status(400).json({ error: 'Invalid business workspace identifier' });
+    }
+
+    if (!businessId) {
+      const assignedMembership = await queryOne(
+        `SELECT bm.business_id
+         FROM business_members bm
+         JOIN businesses b ON b.id = bm.business_id
+         WHERE bm.user_id = ?
+           AND bm.status = 'active'
+           AND b.status != 'deleted'
+           AND b.deleted_at IS NULL
+         ORDER BY CASE WHEN b.status = 'active' THEN 0 ELSE 1 END, bm.id ASC
+         LIMIT 1`,
+        [req.user.id]
+      );
+
+      if (assignedMembership?.business_id) {
+        businessId = Number(assignedMembership.business_id);
+      } else if (isSuperAdmin) {
+        const defaultBiz = await queryOne(
+          `SELECT id
+           FROM businesses
+           WHERE status != 'deleted' AND deleted_at IS NULL
+           ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, id DESC
+           LIMIT 1`
+        );
+        if (defaultBiz?.id) {
+          businessId = Number(defaultBiz.id);
+        }
+      }
+    }
+
+    if (!businessId) {
+      return res.status(403).json({
+        error: 'No active business workspace is assigned to your account.',
+        code: 'NO_ACTIVE_BUSINESS',
+      });
+    }
 
     const business = await queryOne(
       'SELECT * FROM businesses WHERE id = ?',

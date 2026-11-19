@@ -8,7 +8,7 @@ import { loadMemberPermissions, requireBusiness, requirePermission } from '../mi
 import { imageUpload, removeUploadedFile, verifyFileNonEmpty, verifyImageSignature } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, logAudit } from '../services/auditService.js';
-import { sendMail } from '../services/mailService.js';
+import { buildInvitationEmail, sendMail } from '../services/mailService.js';
 import { getCached, invalidatePrefix, setCached } from '../services/cacheService.js';
 
 const ALLOWED_EMPLOYEE_ROLES = ['manager', 'branch_manager', 'accountant', 'cashier', 'salesperson', 'inventory_manager', 'customer_service'];
@@ -544,10 +544,18 @@ router.post(
       );
 
       const activationUrl = `/activate-account?token=${inviteToken}`;
+      const inviteMail = buildInvitationEmail({
+        fullName: full_name.trim(),
+        businessName: req.business.name,
+        roleName: role.name,
+        activationPath: activationUrl,
+        isBusinessAdmin: false,
+      });
       const mailResult = await sendMail({
         to: email,
-        subject: `Invitation to join ${req.business.name} on BizTrade Africa`,
-        text: `Hello ${full_name.trim()}, you have been invited to join ${req.business.name} as ${role.name}. Open ${activationUrl} to set your password and activate your account.`,
+        subject: inviteMail.subject,
+        text: inviteMail.text,
+        html: inviteMail.html,
       });
 
       await logAudit({
@@ -562,6 +570,7 @@ router.post(
       res.status(201).json({
         invitationId: invRes.insertId,
         invite_token: inviteToken,
+        emailDelivered: mailResult.delivered,
         activation_url: !mailResult.delivered || process.env.NODE_ENV !== 'production' ? activationUrl : undefined,
         message: mailResult.delivered
           ? 'Employee activation invitation sent via email'

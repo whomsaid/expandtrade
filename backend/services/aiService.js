@@ -73,48 +73,72 @@ export async function queryBusinessAssistant({ businessId, branchId, allBranches
     },
   };
 
+  const buildFallbackAnswer = (reasonNote) =>
+    [
+      `Actual recorded summary for ${businessName} (${groundedContext.scope}):`,
+      `• Sales today: ${todaySales?.count || 0} transactions totaling ${Number(todaySales?.total || 0).toLocaleString()} ${currencyCode}.`,
+      `• Sales this month: ${monthSales?.count || 0} transactions totaling ${Number(monthSales?.total || 0).toLocaleString()} ${currencyCode}.`,
+      `• Customer receivables owed: ${Number(receivables?.customer_debt || 0).toLocaleString()} ${currencyCode}.`,
+      topProducts.length
+        ? `• Top products: ${topProducts.map((p) => `${p.product_name} (${p.qty_sold} sold, ${Number(p.revenue || 0).toLocaleString()} ${currencyCode})`).join('; ')}.`
+        : '• Top products: No recorded sales items yet.',
+      lowStock.length
+        ? `• Restock priority: ${lowStock.map((i) => `${i.name} (${i.branch_name}: ${i.quantity} left, min ${i.min_stock})`).join('; ')}.`
+        : '• Inventory status: All active products are above minimum stock thresholds.',
+      reasonNote,
+    ].join('\n');
+
   if (!env.geminiApiKey) {
-    // Graceful deterministic fallback if GEMINI_API_KEY is not configured in environment
     return {
       provider: 'local_analytics_fallback',
-      answer: [
-        `Actual recorded summary for ${businessName} (${groundedContext.scope}):`,
-        `• Sales today: ${todaySales?.count || 0} transactions totaling ${Number(todaySales?.total || 0).toLocaleString()} ${currencyCode}.`,
-        `• Sales this month: ${monthSales?.count || 0} transactions totaling ${Number(monthSales?.total || 0).toLocaleString()} ${currencyCode}.`,
-        `• Customer receivables owed: ${Number(receivables?.customer_debt || 0).toLocaleString()} ${currencyCode}.`,
-        lowStock.length
-          ? `• Restock priority: ${lowStock.map((i) => `${i.name} (${i.branch_name}: ${i.quantity} left, min ${i.min_stock})`).join('; ')}.`
-          : '• Inventory status: All active products are above minimum stock thresholds.',
-        `Note: Add GEMINI_API_KEY in Settings > Secrets for full conversational Gemini AI analysis.`,
-      ].join('\n'),
+      answer: buildFallbackAnswer(
+        'Note: Add GEMINI_API_KEY in Settings > Secrets for full conversational Gemini AI analysis.'
+      ),
       groundedContext,
     };
   }
 
-  const ai = new GoogleGenAI({
-    apiKey: env.geminiApiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
+  try {
+    const ai = new GoogleGenAI({
+      apiKey: env.geminiApiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
       },
-    },
-  });
+    });
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-4-hydrogen',
-    contents: `Authorized Business Data JSON:\n${JSON.stringify(groundedContext, null, 2)}\n\nUser Question: ${userPrompt}`,
-    config: {
-      systemInstruction:
-        'You are the BizTrade Africa Business Assistant. Answer strictly using the provided authorized database JSON. ' +
-        'Clearly distinguish ACTUAL DATABASE RESULTS from ESTIMATES or RECOMMENDATIONS. ' +
-        'Never invent figures that are not in the JSON; if data is missing or zero, state that explicitly. ' +
-        'Format currency clearly in the business currency (default RWF). Keep answers concise, executive, and actionable.',
-    },
-  });
+    const timeoutMs = 8000;
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: 'gemini-4-hydrogen',
+        contents: `Authorized Business Data JSON:\n${JSON.stringify(groundedContext, null, 2)}\n\nUser Question: ${userPrompt}`,
+        config: {
+          systemInstruction:
+            'You are the BizTrade Africa Business Assistant. Answer strictly using the provided authorized database JSON. ' +
+            'Clearly distinguish ACTUAL DATABASE RESULTS from ESTIMATES or RECOMMENDATIONS. ' +
+            'Never invent figures that are not in the JSON; if data is missing or zero, state that explicitly. ' +
+            'Format currency clearly in the business currency (default RWF). Keep answers concise, executive, and actionable.',
+        },
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AI_UPSTREAM_TIMEOUT')), timeoutMs)
+      ),
+    ]);
 
-  return {
-    provider: 'gemini-4-hydrogen',
-    answer: response.text || 'No response generated.',
-    groundedContext,
-  };
+    return {
+      provider: 'gemini-4-hydrogen',
+      answer: response.text || buildFallbackAnswer('Note: Empty AI response received; showing recorded metrics.'),
+      groundedContext,
+    };
+  } catch (err) {
+    console.warn('[AI Assistant Fallback]', err?.message || err);
+    return {
+      provider: 'local_analytics_fallback',
+      answer: buildFallbackAnswer(
+        'Note: Live AI model timed out or is temporarily unavailable; displaying verified database metrics.'
+      ),
+      groundedContext,
+    };
+  }
 }

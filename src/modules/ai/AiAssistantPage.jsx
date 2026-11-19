@@ -22,7 +22,7 @@ export default function AiAssistantPage() {
 
   const handleAsk = async (questionText) => {
     const q = (questionText ?? prompt).trim();
-    if (!q) return;
+    if (!q || loading) return;
     setError('');
     setLoading(true);
     setMessages((prev) => [...prev, { role: 'user', text: q }]);
@@ -59,8 +59,9 @@ export default function AiAssistantPage() {
           <button
             key={s}
             type="button"
+            disabled={loading}
             onClick={() => handleAsk(s)}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-sky-600 dark:hover:border-sky-500 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-sky-600 dark:hover:border-sky-500 transition-colors disabled:opacity-50"
           >
             {s}
           </button>
