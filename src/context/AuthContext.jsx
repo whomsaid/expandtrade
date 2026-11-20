@@ -257,8 +257,14 @@ export function AuthProvider({ children }) {
 
     if (!data.user?.must_change_password) {
       const targetBiz = resolveTargetBusinessId(membershipsList);
-      syncWorkspaceIds(targetBiz, undefined);
-      await Promise.all([loadWorkspace(targetBiz), refreshNotifications()]);
+      if (targetBiz) {
+        syncWorkspaceIds(targetBiz, undefined);
+        await loadWorkspace(targetBiz);
+      } else {
+        syncWorkspaceIds(null, null);
+        setWorkspace(null);
+      }
+      refreshNotifications();
     } else {
       syncWorkspaceIds(null, null);
       setWorkspace(null);
@@ -280,8 +286,14 @@ export function AuthProvider({ children }) {
 
     if (!newUser?.must_change_password) {
       const targetBiz = resolveTargetBusinessId(newMemberships);
-      syncWorkspaceIds(targetBiz, undefined);
-      await Promise.all([loadWorkspace(targetBiz), refreshNotifications()]);
+      if (targetBiz) {
+        syncWorkspaceIds(targetBiz, undefined);
+        await loadWorkspace(targetBiz);
+      } else {
+        syncWorkspaceIds(null, null);
+        setWorkspace(null);
+      }
+      refreshNotifications();
     } else {
       syncWorkspaceIds(null, null);
       setWorkspace(null);
@@ -292,35 +304,47 @@ export function AuthProvider({ children }) {
     if (logoutPromiseRef.current) {
       return logoutPromiseRef.current;
     }
-    const run = (async () => {
-      try {
-        if (localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token')) {
-          await api.post('/auth/logout');
-        }
-      } catch {
-        // ignore network/session expiry errors during cleanup
-      } finally {
-        clearApiWorkspaceContext();
-        invalidateApiCache();
-        localStorage.removeItem('biztrade_token');
-        localStorage.removeItem('biztrade_business_id');
-        localStorage.removeItem('biztrade_branch_id');
-        localStorage.removeItem('bizflow_token');
-        localStorage.removeItem('bizflow_business_id');
-        localStorage.removeItem('bizflow_branch_id');
-        setToken('');
-        setUser(null);
-        setSessions([]);
-        setMemberships([]);
-        setActiveBusinessId(null);
-        setActiveBranchId(null);
-        setWorkspace(null);
-        setNotifications([]);
+    const activeToken =
+      token || localStorage.getItem('biztrade_token') || localStorage.getItem('bizflow_token') || '';
+
+    // Clear client workspace, storage, cache, and socket synchronously for instant logout UX
+    clearApiWorkspaceContext();
+    invalidateApiCache();
+    localStorage.removeItem('biztrade_token');
+    localStorage.removeItem('biztrade_business_id');
+    localStorage.removeItem('biztrade_branch_id');
+    localStorage.removeItem('bizflow_token');
+    localStorage.removeItem('bizflow_business_id');
+    localStorage.removeItem('bizflow_branch_id');
+    if (socket) {
+      socket.disconnect();
+      setSocket(null);
+    }
+    setToken('');
+    setUser(null);
+    setSessions([]);
+    setMemberships([]);
+    setActiveBusinessId(null);
+    setActiveBranchId(null);
+    setWorkspace(null);
+    setNotifications([]);
+
+    if (!activeToken) return Promise.resolve();
+
+    const revokePromise = fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${activeToken}`,
+        'Content-Type': 'application/json',
+      },
+      keepalive: true,
+    })
+      .catch(() => {})
+      .finally(() => {
         logoutPromiseRef.current = null;
-      }
-    })();
-    logoutPromiseRef.current = run;
-    return run;
+      });
+    logoutPromiseRef.current = revokePromise;
+    return Promise.resolve();
   };
 
   const switchBusiness = async (bizId) => {

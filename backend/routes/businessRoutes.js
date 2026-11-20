@@ -4,7 +4,14 @@ import bcrypt from 'bcryptjs';
 import { body } from 'express-validator';
 import { execute, query, queryOne, transaction } from '../config/db.js';
 import { authenticate, requirePlatformAdmin, requireProfileImage } from '../middleware/auth.js';
-import { loadMemberPermissions, requireBusiness, requirePermission } from '../middleware/tenant.js';
+import {
+  invalidateBusinessTenantCache,
+  invalidateMemberPermsCache,
+  invalidateUserTenantCache,
+  loadMemberPermissions,
+  requireBusiness,
+  requirePermission,
+} from '../middleware/tenant.js';
 import { imageUpload, removeUploadedFile, verifyFileNonEmpty, verifyImageSignature } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, logAudit } from '../services/auditService.js';
@@ -220,6 +227,7 @@ router.put(
         default_tax_rate,
         tax_identification_number,
         operating_hours,
+        whatsapp_number,
         language,
         date_format,
         receipt_header,
@@ -237,6 +245,7 @@ router.put(
            description = COALESCE(?, description),
            email = COALESCE(?, email),
            phone = COALESCE(?, phone),
+           whatsapp_number = COALESCE(?, whatsapp_number),
            country = COALESCE(?, country),
            province = COALESCE(?, province),
            district = COALESCE(?, district),
@@ -250,7 +259,7 @@ router.put(
            updated_at = datetime('now')
          WHERE id = ?`,
         [
-          name, category, description, email, phone, country, province, district,
+          name, category, description, email, phone, whatsapp_number ?? null, country, province, district,
           physical_address, currency_code, timezone,
           tax_enabled !== undefined ? (tax_enabled ? 1 : 0) : null,
           default_tax_rate !== undefined ? Number(default_tax_rate) : null,
@@ -292,6 +301,7 @@ router.put(
       });
 
       invalidatePrefix('public:businesses:');
+      invalidateBusinessTenantCache(req.businessId);
       const updated = await queryOne('SELECT * FROM businesses WHERE id = ?', [req.businessId]);
       res.json({ business: updated, message: 'Business settings saved' });
     } catch (err) {
@@ -320,6 +330,7 @@ router.post(
         removeUploadedFile(previousLogo);
       }
       invalidatePrefix('public:businesses:');
+      invalidateBusinessTenantCache(req.businessId);
       res.json({ logo_url: logoUrl, message: 'Business logo updated successfully.' });
     } catch (err) {
       if (req.file?.path) removeUploadedFile(req.file.path);
@@ -628,6 +639,9 @@ router.put(
         ]
       );
 
+      invalidateMemberPermsCache(member.id);
+      invalidateBusinessTenantCache(req.businessId);
+      invalidateUserTenantCache(member.user_id);
       const perms = await loadMemberPermissions(member.id, role_id || member.role_id);
       await logAudit({
         businessId: req.businessId,

@@ -5,6 +5,7 @@ import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
+import { WhatsAppContactButton } from '../../components/WhatsAppContactModal.jsx';
 import { formatDateTime, formatMoney } from '../../utils/format.js';
 
 const ORDER_STATUSES = [
@@ -138,7 +139,18 @@ export default function OrdersPage() {
                       <UserAvatar src={o.customer_avatar} name={o.customer_name} size="sm" />
                       <div className="min-w-0">
                         <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{o.customer_name}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{o.customer_phone}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2">
+                          <span className="truncate">{o.customer_phone}</span>
+                          <WhatsAppContactButton
+                            compact
+                            phone={o.customer_phone}
+                            name={o.customer_name}
+                            customerId={o.customer_id || null}
+                            entityType="order"
+                            entityId={o.id}
+                            prefillMessage={`Hello ${o.customer_name}, update regarding order ${o.order_number}: `}
+                          />
+                        </div>
                       </div>
                     </div>
                   </td>

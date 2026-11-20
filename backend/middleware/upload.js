@@ -54,9 +54,11 @@ function isMimeOrGenericExtOk(mimetype, ext, allowedMimeMapOrSet, allowedExts) {
   const mime = String(mimetype || '').toLowerCase();
   const isGenericMime = !mime || mime === 'application/octet-stream';
   const extOk = ext ? allowedExts.has(ext) : !isGenericMime;
-  const mimeOk = Array.isArray(allowedMimeMapOrSet) || allowedMimeMapOrSet instanceof Set
-    ? allowedMimeMapOrSet.has(mime)
-    : Boolean(allowedMimeMapOrSet[mime]);
+  const mimeOk = Array.isArray(allowedMimeMapOrSet)
+    ? allowedMimeMapOrSet.includes(mime)
+    : allowedMimeMapOrSet instanceof Set
+      ? allowedMimeMapOrSet.has(mime)
+      : Boolean(allowedMimeMapOrSet[mime]);
   return extOk && (mimeOk || (isGenericMime && Boolean(ext)));
 }
 

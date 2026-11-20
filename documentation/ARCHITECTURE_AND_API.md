@@ -42,17 +42,18 @@ Normalized 3NF schema across 38 tables in `/database/schema.sql`:
 - `GET /api/subscriptions/plans` — Active SaaS subscription plans
 - `GET /api/public/orders/track?order_number=...&phone=...` — Public order status timeline
 - `POST /api/public/contact` — Contact form inquiry submission
-- `POST /api/auth/register` — Register user & issue 6-digit email OTP
-- `POST /api/auth/verify-email` — Verify OTP & activate user
-- `POST /api/auth/resend-otp` — Regenerate OTP
-- `POST /api/auth/login` — Authenticate & create `user_sessions` record
-- `POST /api/auth/logout` — Revoke current JWT session
+- `GET /api/auth/verification-channels` — Active verification channels (Email, SMS, WhatsApp)
+- `POST /api/auth/register` — Validate full registration, create pending user, return `pending_token` + masked contacts
+- `POST /api/auth/registration/send-otp` — Issue 6-digit OTP via Email, SMS, or WhatsApp (supports method switching)
+- `POST /api/auth/registration/verify-otp` — Verify 6-digit OTP, activate account, and issue session JWT
+- `POST /api/auth/login` — Authenticate & create `user_sessions` record (returns `403 ACCOUNT_VERIFICATION_REQUIRED` if pending)
+- `POST /api/auth/logout` — Revoke current JWT session and clear auth cache
 - `POST /api/auth/forgot-password` & `POST /api/auth/reset-password`
 - `GET /api/auth/me` — Active user, memberships & permissions
-- `PATCH /api/auth/profile` & `POST /api/auth/change-password`
+- `PATCH /api/auth/profile`, `PATCH /api/auth/whatsapp-consent` & `POST /api/auth/change-password`
 
 ### Businesses & Team (`/api/*`)
-- `GET /api/businesses`, `POST /api/businesses`, `PATCH /api/businesses/current`
+- `GET /api/businesses`, `POST /api/businesses`, `PUT /api/businesses/current`
 - `GET /api/branches`, `POST /api/branches`, `PATCH /api/branches/:id`
 - `GET /api/employees`, `POST /api/employees/invite`, `PATCH /api/employees/:id`, `GET /api/roles`
 - `GET /api/settings`, `PUT /api/settings`
@@ -69,6 +70,11 @@ Normalized 3NF schema across 38 tables in `/database/schema.sql`:
 - `GET /api/sales`, `GET /api/sales/:id`, `GET /api/receipts/:saleId`, `POST /api/sales/:id/payments`, `POST /api/sales/:id/refund`
 - `GET /api/orders`, `POST /api/orders`, `PATCH /api/orders/:id/status`
 - `GET /api/customers`, `POST /api/customers`, `GET /api/customers/:id`, `POST /api/customers/:id/notes`
+
+### WhatsApp Communication (`/api/whatsapp/*`)
+- `GET /api/whatsapp/webhook` — Meta webhook verification challenge
+- `POST /api/whatsapp/webhook` — HMAC-SHA256 verified delivery/read/failure statuses, inbound replies & `STOP` opt-out
+- `GET /api/whatsapp/status`, `GET /api/whatsapp/messages`, `POST /api/whatsapp/send`, `PATCH /api/whatsapp/consent`
 
 ### Procurement, Finance, Tasks, Reports, AI & Admin
 - `GET/POST /api/suppliers`, `POST /api/suppliers/:id/pay`

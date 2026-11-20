@@ -1,4 +1,5 @@
 import { execute, query } from '../config/db.js';
+import { invalidatePrefix } from './cacheService.js';
 
 let ioInstance = null;
 
@@ -7,6 +8,9 @@ export function setSocketIo(io) {
 }
 
 export function emitToBusiness(businessId, event, payload) {
+  if (businessId && ['sale:created', 'inventory:updated', 'order:updated', 'expense:updated', 'payroll:updated'].includes(event)) {
+    invalidatePrefix(`dashboard:${businessId}:`);
+  }
   if (ioInstance && businessId) {
     ioInstance.to(`business:${businessId}`).emit(event, payload);
   }

@@ -48,6 +48,7 @@ export default function SettingsPage() {
       activity_tracking: user?.privacy_settings?.activity_tracking !== false,
     },
   });
+  const [whatsappOptIn, setWhatsappOptIn] = useState(Boolean(user?.whatsapp_opt_in));
   const [emailChange, setEmailChange] = useState({
     open: false,
     step: 'request',
@@ -84,6 +85,7 @@ export default function SettingsPage() {
         activity_tracking: user.privacy_settings?.activity_tracking !== false,
       },
     });
+    setWhatsappOptIn(Boolean(user.whatsapp_opt_in));
     setDashPrefs({
       ...DEFAULT_DASHBOARD_PREFS,
       ...(user.dashboard_preferences || {}),
@@ -140,6 +142,20 @@ export default function SettingsPage() {
       setError(err.message);
     } finally {
       setSavingAction('');
+    }
+  };
+
+  const handleToggleWhatsappConsent = async (checked) => {
+    setError('');
+    setMessage('');
+    setWhatsappOptIn(checked);
+    try {
+      const { data } = await api.patch('/auth/whatsapp-consent', { whatsapp_opt_in: checked });
+      await refreshMe();
+      setMessage(data.message);
+    } catch (err) {
+      setWhatsappOptIn(!checked);
+      setError(err.message);
     }
   };
 
@@ -559,6 +575,14 @@ export default function SettingsPage() {
                     }
                   />
                 </label>
+                <label className="flex items-center justify-between py-1">
+                  <span className="text-slate-700 dark:text-slate-300">{t('whatsapp.accountConsentToggle')}</span>
+                  <input
+                    type="checkbox"
+                    checked={whatsappOptIn}
+                    onChange={(e) => handleToggleWhatsappConsent(e.target.checked)}
+                  />
+                </label>
               </div>
               <button type="submit" disabled={Boolean(savingAction)} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">
                 {savingAction === 'personal' ? t('common.saving') : t('settings.savePersonalBtn')}
@@ -782,6 +806,16 @@ export default function SettingsPage() {
               <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('settings.receiptFooter')}</label>
               <input value={profile.receipt_footer || ''} onChange={(e) => setProfile({ ...profile, receipt_footer: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
             </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('whatsapp.businessWhatsappNumber')}</label>
+            <input
+              value={profile.whatsapp_number || ''}
+              onChange={(e) => setProfile({ ...profile, whatsapp_number: e.target.value })}
+              placeholder="+250788123456"
+              className="w-full sm:max-w-sm px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+            />
           </div>
 
           <button type="submit" disabled={Boolean(savingAction)} className="px-5 py-2.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">

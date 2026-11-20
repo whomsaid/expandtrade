@@ -6,7 +6,13 @@ import rateLimit from 'express-rate-limit';
 import { body } from 'express-validator';
 import { env } from '../config/env.js';
 import { execute, query, queryOne, transaction } from '../config/db.js';
-import { authenticate, recordUserSession, signAccessToken } from '../middleware/auth.js';
+import {
+  authenticate,
+  invalidateUserAuthCache,
+  markJtiRevoked,
+  recordUserSession,
+  signAccessToken,
+} from '../middleware/auth.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { avatarUpload, removeUploadedFile, verifyImageSignature } from '../middleware/upload.js';
 import { logAudit } from '../services/auditService.js';
@@ -14,13 +20,17 @@ import {
   buildInvitationEmail,
   buildOtpVerificationEmail,
   buildPasswordResetEmail,
+  isSmtpConfigured,
   sendMail,
 } from '../services/mailService.js';
+import { getSmsProviderStatus, isSmsConfigured, sendSmsOtp } from '../services/smsService.js';
+import { isWhatsAppConfigured, sendWhatsAppOtp } from '../services/whatsappService.js';
 import { validatePasswordStrength } from '../utils/passwordPolicy.js';
+import { maskEmail, maskPhone, normalizePhoneE164 } from '../utils/phone.js';
 
 const router = express.Router();
 
-const OTP_TTL_MINUTES = 10;
+const OTP_TTL_MINUTES = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 
@@ -44,30 +54,62 @@ function generateOtpCode() {
   return String(crypto.randomInt(100000, 1000000));
 }
 
-function hashOtpCode(email, purpose, otpCode) {
-  const normalized = `${String(email || '').trim().toLowerCase()}:${String(purpose || 'registration')}:${String(otpCode || '').trim()}`;
+function hashOtpCode(identifier, purpose, otpCode) {
+  const normalized = `${String(identifier || '').trim().toLowerCase()}:${String(purpose || 'registration')}:${String(otpCode || '').trim()}`;
   return crypto.createHmac('sha256', env.otpSecret).update(normalized).digest('hex');
 }
 
-function verifyOtpHash(email, purpose, otpCode, expectedHash) {
+function verifyOtpHash(identifier, purpose, otpCode, expectedHash) {
   if (!expectedHash) return false;
-  const candidate = Buffer.from(hashOtpCode(email, purpose, otpCode), 'hex');
+  const candidate = Buffer.from(hashOtpCode(identifier, purpose, otpCode), 'hex');
   const stored = Buffer.from(String(expectedHash), 'hex');
   if (candidate.length === 0 || candidate.length !== stored.length) return false;
   return crypto.timingSafeEqual(candidate, stored);
 }
 
-async function getCooldownRemainingSeconds(email, purpose) {
-  const latest = await queryOne(
-    `SELECT created_at FROM otp_tokens WHERE email = ? AND purpose = ? ORDER BY id DESC LIMIT 1`,
-    [email, purpose]
-  );
+function parseSqlUtcMs(ts) {
+  if (!ts) return NaN;
+  const iso = ts.includes('T') ? ts : `${ts.replace(' ', 'T')}Z`;
+  return new Date(iso).getTime();
+}
+
+async function getCooldownRemainingSeconds(email, purpose, channel = null) {
+  const latest = channel
+    ? await queryOne(
+        `SELECT created_at FROM otp_tokens WHERE email = ? AND purpose = ? AND channel = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1`,
+        [email, purpose, channel]
+      )
+    : await queryOne(
+        `SELECT created_at FROM otp_tokens WHERE email = ? AND purpose = ? ORDER BY id DESC LIMIT 1`,
+        [email, purpose]
+      );
   if (!latest?.created_at) return 0;
-  const iso = latest.created_at.includes('T') ? latest.created_at : `${latest.created_at.replace(' ', 'T')}Z`;
-  const createdMs = new Date(iso).getTime();
+  const createdMs = parseSqlUtcMs(latest.created_at);
   if (Number.isNaN(createdMs)) return 0;
   const elapsedSec = Math.floor((Date.now() - createdMs) / 1000);
   return Math.max(0, OTP_RESEND_COOLDOWN_SECONDS - elapsedSec);
+}
+
+function buildPendingRegistrationToken(user) {
+  return jwt.sign(
+    {
+      typ: 'pending_registration',
+      userId: user.id,
+      email: user.email,
+      phone: user.phone,
+    },
+    env.otpSecret,
+    { expiresIn: '45m' }
+  );
+}
+
+function getVerificationChannelsAvailability() {
+  const smsStatus = getSmsProviderStatus();
+  return {
+    email: { available: isSmtpConfigured(), label: 'Email OTP' },
+    sms: { available: isSmsConfigured(), provider: smsStatus.provider, label: 'SMS OTP' },
+    whatsapp: { available: isWhatsAppConfigured(), label: 'WhatsApp OTP' },
+  };
 }
 
 function validateOptionalAvatarUpload(req, res, next) {
@@ -133,8 +175,11 @@ function formatSafeUser(user, memberships = []) {
       },
     }),
     must_change_password: Boolean(user.must_change_password),
-    is_email_verified: user.is_email_verified,
-    is_platform_admin: user.is_platform_admin,
+    is_email_verified: Boolean(user.is_email_verified),
+    is_phone_verified: Boolean(user.is_phone_verified),
+    whatsapp_opt_in: Boolean(user.whatsapp_opt_in),
+    whatsapp_opted_out_at: user.whatsapp_opted_out_at || null,
+    is_platform_admin: Boolean(user.is_platform_admin),
     preferred_language: ['en', 'rw', 'fr'].includes(user.preferred_language) ? user.preferred_language : 'en',
     theme_preference: user.theme_preference || 'system',
     account_category: resolveAccountCategory(user, memberships),
@@ -204,168 +249,25 @@ function resolveAccountCategory(user, memberships = []) {
   return 'customer';
 }
 
-// Step 1: Send real hashed OTP code to verify customer email before allowing registration to continue
-router.post(
-  '/send-registration-otp',
-  otpSendLimiter,
-  [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email address is required'),
-    body('full_name').optional().trim().isLength({ max: 140 }),
-  ],
-  validateRequest,
-  async (req, res, next) => {
-    try {
-      const { email, full_name = '' } = req.body;
-      const existing = await queryOne('SELECT id, is_email_verified FROM users WHERE email = ?', [email]);
-      if (existing) {
-        return res.status(409).json({
-          error: existing.is_email_verified
-            ? 'An account with this email already exists. Please sign in.'
-            : 'An account with this email already exists and awaits verification.',
-        });
-      }
+// Public OTP Channel Availability Metadata (never leaks secrets)
+router.get('/verification-channels', (_req, res) => {
+  res.json({
+    otpTtlSeconds: OTP_TTL_MINUTES * 60,
+    resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+    channels: getVerificationChannelsAvailability(),
+  });
+});
 
-      const cooldown = await getCooldownRemainingSeconds(email, 'registration');
-      if (cooldown > 0) {
-        return res.status(429).json({
-          error: `Please wait ${cooldown} seconds before requesting a new verification code.`,
-          retryAfterSeconds: cooldown,
-        });
-      }
-
-      const otpCode = generateOtpCode();
-      const otpHash = hashOtpCode(email, 'registration', otpCode);
-      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
-
-      await execute(
-        `UPDATE otp_tokens SET used_at = datetime('now') WHERE email = ? AND purpose = 'registration' AND used_at IS NULL`,
-        [email]
-      );
-      const insertRes = await execute(
-        `INSERT INTO otp_tokens (email, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
-         VALUES (?, NULL, 'registration', ?, ?, ?, ?)`,
-        [email, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
-      );
-
-      const emailPayload = buildOtpVerificationEmail({
-        fullName: full_name.trim(),
-        otpCode,
-        expiresMinutes: OTP_TTL_MINUTES,
-        purposeLabel: 'account registration',
-      });
-      const mailResult = await sendMail({
-        to: email,
-        subject: emailPayload.subject,
-        text: emailPayload.text,
-        html: emailPayload.html,
-      });
-
-      if (!mailResult.delivered) {
-        await execute(`DELETE FROM otp_tokens WHERE id = ?`, [insertRes.insertId]);
-        return res.status(503).json({
-          error: mailResult.error || 'Unable to send verification email. Check SMTP server configuration and try again.',
-          code: mailResult.reason || 'EMAIL_DELIVERY_FAILED',
-        });
-      }
-
-      res.json({
-        message: `Verification code sent to ${email}. Check your inbox to continue.`,
-        email,
-        expiresInSeconds: OTP_TTL_MINUTES * 60,
-        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-);
-
-// Step 2: Verify pre-registration OTP code against stored HMAC-SHA256 hash
-router.post(
-  '/verify-registration-otp',
-  otpVerifyLimiter,
-  [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email address is required'),
-    body('otp_code').trim().matches(/^\d{6}$/).withMessage('A valid 6-digit OTP code is required'),
-  ],
-  validateRequest,
-  async (req, res, next) => {
-    try {
-      const { email, otp_code } = req.body;
-      const existing = await queryOne('SELECT id FROM users WHERE email = ?', [email]);
-      if (existing) {
-        return res.status(409).json({ error: 'An account with this email already exists.' });
-      }
-
-      const record = await queryOne(
-        `SELECT * FROM otp_tokens
-         WHERE email = ? AND purpose = 'registration' AND used_at IS NULL
-         ORDER BY id DESC LIMIT 1`,
-        [email]
-      );
-      if (!record) {
-        return res.status(400).json({ error: 'No active verification code found. Please request a new OTP.' });
-      }
-      if (new Date(record.expires_at).getTime() <= Date.now()) {
-        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
-        return res.status(400).json({ error: 'Verification code has expired. Please request a new OTP.' });
-      }
-      if (Number(record.attempts || 0) >= Number(record.max_attempts || OTP_MAX_ATTEMPTS)) {
-        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
-        return res.status(429).json({ error: 'Maximum verification attempts exceeded. Please request a new OTP.' });
-      }
-
-      const valid = verifyOtpHash(email, 'registration', otp_code, record.otp_hash);
-      if (!valid) {
-        const nextAttempts = Number(record.attempts || 0) + 1;
-        const maxAttempts = Number(record.max_attempts || OTP_MAX_ATTEMPTS);
-        if (nextAttempts >= maxAttempts) {
-          await execute(`UPDATE otp_tokens SET attempts = ?, used_at = datetime('now') WHERE id = ?`, [
-            nextAttempts,
-            record.id,
-          ]);
-          return res.status(429).json({ error: 'Too many invalid attempts. Please request a new OTP code.' });
-        }
-        await execute('UPDATE otp_tokens SET attempts = ? WHERE id = ?', [nextAttempts, record.id]);
-        return res.status(400).json({
-          error: `Invalid verification code. ${maxAttempts - nextAttempts} attempt(s) remaining.`,
-        });
-      }
-
-      await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
-
-      const verificationToken = jwt.sign(
-        {
-          typ: 'email_verified_registration',
-          email,
-          otpTokenId: record.id,
-        },
-        env.otpSecret,
-        { expiresIn: '30m' }
-      );
-
-      res.json({
-        verified: true,
-        email,
-        verification_token: verificationToken,
-        message: 'Email verified successfully. You may now complete your account registration.',
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-);
-
-// Public Customer Registration ONLY (requires verified email OTP before issuing authenticated session)
+// Public Customer Registration Step 1: Validate & store all required details first, keep pending until OTP verified
 router.post(
   '/register',
   otpSendLimiter,
   avatarUpload.single('avatar'),
   validateOptionalAvatarUpload,
   [
-    body('full_name').trim().isLength({ min: 2, max: 140 }).withMessage('Full name is required'),
+    body('full_name').trim().isLength({ min: 2, max: 140 }).withMessage('Full name is required (at least 2 characters)'),
     body('email').isEmail().normalizeEmail().withMessage('Valid email address is required'),
-    body('phone').trim().matches(/^\+?[0-9\s-]{8,20}$/).withMessage('Valid phone number is required (e.g. +250788123456)'),
+    body('phone').trim().notEmpty().withMessage('Phone number is required'),
     body('password').custom((val) => {
       const err = validatePasswordStrength(val);
       if (err) throw new Error(err);
@@ -379,143 +281,365 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
-      const { full_name, email, phone, password, preferred_language, verification_token } = req.body;
+      const {
+        full_name,
+        email,
+        phone,
+        password,
+        preferred_language,
+        whatsapp_opt_in,
+      } = req.body;
       const safeLang = ['en', 'rw', 'fr'].includes(preferred_language) ? preferred_language : 'en';
-      const existing = await queryOne('SELECT id, is_email_verified FROM users WHERE email = ?', [email]);
-      if (existing) {
+      const optIn = whatsapp_opt_in === true || whatsapp_opt_in === 'true' || whatsapp_opt_in === '1' || whatsapp_opt_in === 1;
+
+      const phoneCheck = normalizePhoneE164(phone);
+      if (!phoneCheck.valid) {
         if (req.file?.path) removeUploadedFile(req.file.path);
-        return res.status(409).json({ error: 'An account with this email already exists' });
+        return res.status(422).json({ error: phoneCheck.error, code: 'INVALID_PHONE_NUMBER' });
+      }
+      const normalizedPhone = phoneCheck.e164;
+
+      const existingByEmail = await queryOne(
+        'SELECT id, email, phone, is_email_verified, is_phone_verified FROM users WHERE email = ?',
+        [email]
+      );
+      if (existingByEmail) {
+        if (req.file?.path) removeUploadedFile(req.file.path);
+        const alreadyVerified = Boolean(existingByEmail.is_email_verified || existingByEmail.is_phone_verified);
+        return res.status(409).json({
+          error: alreadyVerified
+            ? 'An account with this email address already exists. Please sign in instead.'
+            : 'An account with this email address already exists and is waiting for verification. Please sign in to finish verifying.',
+          code: 'DUPLICATE_EMAIL',
+        });
       }
 
-      let preVerified = false;
-      if (verification_token) {
-        try {
-          const decoded = jwt.verify(String(verification_token), env.otpSecret);
-          if (decoded?.typ !== 'email_verified_registration' || decoded?.email !== email) {
-            if (req.file?.path) removeUploadedFile(req.file.path);
-            return res.status(400).json({ error: 'Email verification token does not match this email address.' });
-          }
-          const otpRow = await queryOne(
-            `SELECT id, used_at FROM otp_tokens WHERE id = ? AND email = ? AND purpose = 'registration'`,
-            [decoded.otpTokenId, email]
-          );
-          if (!otpRow || !otpRow.used_at) {
-            if (req.file?.path) removeUploadedFile(req.file.path);
-            return res.status(400).json({ error: 'Email verification record could not be confirmed.' });
-          }
-          preVerified = true;
-        } catch {
-          if (req.file?.path) removeUploadedFile(req.file.path);
-          return res.status(400).json({ error: 'Email verification has expired. Please verify your email OTP again.' });
-        }
+      const existingByPhone = await queryOne(
+        'SELECT id FROM users WHERE phone = ?',
+        [normalizedPhone]
+      );
+      if (existingByPhone) {
+        if (req.file?.path) removeUploadedFile(req.file.path);
+        return res.status(409).json({
+          error: 'An account with this phone number already exists. Please use another number or sign in.',
+          code: 'DUPLICATE_PHONE',
+        });
       }
 
       const avatarUrl = req.file ? `/uploads/avatars/${req.file.filename}` : null;
       const passwordHash = await bcrypt.hash(password, 10);
 
-      if (preVerified) {
-        const userId = await transaction(async (tx) => {
-          const uRes = await tx.execute(
-            `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, is_platform_admin, preferred_language)
-             VALUES (?, ?, ?, ?, ?, 1, 0, ?)`,
-            [full_name.trim(), email, phone.trim(), avatarUrl, passwordHash, safeLang]
-          );
-          const newUserId = uRes.insertId;
-          await tx.execute('INSERT INTO customer_profiles (user_id) VALUES (?)', [newUserId]);
-          await tx.execute('INSERT INTO notification_preferences (user_id) VALUES (?)', [newUserId]);
-          return newUserId;
-        });
-
-        const user = await queryOne(
-          `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                  must_change_password, is_email_verified, is_platform_admin, preferred_language, theme_preference
-           FROM users WHERE id = ?`,
-          [userId]
-        );
-        const { token, jti } = signAccessToken(user);
-        await recordUserSession(user.id, jti, req);
-
-        await logAudit({
-          userId: user.id,
-          action: 'customer.registered',
-          entityType: 'user',
-          entityId: user.id,
-          ipAddress: req.ip,
-        });
-
-        return res.status(201).json({
-          message: 'Email verified and customer account created successfully.',
-          token,
-          user: formatSafeUser(user, []),
-          memberships: [],
-        });
-      }
-
-      // Direct registration path without pre-verification: generate hashed OTP, deliver via real SMTP, and withhold session until verified
-      const otpCode = generateOtpCode();
-      const otpHash = hashOtpCode(email, 'registration', otpCode);
-      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
-
-      const emailPayload = buildOtpVerificationEmail({
-        fullName: full_name.trim(),
-        otpCode,
-        expiresMinutes: OTP_TTL_MINUTES,
-        purposeLabel: 'customer registration',
-      });
-      const mailResult = await sendMail({
-        to: email,
-        subject: emailPayload.subject,
-        text: emailPayload.text,
-        html: emailPayload.html,
-      });
-
-      if (!mailResult.delivered) {
-        if (req.file?.path) removeUploadedFile(req.file.path);
-        return res.status(503).json({
-          error: mailResult.error || 'Unable to deliver verification OTP email. Check SMTP configuration and try again.',
-          code: mailResult.reason || 'EMAIL_DELIVERY_FAILED',
-        });
-      }
-
       const userId = await transaction(async (tx) => {
         const uRes = await tx.execute(
-          `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, is_platform_admin, preferred_language)
-           VALUES (?, ?, ?, ?, ?, 0, 0, ?)`,
-          [full_name.trim(), email, phone.trim(), avatarUrl, passwordHash, safeLang]
+          `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, is_phone_verified, whatsapp_opt_in, is_platform_admin, preferred_language)
+           VALUES (?, ?, ?, ?, ?, 0, 0, ?, 0, ?)`,
+          [full_name.trim(), email, normalizedPhone, avatarUrl, passwordHash, optIn ? 1 : 0, safeLang]
         );
         const newUserId = uRes.insertId;
-
         await tx.execute('INSERT INTO customer_profiles (user_id) VALUES (?)', [newUserId]);
-        await tx.execute(
-          `UPDATE otp_tokens SET used_at = datetime('now') WHERE email = ? AND purpose = 'registration' AND used_at IS NULL`,
-          [email]
-        );
-        await tx.execute(
-          `INSERT INTO otp_tokens (email, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
-           VALUES (?, ?, 'registration', ?, ?, ?, ?)`,
-          [email, newUserId, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
-        );
         await tx.execute('INSERT INTO notification_preferences (user_id) VALUES (?)', [newUserId]);
         return newUserId;
       });
 
+      const pendingUser = { id: userId, email, phone: normalizedPhone };
+      const pendingToken = buildPendingRegistrationToken(pendingUser);
+
       await logAudit({
         userId,
-        action: 'customer.registered_pending_otp',
+        action: 'customer.registered_pending_verification',
         entityType: 'user',
         entityId: userId,
         ipAddress: req.ip,
       });
 
       return res.status(201).json({
-        requiresEmailVerification: true,
-        email,
+        requiresVerification: true,
+        pending_token: pendingToken,
+        masked_email: maskEmail(email),
+        masked_phone: maskPhone(normalizedPhone),
+        channels: getVerificationChannelsAvailability(),
         expiresInSeconds: OTP_TTL_MINUTES * 60,
         resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
-        message: `Verification OTP sent to ${email}. Verify your email code to complete registration.`,
+        message: 'Account details saved. Choose Email, SMS, or WhatsApp verification to activate your account.',
       });
     } catch (err) {
       if (req.file?.path) removeUploadedFile(req.file.path);
+      next(err);
+    }
+  }
+);
+
+// Public Customer Registration Step 2: Send or switch verification OTP channel (Email / SMS / WhatsApp)
+router.post(
+  '/registration/send-otp',
+  otpSendLimiter,
+  [
+    body('pending_token').trim().notEmpty().withMessage('Registration session token is required'),
+    body('channel').trim().isIn(['email', 'sms', 'whatsapp']).withMessage('Choose email, sms, or whatsapp verification'),
+  ],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const { pending_token, channel } = req.body;
+      let decoded;
+      try {
+        decoded = jwt.verify(String(pending_token), env.otpSecret);
+        if (decoded?.typ !== 'pending_registration' || !decoded?.userId) {
+          throw new Error('Invalid token type');
+        }
+      } catch {
+        return res.status(401).json({
+          error: 'Your registration session has expired. Please restart registration or sign in to continue verification.',
+          code: 'PENDING_SESSION_EXPIRED',
+        });
+      }
+
+      const user = await queryOne(
+        `SELECT id, full_name, email, phone, is_active, is_email_verified, is_phone_verified
+         FROM users WHERE id = ?`,
+        [decoded.userId]
+      );
+      if (!user || !user.is_active) {
+        return res.status(404).json({ error: 'Pending registration account was not found.' });
+      }
+      if (user.is_email_verified || user.is_phone_verified) {
+        return res.status(409).json({
+          error: 'Your account is already verified. Please sign in to continue.',
+          code: 'ALREADY_VERIFIED',
+        });
+      }
+
+      const cooldown = await getCooldownRemainingSeconds(user.email, 'registration', channel);
+      if (cooldown > 0) {
+        return res.status(429).json({
+          error: `Please wait ${cooldown} seconds before requesting another ${channel.toUpperCase()} verification code.`,
+          retryAfterSeconds: cooldown,
+        });
+      }
+
+      // Check rapid channel switching abuse (enforce min 10 seconds between sends across different channels)
+      const lastAny = await queryOne(
+        `SELECT created_at, channel FROM otp_tokens WHERE user_id = ? AND purpose = 'registration' ORDER BY id DESC LIMIT 1`,
+        [user.id]
+      );
+      if (lastAny?.created_at && lastAny.channel !== channel) {
+        const lastMs = parseSqlUtcMs(lastAny.created_at);
+        const diffSec = Math.floor((Date.now() - lastMs) / 1000);
+        if (!Number.isNaN(lastMs) && diffSec < 10) {
+          return res.status(429).json({
+            error: `Please wait ${10 - diffSec} seconds before switching verification methods.`,
+            retryAfterSeconds: 10 - diffSec,
+          });
+        }
+      }
+
+      const otpCode = generateOtpCode();
+      const otpHash = hashOtpCode(`${user.id}:${channel}:${user.email}`, 'registration', otpCode);
+      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
+      const destinationMasked = channel === 'email' ? maskEmail(user.email) : maskPhone(user.phone);
+
+      // Invalidate ALL previous unused registration OTPs (critical when switching verification methods)
+      await execute(
+        `UPDATE otp_tokens SET used_at = datetime('now') WHERE user_id = ? AND purpose = 'registration' AND used_at IS NULL`,
+        [user.id]
+      );
+
+      const insertRes = await execute(
+        `INSERT INTO otp_tokens (email, phone, channel, destination_masked, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
+         VALUES (?, ?, ?, ?, ?, 'registration', ?, ?, ?, ?)`,
+        [user.email, user.phone, channel, destinationMasked, user.id, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
+      );
+
+      let deliveryResult;
+      if (channel === 'email') {
+        const emailPayload = buildOtpVerificationEmail({
+          fullName: user.full_name,
+          otpCode,
+          expiresMinutes: OTP_TTL_MINUTES,
+          purposeLabel: 'account verification',
+        });
+        deliveryResult = await sendMail({
+          to: user.email,
+          subject: emailPayload.subject,
+          text: emailPayload.text,
+          html: emailPayload.html,
+        });
+      } else if (channel === 'sms') {
+        deliveryResult = await sendSmsOtp({
+          to: user.phone,
+          otpCode,
+          expiresMinutes: OTP_TTL_MINUTES,
+        });
+      } else {
+        deliveryResult = await sendWhatsAppOtp({
+          to: user.phone,
+          otpCode,
+          expiresMinutes: OTP_TTL_MINUTES,
+        });
+      }
+
+      if (!deliveryResult.delivered) {
+        await execute('DELETE FROM otp_tokens WHERE id = ?', [insertRes.insertId]);
+        const isClientPhoneErr = deliveryResult.reason === 'RECIPIENT_NOT_ON_WHATSAPP' || deliveryResult.reason === 'INVALID_PHONE_NUMBER';
+        return res.status(isClientPhoneErr ? 400 : 503).json({
+          error: deliveryResult.error || `Unable to deliver verification code via ${channel.toUpperCase()}. Please try another method.`,
+          code: deliveryResult.reason || `${channel.toUpperCase()}_DELIVERY_FAILED`,
+        });
+      }
+
+      if (deliveryResult.messageId) {
+        await execute('UPDATE otp_tokens SET provider_message_id = ? WHERE id = ?', [
+          String(deliveryResult.messageId).slice(0, 180),
+          insertRes.insertId,
+        ]);
+      }
+
+      res.json({
+        sent: true,
+        channel,
+        destination_masked: destinationMasked,
+        expiresInSeconds: OTP_TTL_MINUTES * 60,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+        message: `A 6-digit verification code has been sent via ${channel === 'email' ? 'Email' : channel === 'sms' ? 'SMS' : 'WhatsApp'} to ${destinationMasked}.`,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Public Customer Registration Step 3: Verify 6-digit OTP and activate account
+router.post(
+  '/registration/verify-otp',
+  otpVerifyLimiter,
+  [
+    body('pending_token').trim().notEmpty().withMessage('Registration session token is required'),
+    body('channel').trim().isIn(['email', 'sms', 'whatsapp']).withMessage('Valid verification channel is required'),
+    body('otp_code').trim().matches(/^\d{6}$/).withMessage('Enter a valid 6-digit verification code'),
+  ],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const { pending_token, channel, otp_code } = req.body;
+      let decoded;
+      try {
+        decoded = jwt.verify(String(pending_token), env.otpSecret);
+        if (decoded?.typ !== 'pending_registration' || !decoded?.userId) {
+          throw new Error('Invalid token type');
+        }
+      } catch {
+        return res.status(401).json({
+          error: 'Your registration session has expired. Please restart registration or sign in.',
+          code: 'PENDING_SESSION_EXPIRED',
+        });
+      }
+
+      const user = await queryOne(
+        `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
+                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                is_active, is_platform_admin, preferred_language, theme_preference
+         FROM users WHERE id = ?`,
+        [decoded.userId]
+      );
+      if (!user || !user.is_active) {
+        return res.status(404).json({ error: 'Account not found.' });
+      }
+
+      const record = await queryOne(
+        `SELECT * FROM otp_tokens
+         WHERE user_id = ? AND purpose = 'registration' AND channel = ? AND used_at IS NULL
+         ORDER BY id DESC LIMIT 1`,
+        [user.id, channel]
+      );
+      if (!record) {
+        return res.status(400).json({
+          error: 'No active verification code found for this method. Please request a new code.',
+        });
+      }
+
+      if (new Date(record.expires_at).getTime() <= Date.now()) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+        return res.status(400).json({
+          error: 'This verification code has expired. Request a fresh code to continue.',
+        });
+      }
+
+      if (Number(record.attempts || 0) >= Number(record.max_attempts || OTP_MAX_ATTEMPTS)) {
+        await execute(`UPDATE otp_tokens SET used_at = datetime('now') WHERE id = ?`, [record.id]);
+        return res.status(429).json({
+          error: 'Too many incorrect attempts. Please request a new verification code.',
+        });
+      }
+
+      const valid = verifyOtpHash(`${user.id}:${channel}:${user.email}`, 'registration', otp_code, record.otp_hash);
+      if (!valid) {
+        const nextAttempts = Number(record.attempts || 0) + 1;
+        const maxAttempts = Number(record.max_attempts || OTP_MAX_ATTEMPTS);
+        if (nextAttempts >= maxAttempts) {
+          await execute(`UPDATE otp_tokens SET attempts = ?, used_at = datetime('now') WHERE id = ?`, [
+            nextAttempts,
+            record.id,
+          ]);
+          return res.status(429).json({
+            error: 'Maximum verification attempts reached. Please request a new verification code.',
+          });
+        }
+        await execute('UPDATE otp_tokens SET attempts = ? WHERE id = ?', [nextAttempts, record.id]);
+        return res.status(400).json({
+          error: `Incorrect verification code. ${maxAttempts - nextAttempts} attempt(s) remaining.`,
+        });
+      }
+
+      await transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE otp_tokens SET used_at = datetime('now') WHERE user_id = ? AND purpose = 'registration' AND used_at IS NULL`,
+          [user.id]
+        );
+        if (channel === 'email') {
+          await tx.execute(
+            `UPDATE users SET is_email_verified = 1, updated_at = datetime('now') WHERE id = ?`,
+            [user.id]
+          );
+        } else if (channel === 'sms') {
+          await tx.execute(
+            `UPDATE users SET is_phone_verified = 1, updated_at = datetime('now') WHERE id = ?`,
+            [user.id]
+          );
+        } else {
+          await tx.execute(
+            `UPDATE users SET is_phone_verified = 1, whatsapp_opt_in = 1, whatsapp_opted_out_at = NULL, updated_at = datetime('now') WHERE id = ?`,
+            [user.id]
+          );
+        }
+      });
+
+      const refreshedUser = {
+        ...user,
+        is_email_verified: channel === 'email' ? 1 : user.is_email_verified,
+        is_phone_verified: channel === 'sms' || channel === 'whatsapp' ? 1 : user.is_phone_verified,
+        whatsapp_opt_in: channel === 'whatsapp' ? 1 : user.whatsapp_opt_in,
+      };
+      const memberships = await getUserMemberships(user.id, Boolean(user.is_platform_admin));
+      const { token, jti } = signAccessToken(refreshedUser);
+      await recordUserSession(user.id, jti, req);
+
+      await logAudit({
+        userId: user.id,
+        action: `customer.verified_${channel}`,
+        entityType: 'user',
+        entityId: user.id,
+        ipAddress: req.ip,
+      });
+
+      res.json({
+        verified: true,
+        channel,
+        message: 'Your account has been verified and activated.',
+        token,
+        user: formatSafeUser(refreshedUser, memberships),
+        memberships,
+      });
+    } catch (err) {
       next(err);
     }
   }
@@ -914,32 +1038,57 @@ router.post(
   async (req, res, next) => {
     try {
       const { email, password } = req.body;
+
+      // Per-account brute-force protection: check failed attempts in last 15 minutes
+      const lockoutWindow = new Date(Date.now() - 15 * 60 * 1000)
+        .toISOString()
+        .slice(0, 19)
+        .replace('T', ' ');
+      const recentFailed = await queryOne(
+        `SELECT COUNT(*) AS cnt
+         FROM login_attempts
+         WHERE email = ? AND was_successful = 0 AND created_at >= ?`,
+        [email, lockoutWindow]
+      );
+      if (Number(recentFailed?.cnt || 0) >= 8) {
+        return res.status(429).json({
+          error: 'Too many failed sign-in attempts for this account. Please wait 15 minutes or reset your password.',
+          code: 'ACCOUNT_LOGIN_LOCKED',
+        });
+      }
+
       const user = await queryOne('SELECT * FROM users WHERE email = ?', [email]);
       const valid = user ? await bcrypt.compare(password, user.password_hash) : false;
 
-      await execute(
-        'INSERT INTO login_attempts (email, ip_address, was_successful, user_agent) VALUES (?, ?, ?, ?)',
-        [email, req.ip || 'unknown', valid ? 1 : 0, String(req.headers['user-agent'] || '').slice(0, 250)]
-      );
-
       if (!user || !valid) {
-        return res.status(401).json({ error: 'Invalid email or password' });
+        await execute(
+          'INSERT INTO login_attempts (email, ip_address, was_successful, user_agent) VALUES (?, ?, 0, ?)',
+          [email, req.ip || 'unknown', String(req.headers['user-agent'] || '').slice(0, 250)]
+        );
+        return res.status(401).json({ error: 'Incorrect email address or password. Please try again.' });
       }
       if (!user.is_active) {
-        return res.status(403).json({ error: 'Your account has been deactivated' });
+        return res.status(403).json({ error: 'Your account has been deactivated. Contact support for help.' });
       }
 
       const memberships = await getUserMemberships(user.id, Boolean(user.is_platform_admin));
-      if (!user.is_platform_admin && !user.is_email_verified && memberships.length === 0) {
+      if (!user.is_platform_admin && !user.is_email_verified && !user.is_phone_verified && memberships.length === 0) {
         return res.status(403).json({
-          error: 'Please verify your email address with your OTP verification code before signing in.',
-          code: 'EMAIL_NOT_VERIFIED',
-          email: user.email,
+          error: 'Your account still needs OTP verification before you can sign in.',
+          code: 'ACCOUNT_VERIFICATION_REQUIRED',
+          pending_token: buildPendingRegistrationToken(user),
+          masked_email: maskEmail(user.email),
+          masked_phone: maskPhone(user.phone),
+          channels: getVerificationChannelsAvailability(),
         });
       }
 
       const { token, jti } = signAccessToken(user);
       await Promise.all([
+        execute(
+          'INSERT INTO login_attempts (email, ip_address, was_successful, user_agent) VALUES (?, ?, 1, ?)',
+          [email, req.ip || 'unknown', String(req.headers['user-agent'] || '').slice(0, 250)]
+        ),
         execute(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?`, [user.id]),
         recordUserSession(user.id, jti, req),
         logAudit({
@@ -961,6 +1110,7 @@ router.post(
 
 router.post('/logout', authenticate, async (req, res, next) => {
   try {
+    markJtiRevoked(req.tokenJti);
     await execute('UPDATE user_sessions SET is_revoked = 1 WHERE token_jti = ?', [req.tokenJti]);
     res.json({ message: 'Signed out cleanly' });
   } catch (err) {
@@ -1012,13 +1162,15 @@ router.post(
         `UPDATE users SET avatar_url = ?, updated_at = datetime('now') WHERE id = ?`,
         [avatarUrl, req.user.id]
       );
+      invalidateUserAuthCache(req.user.id);
       if (previousAvatar && previousAvatar !== avatarUrl) {
         removeUploadedFile(previousAvatar);
       }
 
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
       );
@@ -1048,13 +1200,15 @@ router.delete('/avatar', authenticate, async (req, res, next) => {
   try {
     const previousAvatar = req.user.avatar_url;
     await execute(`UPDATE users SET avatar_url = NULL, updated_at = datetime('now') WHERE id = ?`, [req.user.id]);
+    invalidateUserAuthCache(req.user.id);
     if (previousAvatar) {
       removeUploadedFile(previousAvatar);
     }
 
     const updated = await queryOne(
       `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-              must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+              must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+              is_active, is_platform_admin, preferred_language, theme_preference
        FROM users WHERE id = ?`,
       [req.user.id]
     );
@@ -1148,6 +1302,7 @@ router.post(
       );
       await execute(`UPDATE password_resets SET used_at = datetime('now') WHERE id = ?`, [record.id]);
       await execute('UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ?', [record.user_id]);
+      invalidateUserAuthCache(record.user_id, '');
 
       res.json({ message: 'Password updated successfully. Please sign in.' });
     } catch (err) {
@@ -1232,9 +1387,12 @@ router.post(
         ipAddress: req.ip,
       });
 
+      invalidateUserAuthCache(req.user.id);
+
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
       );
@@ -1291,7 +1449,7 @@ router.put(
          WHERE id = ?`,
         [
           full_name?.trim() || null,
-          phone?.trim() || null,
+          phone?.trim() ? (normalizePhoneE164(phone).valid ? normalizePhoneE164(phone).e164 : phone.trim()) : null,
           bio !== undefined ? String(bio).trim() : req.user.bio || '',
           location !== undefined ? String(location).trim() : req.user.location || '',
           JSON.stringify(nextPrivacy),
@@ -1299,10 +1457,12 @@ router.put(
           req.user.id,
         ]
       );
+      invalidateUserAuthCache(req.user.id);
 
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
       );
@@ -1452,6 +1612,7 @@ router.post(
           req.user.id,
         ]);
       });
+      invalidateUserAuthCache(req.user.id);
 
       await logAudit({
         userId: req.user.id,
@@ -1464,7 +1625,8 @@ router.post(
 
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
       );
@@ -1542,10 +1704,12 @@ router.put('/preferences', authenticate, async (req, res, next) => {
        WHERE id = ?`,
       [JSON.stringify(nextPrefs), validTheme, validLanguage, req.user.id]
     );
+    invalidateUserAuthCache(req.user.id);
 
     const updated = await queryOne(
       `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-              must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+              must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+              is_active, is_platform_admin, preferred_language, theme_preference
        FROM users WHERE id = ?`,
       [req.user.id]
     );
@@ -1571,6 +1735,7 @@ router.delete('/sessions/:id', authenticate, async (req, res, next) => {
     if (sess.token_jti === req.tokenJti) {
       return res.status(400).json({ error: 'Use Sign Out to end your current session.' });
     }
+    markJtiRevoked(sess.token_jti);
     await execute('UPDATE user_sessions SET is_revoked = 1 WHERE id = ? AND user_id = ?', [sess.id, req.user.id]);
     res.json({ message: 'Session revoked cleanly' });
   } catch (err) {
@@ -1580,6 +1745,7 @@ router.delete('/sessions/:id', authenticate, async (req, res, next) => {
 
 router.post('/sessions/revoke-others', authenticate, async (req, res, next) => {
   try {
+    invalidateUserAuthCache(req.user.id, req.tokenJti);
     await execute('UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ? AND token_jti != ?', [
       req.user.id,
       req.tokenJti,
@@ -1589,6 +1755,35 @@ router.post('/sessions/revoke-others', authenticate, async (req, res, next) => {
     next(err);
   }
 });
+
+router.patch(
+  '/whatsapp-consent',
+  authenticate,
+  [body('whatsapp_opt_in').isBoolean().withMessage('Consent flag must be true or false')],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const optIn = Boolean(req.body.whatsapp_opt_in);
+      await execute(
+        `UPDATE users
+         SET whatsapp_opt_in = ?,
+             whatsapp_opted_out_at = CASE WHEN ? = 1 THEN NULL ELSE datetime('now') END,
+             updated_at = datetime('now')
+         WHERE id = ?`,
+        [optIn ? 1 : 0, optIn ? 1 : 0, req.user.id]
+      );
+      invalidateUserAuthCache(req.user.id);
+      res.json({
+        message: optIn
+          ? 'WhatsApp notifications and order alerts enabled.'
+          : 'You have opted out of WhatsApp notifications.',
+        whatsapp_opt_in: optIn,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 router.patch(
   '/theme',
@@ -1607,6 +1802,7 @@ router.patch(
         `UPDATE users SET theme_preference = ?, updated_at = datetime('now') WHERE id = ?`,
         [theme_preference, req.user.id]
       );
+      invalidateUserAuthCache(req.user.id);
       res.json({
         message: 'Theme preference saved',
         theme_preference,
@@ -1634,6 +1830,7 @@ router.patch(
         `UPDATE users SET preferred_language = ?, updated_at = datetime('now') WHERE id = ?`,
         [preferred_language, req.user.id]
       );
+      invalidateUserAuthCache(req.user.id);
       res.json({
         message: 'Language preference saved',
         preferred_language,

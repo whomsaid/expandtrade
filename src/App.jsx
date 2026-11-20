@@ -6,26 +6,24 @@ import { PlatformConfigProvider } from './context/PlatformConfigContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import GlobalWatermark from './components/GlobalWatermark.jsx';
 import AppLayout from './layouts/AppLayout.jsx';
-import {
-  AboutPage,
-  ContactPage,
-  FeaturesPage,
-  HomePage,
-  LegalPage,
-  PricingPage,
-  PublicBusinessDetailPage,
-  PublicBusinessesPage,
-  TrackOrderPage,
-} from './pages/PublicPages.jsx';
-import { PublicJobDetailPage, PublicJobsPage } from './pages/JobsPages.jsx';
-import {
-  ActivateAccountPage,
-  CompleteProfilePage,
-  ForceChangePasswordPage,
-  ForgotPasswordPage,
-  LoginPage,
-  RegisterPage,
-} from './pages/AuthPages.jsx';
+const HomePage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.HomePage })));
+const AboutPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.AboutPage })));
+const FeaturesPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.FeaturesPage })));
+const PricingPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.PricingPage })));
+const ContactPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.ContactPage })));
+const LegalPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.LegalPage })));
+const PublicBusinessesPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.PublicBusinessesPage })));
+const PublicBusinessDetailPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.PublicBusinessDetailPage })));
+const TrackOrderPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.TrackOrderPage })));
+const PublicJobsPage = lazy(() => import('./pages/JobsPages.jsx').then((m) => ({ default: m.PublicJobsPage })));
+const PublicJobDetailPage = lazy(() => import('./pages/JobsPages.jsx').then((m) => ({ default: m.PublicJobDetailPage })));
+const LoginPage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.RegisterPage })));
+const ActivateAccountPage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.ActivateAccountPage })));
+const CompleteProfilePage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.CompleteProfilePage })));
+const ForceChangePasswordPage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.ForceChangePasswordPage })));
+const ForgotPasswordPage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.ForgotPasswordPage })));
+const WhatsAppPage = lazy(() => import('./modules/whatsapp/WhatsAppPage.jsx'));
 
 const CustomerPortalPage = lazy(() => import('./modules/customer/CustomerPortalPage.jsx'));
 const JobApplicationFormPage = lazy(() => import('./modules/customer/JobApplicationFormPage.jsx'));
@@ -242,6 +240,7 @@ export default function App() {
                   <Route path="branches" element={<BranchesPage />} />
                   <Route path="ads" element={<AdvertisementsPage />} />
                   <Route path="tasks" element={<TasksPage />} />
+                  <Route path="whatsapp" element={<WhatsAppPage />} />
                   <Route path="reports" element={<ReportsPage />} />
                   <Route path="ai" element={<AiAssistantPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />

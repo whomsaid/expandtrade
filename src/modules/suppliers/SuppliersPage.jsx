@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney, getPaymentMethodLabel } from '../../utils/format.js';
+import { WhatsAppContactButton } from '../../components/WhatsAppContactModal.jsx';
 
 export default function SuppliersPage() {
   const { t } = useTranslation();
@@ -101,7 +102,16 @@ export default function SuppliersPage() {
                 <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">{s.name}</td>
                 <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{s.contact_person || '—'}</td>
                 <td className="py-3 px-4">
-                  <div className="text-slate-900 dark:text-slate-100">{s.phone}</div>
+                  <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                    <span>{s.phone}</span>
+                    <WhatsAppContactButton
+                      compact
+                      phone={s.phone}
+                      name={s.contact_person ? `${s.name} (${s.contact_person})` : s.name}
+                      entityType="supplier"
+                      entityId={s.id}
+                    />
+                  </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">{s.email}</div>
                 </td>
                 <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{s.address || '—'}</td>

@@ -22,10 +22,22 @@ function resolvePort() {
   return envPort;
 }
 
+function cleanEnvString(value, fallback = '') {
+  const raw = String(value ?? fallback).trim();
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+    return raw.slice(1, -1).trim();
+  }
+  return raw;
+}
+
 export const env = {
   port: resolvePort(),
   nodeEnv: process.env.NODE_ENV || 'development',
   appUrl: process.env.APP_URL || 'http://localhost:3000',
+  corsOrigins: cleanEnvString(process.env.CORS_ORIGINS)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
   jwtSecret: process.env.JWT_SECRET || 'biztrade_africa_dev_jwt_secret_change_in_prod_2026',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   dbClient: process.env.DB_CLIENT || (process.env.MYSQL_HOST ? 'mysql' : 'sqlite'),
@@ -39,13 +51,33 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   otpSecret: process.env.OTP_SECRET || process.env.JWT_SECRET || 'biztrade_africa_dev_otp_secret_2026',
   smtp: {
-    provider: process.env.SMTP_PROVIDER || 'smtp',
-    host: process.env.SMTP_HOST || '',
+    provider: cleanEnvString(process.env.SMTP_PROVIDER, 'smtp'),
+    host: cleanEnvString(process.env.SMTP_HOST),
     port: Number(process.env.SMTP_PORT || 587),
     secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : Number(process.env.SMTP_PORT || 587) === 465,
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || '',
-    from: process.env.SMTP_FROM || 'BizTrade Africa <noreply@biztrade.africa>',
+    user: cleanEnvString(process.env.SMTP_USER),
+    pass: cleanEnvString(process.env.SMTP_PASS),
+    from: cleanEnvString(process.env.SMTP_FROM, 'BizTrade Africa <noreply@biztrade.africa>'),
+  },
+  sms: {
+    provider: cleanEnvString(process.env.SMS_PROVIDER).toLowerCase(),
+    twilioAccountSid: cleanEnvString(process.env.TWILIO_ACCOUNT_SID),
+    twilioAuthToken: cleanEnvString(process.env.TWILIO_AUTH_TOKEN),
+    twilioFromNumber: cleanEnvString(process.env.TWILIO_FROM_NUMBER),
+    atApiKey: cleanEnvString(process.env.AT_API_KEY),
+    atUsername: cleanEnvString(process.env.AT_USERNAME),
+    atSenderId: cleanEnvString(process.env.AT_SENDER_ID),
+    atEnv: cleanEnvString(process.env.AT_ENV, 'production').toLowerCase(),
+  },
+  whatsapp: {
+    accessToken: cleanEnvString(process.env.WHATSAPP_ACCESS_TOKEN),
+    phoneNumberId: cleanEnvString(process.env.WHATSAPP_PHONE_NUMBER_ID),
+    businessAccountId: cleanEnvString(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID),
+    appSecret: cleanEnvString(process.env.WHATSAPP_APP_SECRET),
+    verifyToken: cleanEnvString(process.env.WHATSAPP_VERIFY_TOKEN),
+    authTemplateName: cleanEnvString(process.env.WHATSAPP_AUTH_TEMPLATE_NAME, 'biztrade_otp_verification'),
+    authTemplateLang: cleanEnvString(process.env.WHATSAPP_AUTH_TEMPLATE_LANG, 'en'),
+    apiVersion: cleanEnvString(process.env.WHATSAPP_API_VERSION, 'v21.0'),
   },
   superAdmin: {
     name: process.env.SUPER_ADMIN_NAME || 'Jean Claude Ndayisaba',

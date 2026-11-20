@@ -69,10 +69,31 @@ async function startServer() {
 
   if (env.nodeEnv !== 'production') {
     const { createServer: createViteServer } = await import('vite');
+    const hmrDisabled = process.env.DISABLE_HMR === 'true' || Boolean(process.env.CONTROL_PLANE_PORT);
     const vite = await createViteServer({
+      plugins: hmrDisabled
+        ? [
+            {
+              name: 'disable-hmr-client-ws',
+              enforce: 'post',
+              transform(code, id) {
+                if (
+                  (id.includes('vite/dist/client/client.mjs') || id === '/@vite/client') &&
+                  code.includes('transport.connect(createHMRHandler(handleMessage));')
+                ) {
+                  return code.replace(
+                    'transport.connect(createHMRHandler(handleMessage));',
+                    '/* HMR disabled: WebSocket transport suppressed */'
+                  );
+                }
+              },
+            },
+          ]
+        : [],
       server: {
         middlewareMode: true,
-        hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
+        hmr: hmrDisabled ? false : { server: httpServer },
+        ...(hmrDisabled ? { ws: false, watch: null } : {}),
       },
       appType: 'spa',
     });

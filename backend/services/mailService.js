@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
 
@@ -14,6 +15,42 @@ const PLACEHOLDER_VALUES = new Set([
   'replace_me',
 ]);
 
+function stripQuotes(val = '') {
+  const s = String(val || '').trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+function getNormalizedSmtpConfig() {
+  let host = stripQuotes(env.smtp.host);
+  const provider = stripQuotes(env.smtp.provider || 'smtp').toLowerCase();
+  if (!host && provider === 'gmail') {
+    host = 'smtp.gmail.com';
+  }
+  const port = Number(env.smtp.port || 587);
+  const secure = Boolean(env.smtp.secure || port === 465);
+  const user = stripQuotes(env.smtp.user);
+  let pass = stripQuotes(env.smtp.pass);
+
+  const isGmail = host.toLowerCase().includes('gmail.com') || provider === 'gmail';
+  if (isGmail && pass) {
+    const compact = pass.replace(/\s+/g, '');
+    // Google displays 16-character App Passwords in 4x4 space-separated groups
+    if (/^[a-zA-Z0-9]{16}$/.test(compact)) {
+      pass = compact;
+    }
+  }
+
+  let from = stripQuotes(env.smtp.from || 'BizTrade Africa <noreply@biztrade.africa>');
+  if (isGmail && user && (!from || from.includes('noreply@biztrade.africa'))) {
+    from = `BizTrade Africa <${user}>`;
+  }
+
+  return { provider, host, port, secure, user, pass, from, isGmail };
+}
+
 function escapeHtml(value = '') {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -24,9 +61,7 @@ function escapeHtml(value = '') {
 }
 
 export function isSmtpConfigured() {
-  const host = String(env.smtp.host || '').trim();
-  const user = String(env.smtp.user || '').trim();
-  const pass = String(env.smtp.pass || '').trim();
+  const { host, user, pass } = getNormalizedSmtpConfig();
   return Boolean(host && user && pass && !PLACEHOLDER_VALUES.has(pass.toLowerCase()));
 }
 
@@ -35,12 +70,9 @@ function getTransporter() {
     return null;
   }
 
-  const host = String(env.smtp.host || '').trim();
-  const port = Number(env.smtp.port || 587);
-  const secure = Boolean(env.smtp.secure || port === 465);
-  const user = String(env.smtp.user || '').trim();
-  const pass = String(env.smtp.pass || '').trim();
-  const configKey = `${host}:${port}:${secure}:${user}`;
+  const { host, port, secure, user, pass } = getNormalizedSmtpConfig();
+  const passDigest = crypto.createHash('sha256').update(pass).digest('hex').slice(0, 12);
+  const configKey = `${host}:${port}:${secure}:${user}:${passDigest}`;
 
   if (!cachedTransporter || cachedConfigKey !== configKey) {
     cachedTransporter = nodemailer.createTransport({
@@ -76,16 +108,45 @@ export function resetMailTransporter() {
   cachedConfigKey = '';
 }
 
+function formatSmtpFailure(err, smtpCfg) {
+  const raw = String(err?.message || 'Unknown SMTP error');
+  const isAuthError =
+    err?.code === 'EAUTH' ||
+    Number(err?.responseCode) === 535 ||
+    /535[- ]5\.7\.8|BadCredentials|Invalid login|authentication failed/i.test(raw);
+
+  if (isAuthError) {
+    resetMailTransporter();
+    if (smtpCfg.isGmail) {
+      return {
+        reason: 'SMTP_AUTH_FAILED',
+        error:
+          'Gmail SMTP authentication failed (535). Gmail requires a 16-character Google App Password (with 2-Step Verification enabled under Google Account -> Security -> App passwords) in SMTP_PASS, not your regular Gmail password.',
+      };
+    }
+    return {
+      reason: 'SMTP_AUTH_FAILED',
+      error: `SMTP authentication failed for ${smtpCfg.host}. Verify SMTP_USER and SMTP_PASS in backend environment variables.`,
+    };
+  }
+
+  return {
+    reason: 'SMTP_SEND_FAILED',
+    error: raw,
+  };
+}
+
 export async function verifySmtpConnection() {
+  const cfg = getNormalizedSmtpConfig();
   const configured = isSmtpConfigured();
   if (!configured) {
     return {
       configured: false,
       verified: false,
-      provider: env.smtp.provider || 'smtp',
-      host: env.smtp.host || null,
-      port: Number(env.smtp.port || 587),
-      from: env.smtp.from,
+      provider: cfg.provider || 'smtp',
+      host: cfg.host || null,
+      port: cfg.port,
+      from: cfg.from,
       error: 'SMTP credentials are not configured in backend environment variables (SMTP_HOST, SMTP_USER, SMTP_PASS).',
     };
   }
@@ -96,20 +157,22 @@ export async function verifySmtpConnection() {
     return {
       configured: true,
       verified: true,
-      provider: env.smtp.provider || 'smtp',
-      host: env.smtp.host,
-      port: Number(env.smtp.port || 587),
-      from: env.smtp.from,
+      provider: cfg.provider || 'smtp',
+      host: cfg.host,
+      port: cfg.port,
+      from: cfg.from,
     };
   } catch (err) {
+    const formatted = formatSmtpFailure(err, cfg);
     return {
       configured: true,
       verified: false,
-      provider: env.smtp.provider || 'smtp',
-      host: env.smtp.host,
-      port: Number(env.smtp.port || 587),
-      from: env.smtp.from,
-      error: err.message,
+      provider: cfg.provider || 'smtp',
+      host: cfg.host,
+      port: cfg.port,
+      from: cfg.from,
+      error: formatted.error,
+      reason: formatted.reason,
     };
   }
 }
@@ -285,6 +348,7 @@ export async function sendMail({ to, subject, text, html, replyTo }) {
     return { delivered: false, reason: 'INVALID_PARAMETERS', error: 'Recipient and subject are required.' };
   }
 
+  const cfg = getNormalizedSmtpConfig();
   const mailer = getTransporter();
   if (!mailer) {
     console.warn(`[Mail] Delivery skipped for ${to}: SMTP server not configured in environment variables.`);
@@ -297,7 +361,7 @@ export async function sendMail({ to, subject, text, html, replyTo }) {
 
   try {
     const info = await mailer.sendMail({
-      from: env.smtp.from,
+      from: cfg.from,
       to,
       ...(replyTo ? { replyTo } : {}),
       subject,
@@ -323,11 +387,12 @@ export async function sendMail({ to, subject, text, html, replyTo }) {
       accepted,
     };
   } catch (err) {
-    console.error(`[Mail] SMTP delivery error for ${to}:`, err.message);
+    const formatted = formatSmtpFailure(err, cfg);
+    console.warn(`[Mail] SMTP delivery failed for ${to} (${formatted.reason}): ${formatted.error}`);
     return {
       delivered: false,
-      reason: 'SMTP_SEND_FAILED',
-      error: err.message,
+      reason: formatted.reason,
+      error: formatted.error,
     };
   }
 }

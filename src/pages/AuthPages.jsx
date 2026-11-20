@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Camera, Lock, LogOut } from 'lucide-react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Camera, CheckCircle2, Lock, LogOut, Mail, MessageCircle, Smartphone } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../components/LanguageSelector.jsx';
 import LogoutConfirmModal from '../components/LogoutConfirmModal.jsx';
@@ -10,6 +10,7 @@ import UserAvatar from '../components/UserAvatar.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { validatePasswordStrength } from '../utils/passwordPolicy.js';
+import { normalizePhoneClient } from '../utils/phone.js';
 
 function sanitizeRedirect(raw) {
   if (!raw || typeof raw !== 'string') return '';
@@ -40,12 +41,14 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [pendingVerif, setPendingVerif] = useState(null);
   const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setPendingVerif(null);
     setUnverifiedEmail('');
     setSubmitting(true);
     try {
@@ -53,12 +56,24 @@ export function LoginPage() {
       navigate(getLandingRoute(data.user, data.memberships, redirectTarget), { replace: true });
     } catch (err) {
       setError(err.message);
-      if (err.code === 'EMAIL_NOT_VERIFIED') {
+      if (err.code === 'ACCOUNT_VERIFICATION_REQUIRED' && err.data?.pending_token) {
+        setPendingVerif(err.data);
+      } else if (err.code === 'EMAIL_NOT_VERIFIED') {
         setUnverifiedEmail(email.trim().toLowerCase());
       }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleContinuePendingVerification = () => {
+    if (!pendingVerif) return;
+    navigate(redirectTarget ? `/register?redirect=${encodeURIComponent(redirectTarget)}` : '/register', {
+      state: {
+        pendingVerification: pendingVerif,
+        email: email.trim().toLowerCase(),
+      },
+    });
   };
 
   return (
@@ -79,7 +94,16 @@ export function LoginPage() {
           {error && (
             <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg space-y-2">
               <div>{error}</div>
-              {unverifiedEmail && (
+              {pendingVerif && (
+                <button
+                  type="button"
+                  onClick={handleContinuePendingVerification}
+                  className="inline-flex items-center font-semibold text-sky-700 dark:text-sky-300 underline"
+                >
+                  {t('auth.completeVerificationNow')}
+                </button>
+              )}
+              {unverifiedEmail && !pendingVerif && (
                 <Link
                   to={`/register?verify_email=${encodeURIComponent(unverifiedEmail)}${
                     redirectTarget ? `&redirect=${encodeURIComponent(redirectTarget)}` : ''
@@ -158,28 +182,47 @@ export function RegisterPage() {
   const { t } = useTranslation();
   const { completeSession, language } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const redirectTarget = sanitizeRedirect(searchParams.get('redirect'));
-  const verifyEmailParam = (searchParams.get('verify_email') || '').trim().toLowerCase();
+  const pendingFromState = location.state?.pendingVerification || null;
 
-  const [step, setStep] = useState(verifyEmailParam ? 'otp' : 'email');
-  const [otpMode, setOtpMode] = useState(verifyEmailParam ? 'legacy-verify' : 'pre-register');
+  const [step, setStep] = useState(pendingFromState ? 'verify' : 'details');
   const [form, setForm] = useState({
     full_name: '',
-    email: verifyEmailParam || '',
+    email: location.state?.email || '',
     phone: '+250',
     password: '',
     confirm_password: '',
+    whatsapp_opt_in: true,
   });
+
+  const [pendingSession, setPendingSession] = useState(() =>
+    pendingFromState
+      ? {
+          pending_token: pendingFromState.pending_token,
+          masked_email: pendingFromState.masked_email,
+          masked_phone: pendingFromState.masked_phone,
+          channels: pendingFromState.channels || {},
+        }
+      : null
+  );
+  const [selectedChannel, setSelectedChannel] = useState(() => {
+    const ch = pendingFromState?.channels;
+    if (ch?.email?.available) return 'email';
+    if (ch?.sms?.available) return 'sms';
+    if (ch?.whatsapp?.available) return 'whatsapp';
+    return 'email';
+  });
+  const [activeSentChannel, setActiveSentChannel] = useState('');
   const [otp, setOtp] = useState('');
-  const [verificationToken, setVerificationToken] = useState('');
   const [expiresAt, setExpiresAt] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [resending, setResending] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
 
   useEffect(() => {
     if (!expiresAt && resendCooldown <= 0) return undefined;
@@ -193,7 +236,7 @@ export function RegisterPage() {
     return () => clearInterval(timer);
   }, [expiresAt, resendCooldown > 0]);
 
-  const applyOtpMetadata = (data, defaultExpires = 600, defaultCooldown = 60) => {
+  const applyOtpMetadata = (data, defaultExpires = 300, defaultCooldown = 60) => {
     const ttl = Number(data?.expiresInSeconds || defaultExpires);
     const cd = Number(data?.resendCooldownSeconds || defaultCooldown);
     setExpiresAt(Date.now() + ttl * 1000);
@@ -201,101 +244,20 @@ export function RegisterPage() {
     setResendCooldown(cd);
   };
 
-  const handleSendOtp = async (e) => {
+  const handleCreatePendingAccount = async (e) => {
     e.preventDefault();
     setError('');
     setNotice('');
-    setSubmitting(true);
-    try {
-      const normalizedEmail = form.email.trim().toLowerCase();
-      const { data } = await api.post('/auth/send-registration-otp', {
-        email: normalizedEmail,
-        preferred_language: language,
-      });
-      setForm((prev) => ({ ...prev, email: normalizedEmail }));
-      setOtpMode('pre-register');
-      setOtp('');
-      setVerificationToken('');
-      applyOtpMetadata(data);
-      setNotice(data.message);
-      setStep('otp');
-    } catch (err) {
-      if (err.response?.data?.retryAfterSeconds) {
-        setResendCooldown(Number(err.response.data.retryAfterSeconds));
-      }
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setError('');
-    setNotice('');
-    if (!/^\d{6}$/.test(otp.trim())) {
-      setError(t('auth.otpPlaceholder'));
+    if (form.full_name.trim().length < 2) {
+      setError(t('auth.fullNameRequired'));
       return;
     }
-    setSubmitting(true);
-    try {
-      if (otpMode === 'legacy-verify') {
-        const { data } = await api.post('/auth/verify-email', {
-          email: form.email.trim().toLowerCase(),
-          otp_code: otp.trim(),
-        });
-        if (data?.token && data?.user) {
-          await completeSession(data.token, data.user, data.memberships || []);
-          navigate(redirectTarget || '/customer', { replace: true });
-          return;
-        }
-        navigate('/login', { replace: true });
-        return;
-      }
-
-      const { data } = await api.post('/auth/verify-registration-otp', {
-        email: form.email.trim().toLowerCase(),
-        otp_code: otp.trim(),
-      });
-      setVerificationToken(data.verification_token);
-      setNotice(data.message);
-      setStep('form');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
+    const phoneCheck = normalizePhoneClient(form.phone);
+    if (!phoneCheck.valid) {
+      setError(phoneCheck.error);
+      return;
     }
-  };
-
-  const handleResend = async () => {
-    if (resendCooldown > 0 || resending) return;
-    setError('');
-    setNotice('');
-    setResending(true);
-    try {
-      const endpoint = otpMode === 'legacy-verify' ? '/auth/resend-verification' : '/auth/send-registration-otp';
-      const payload =
-        otpMode === 'legacy-verify'
-          ? { email: form.email.trim().toLowerCase() }
-          : { email: form.email.trim().toLowerCase(), preferred_language: language };
-      const { data } = await api.post(endpoint, payload);
-      setOtp('');
-      applyOtpMetadata(data);
-      setNotice(data.message);
-    } catch (err) {
-      if (err.response?.data?.retryAfterSeconds) {
-        setResendCooldown(Number(err.response.data.retryAfterSeconds));
-      }
-      setError(err.message);
-    } finally {
-      setResending(false);
-    }
-  };
-
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setError('');
-    setNotice('');
     const pwErr = validatePasswordStrength(form.password);
     if (pwErr) {
       setError(pwErr);
@@ -305,27 +267,94 @@ export function RegisterPage() {
       setError(t('validation.passwordsMismatch'));
       return;
     }
+
     setSubmitting(true);
     try {
+      const normalizedEmail = form.email.trim().toLowerCase();
       const { data } = await api.post('/auth/register', {
-        full_name: form.full_name,
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone,
+        full_name: form.full_name.trim(),
+        email: normalizedEmail,
+        phone: phoneCheck.e164,
         password: form.password,
         confirm_password: form.confirm_password,
         preferred_language: language,
-        verification_token: verificationToken,
+        whatsapp_opt_in: form.whatsapp_opt_in,
       });
 
-      if (data?.requiresEmailVerification || !data?.token) {
-        setOtpMode('legacy-verify');
-        setOtp('');
-        applyOtpMetadata(data);
-        setNotice(data?.message || '');
-        setStep('otp');
-        return;
-      }
+      const channels = data.channels || {};
+      const preferred =
+        (channels.email?.available && 'email') ||
+        (channels.sms?.available && 'sms') ||
+        (channels.whatsapp?.available && 'whatsapp') ||
+        'email';
 
+      setPendingSession({
+        pending_token: data.pending_token,
+        masked_email: data.masked_email,
+        masked_phone: data.masked_phone,
+        channels,
+      });
+      setSelectedChannel(preferred);
+      setActiveSentChannel('');
+      setOtp('');
+      setExpiresAt(0);
+      setSecondsLeft(0);
+      setResendCooldown(0);
+      setNotice(data.message || t('auth.pendingAccountCreated'));
+      setStep('verify');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const sendOtpViaChannel = async (channelToSend) => {
+    if (!pendingSession?.pending_token || sendingOtp) return;
+    setError('');
+    setNotice('');
+    setSendingOtp(true);
+    try {
+      const { data } = await api.post('/auth/registration/send-otp', {
+        pending_token: pendingSession.pending_token,
+        channel: channelToSend,
+      });
+      setSelectedChannel(channelToSend);
+      setActiveSentChannel(channelToSend);
+      setOtp('');
+      applyOtpMetadata(data, 300, 60);
+      setNotice(data.message);
+    } catch (err) {
+      if (err.data?.retryAfterSeconds) {
+        setResendCooldown(Number(err.data.retryAfterSeconds));
+      }
+      setError(err.message);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!pendingSession?.pending_token) return;
+    setError('');
+    setNotice('');
+    const targetChannel = activeSentChannel || selectedChannel;
+    if (!activeSentChannel) {
+      setError(t('auth.sendCodeFirstHint'));
+      return;
+    }
+    if (!/^\d{6}$/.test(otp.trim())) {
+      setError(t('auth.otpPlaceholder'));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { data } = await api.post('/auth/registration/verify-otp', {
+        pending_token: pendingSession.pending_token,
+        channel: targetChannel,
+        otp_code: otp.trim(),
+      });
       await completeSession(data.token, data.user, data.memberships || []);
       navigate(redirectTarget || '/customer', { replace: true });
     } catch (err) {
@@ -335,173 +364,65 @@ export function RegisterPage() {
     }
   };
 
-  const resetToEmailStep = () => {
-    setStep('email');
-    setOtpMode('pre-register');
-    setOtp('');
-    setVerificationToken('');
-    setExpiresAt(0);
-    setSecondsLeft(0);
-    setError('');
-    setNotice('');
-  };
+  const channelOptions = [
+    {
+      key: 'email',
+      icon: Mail,
+      title: t('auth.channelEmailTitle'),
+      target: pendingSession?.masked_email || form.email,
+      available: Boolean(pendingSession?.channels?.email?.available),
+    },
+    {
+      key: 'sms',
+      icon: Smartphone,
+      title: t('auth.channelSmsTitle'),
+      target: pendingSession?.masked_phone || form.phone,
+      available: Boolean(pendingSession?.channels?.sms?.available),
+    },
+    {
+      key: 'whatsapp',
+      icon: MessageCircle,
+      title: t('auth.channelWhatsappTitle'),
+      target: pendingSession?.masked_phone || form.phone,
+      available: Boolean(pendingSession?.channels?.whatsapp?.available),
+    },
+  ];
+
+  const isSwitchingChannel = Boolean(activeSentChannel && selectedChannel !== activeSentChannel);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
-        <div className="animate-fade-up w-full max-w-md bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-6">
-          {step === 'email' && (
+        <div className="animate-fade-up w-full max-w-lg bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-5">
+          {/* Registration Progress Indicator */}
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800 text-[11px]">
+            <div className="flex items-center gap-2 font-semibold">
+              <span className={step === 'details' ? 'text-[#0B192C] dark:text-sky-400' : 'text-emerald-700 dark:text-emerald-400'}>
+                {step === 'verify' ? '1. ✓ ' : '1. '}
+                {t('auth.stepDetails')}
+              </span>
+              <span className="text-slate-300 dark:text-slate-700">·</span>
+              <span className={step === 'verify' ? 'text-[#0B192C] dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}>
+                2. {t('auth.stepVerify')}
+              </span>
+            </div>
+            <LanguageSelector compact className="shrink-0" />
+          </div>
+
+          {step === 'details' && (
             <>
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.registerTitle')}</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t('auth.verifyEmailStepSubtitle')}
-                  </p>
-                </div>
-                <LanguageSelector compact className="shrink-0" />
+              <div className="space-y-1">
+                <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.registerTitle')}</h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('auth.registerDetailsSubtitle')}
+                </p>
               </div>
 
               {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
               {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
 
-              <form onSubmit={handleSendOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.emailAddress')}</label>
-                  <input
-                    required
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
-                    placeholder={t('auth.emailPlaceholder')}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
-                >
-                  {submitting ? t('auth.sendingOtp') : t('auth.sendOtpCode')}
-                </button>
-              </form>
-
-              <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
-                {t('auth.alreadyRegistered')}{' '}
-                <Link
-                  to={redirectTarget ? `/login?redirect=${encodeURIComponent(redirectTarget)}` : '/login'}
-                  className="font-semibold text-sky-700 dark:text-sky-400 hover:underline"
-                >
-                  {t('auth.signIn')}
-                </Link>
-              </p>
-            </>
-          )}
-
-          {step === 'otp' && (
-            <>
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 min-w-0">
-                  <h1 className="text-lg sm:text-xl font-bold text-[#0B192C] dark:text-white">{t('auth.verifyTitle')}</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 break-words">
-                    {t('auth.verifySubtitle')} <span className="font-medium text-slate-700 dark:text-slate-200 break-all">{form.email}</span>. {t('auth.verifySubtitleEnd')}
-                  </p>
-                </div>
-                <LanguageSelector compact className="shrink-0" />
-              </div>
-
-              {expiresAt > 0 && (
-                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs">
-                  <span className="text-slate-600 dark:text-slate-300">
-                    {secondsLeft > 0 ? t('auth.otpExpiresIn') : t('auth.otpExpiredNotice')}
-                  </span>
-                  {secondsLeft > 0 && (
-                    <span className="font-mono font-semibold text-[#0B192C] dark:text-sky-300 tabular-nums shrink-0">
-                      {formatCountdownClock(secondsLeft)}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
-              {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
-
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <input
-                  required
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder={t('auth.otpPlaceholder')}
-                  className="w-full px-3 py-2.5 text-center text-lg font-mono tracking-widest tabular-nums bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg"
-                />
-                <button
-                  type="submit"
-                  disabled={submitting || (expiresAt > 0 && secondsLeft === 0)}
-                  className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
-                >
-                  {submitting
-                    ? t('auth.verifying')
-                    : otpMode === 'legacy-verify'
-                      ? t('auth.verifyContinue')
-                      : t('auth.verifyOtpCode')}
-                </button>
-              </form>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
-                <button
-                  type="button"
-                  onClick={handleResend}
-                  disabled={resendCooldown > 0 || resending}
-                  className="font-medium text-sky-700 dark:text-sky-400 hover:underline disabled:opacity-50 disabled:no-underline tabular-nums"
-                >
-                  {resendCooldown > 0
-                    ? t('auth.resendInSeconds', { seconds: resendCooldown })
-                    : t('auth.resendCode')}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetToEmailStep}
-                  className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:underline"
-                >
-                  {t('auth.changeEmailAddress')}
-                </button>
-              </div>
-            </>
-          )}
-
-          {step === 'form' && (
-            <>
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-bold text-[#0B192C] dark:text-white">{t('auth.registerTitle')}</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t('auth.completeRegistrationSubtitle')}
-                  </p>
-                </div>
-                <LanguageSelector compact className="shrink-0" />
-              </div>
-
-              <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="min-w-0">
-                  <span className="text-emerald-800 dark:text-emerald-300 font-semibold">{t('auth.emailVerifiedLabel')}: </span>
-                  <span className="text-slate-800 dark:text-slate-100 break-all">{form.email}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={resetToEmailStep}
-                  className="text-sky-700 dark:text-sky-400 font-medium hover:underline whitespace-nowrap shrink-0"
-                >
-                  {t('auth.changeEmailAddress')}
-                </button>
-              </div>
-
-              {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
-
-              <form onSubmit={handleRegister} className="space-y-3.5">
+              <form onSubmit={handleCreatePendingAccount} className="space-y-3.5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.fullName')}</label>
                   <input
@@ -512,14 +433,28 @@ export function RegisterPage() {
                     placeholder={t('auth.fullNamePlaceholder')}
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.phoneWithHint')}</label>
-                  <input
-                    required
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.emailAddress')}</label>
+                    <input
+                      required
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
+                      placeholder={t('auth.emailPlaceholder')}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.phoneWithHint')}</label>
+                    <input
+                      required
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+                      placeholder="+250788123456"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -545,14 +480,29 @@ export function RegisterPage() {
                     />
                   </div>
                 </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {t('auth.passwordPolicyHint')}
+                </p>
+                <label className="flex items-start gap-2.5 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.whatsapp_opt_in}
+                    onChange={(e) => setForm({ ...form, whatsapp_opt_in: e.target.checked })}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <span className="text-slate-700 dark:text-slate-300 leading-relaxed">
+                    {t('auth.whatsappOptInLabel')}
+                  </span>
+                </label>
                 <button
                   type="submit"
                   disabled={submitting}
                   className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
                 >
-                  {submitting ? t('auth.creatingAccount') : t('auth.createAccount')}
+                  {submitting ? t('auth.savingDetails') : t('auth.continueVerification')}
                 </button>
               </form>
+
               <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
                 {t('auth.alreadyRegistered')}{' '}
                 <Link
@@ -562,6 +512,142 @@ export function RegisterPage() {
                   {t('auth.signIn')}
                 </Link>
               </p>
+            </>
+          )}
+
+          {step === 'verify' && pendingSession && (
+            <>
+              <div className="space-y-1">
+                <h1 className="text-lg sm:text-xl font-bold text-[#0B192C] dark:text-white">{t('auth.chooseMethodTitle')}</h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {t('auth.chooseMethodSubtitle')}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {channelOptions.map((opt) => {
+                  const Icon = opt.icon;
+                  const isSelected = selectedChannel === opt.key;
+                  const isSent = activeSentChannel === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      disabled={!opt.available}
+                      onClick={() => {
+                        setError('');
+                        setSelectedChannel(opt.key);
+                      }}
+                      className={`text-left p-3 rounded-lg border transition-colors ${
+                        !opt.available
+                          ? 'opacity-55 cursor-not-allowed bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                          : isSelected
+                            ? 'border-sky-600 bg-sky-50/70 dark:bg-sky-950/50 dark:border-sky-500'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <Icon className="w-4 h-4 text-[#0B192C] dark:text-sky-400 shrink-0" />
+                        {isSent && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                      </div>
+                      <div className="text-xs font-semibold text-slate-900 dark:text-white">{opt.title}</div>
+                      <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300 truncate mt-0.5 tabular-nums">
+                        {opt.target}
+                      </div>
+                      {!opt.available && (
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                          {t('auth.channelUnavailable')}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  disabled={sendingOtp || !pendingSession?.channels?.[selectedChannel]?.available || (activeSentChannel === selectedChannel && resendCooldown > 0)}
+                  onClick={() => sendOtpViaChannel(selectedChannel)}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-55"
+                >
+                  {sendingOtp
+                    ? t('auth.sendingOtp')
+                    : isSwitchingChannel
+                      ? t('auth.switchChannelSend', { method: selectedChannel.toUpperCase() })
+                      : activeSentChannel === selectedChannel
+                        ? resendCooldown > 0
+                          ? t('auth.resendInSeconds', { seconds: resendCooldown })
+                          : t('auth.resendCode')
+                        : t('auth.sendCodeVia', { method: selectedChannel.toUpperCase() })}
+                </button>
+                {activeSentChannel && expiresAt > 0 && (
+                  <div className="text-xs text-slate-600 dark:text-slate-300 tabular-nums">
+                    {secondsLeft > 0 ? (
+                      <>
+                        {t('auth.otpExpiresIn')}{' '}
+                        <span className="font-mono font-bold text-[#0B192C] dark:text-sky-300">
+                          {formatCountdownClock(secondsLeft)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-rose-700 dark:text-rose-400 font-medium">{t('auth.otpExpiredNotice')}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
+              {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
+
+              {activeSentChannel && (
+                <form onSubmit={handleVerifyOtp} className="space-y-3.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                      {t('auth.enterSixDigitCode')}
+                    </label>
+                    <input
+                      required
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder={t('auth.otpPlaceholder')}
+                      className="w-full px-3 py-2.5 text-center text-lg font-mono tracking-widest tabular-nums bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submitting || (expiresAt > 0 && secondsLeft === 0)}
+                    className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-700 dark:bg-emerald-600 rounded-lg hover:bg-emerald-800 dark:hover:bg-emerald-500 disabled:opacity-60"
+                  >
+                    {submitting ? t('auth.verifying') : t('auth.verifyActivateAccount')}
+                  </button>
+                </form>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+                <Link
+                  to={redirectTarget ? `/login?redirect=${encodeURIComponent(redirectTarget)}` : '/login'}
+                  className="text-sky-700 dark:text-sky-400 hover:underline font-medium"
+                >
+                  {t('auth.backToSignIn')}
+                </Link>
+                {!pendingFromState && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('details');
+                      setError('');
+                      setNotice('');
+                    }}
+                    className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:underline"
+                  >
+                    {t('auth.startNewRegistration')}
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>

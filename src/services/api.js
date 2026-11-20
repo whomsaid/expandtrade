@@ -100,6 +100,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+function sanitizeFriendlyError(rawMessage, status, hasBackendMessage, { isTimeout, isNetwork }) {
+  if (isTimeout) return i18n.t('common.requestTimeout');
+  if (isNetwork) return i18n.t('common.networkError');
+
+  const text = String(rawMessage || '').trim();
+  const looksTechnical =
+    !text ||
+    /^Request failed with status code \d+/i.test(text) ||
+    /(SQLITE_|ER_[A-Z0-9_]+|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|SyntaxError|TypeError|ReferenceError|SELECT\s+.*FROM|INSERT\s+INTO|UPDATE\s+.*SET)/i.test(text);
+
+  if (looksTechnical || (status >= 500 && !hasBackendMessage)) {
+    return i18n.t('common.serverErrorFriendly', {
+      defaultValue: 'Something went wrong while processing your request. Please try again in a moment.',
+    });
+  }
+  return text;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -135,7 +153,7 @@ api.interceptors.response.use(
       }
     }
 
-    if (status === 401 && !url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/reset-password')) {
+    if (status === 401 && !url.includes('/auth/login') && !url.includes('/auth/register') && !url.includes('/auth/reset-password') && !url.includes('/auth/registration/')) {
       clearApiWorkspaceContext();
       localStorage.removeItem('biztrade_token');
       localStorage.removeItem('biztrade_business_id');
@@ -149,13 +167,15 @@ api.interceptors.response.use(
       }
     }
 
-    const message =
-      error.response?.data?.error ||
-      (isTimeout ? i18n.t('common.requestTimeout') : isNetwork ? i18n.t('common.networkError') : error.message) ||
-      i18n.t('common.requestFailed');
+    const backendMsg = error.response?.data?.error;
+    const message = sanitizeFriendlyError(backendMsg || error.message, status, Boolean(backendMsg), {
+      isTimeout,
+      isNetwork,
+    });
     const err = new Error(message);
     err.status = status;
     err.code = error.response?.data?.code || error.code;
+    err.data = error.response?.data || null;
     err.isTimeout = isTimeout;
     err.isNetwork = isNetwork;
     return Promise.reject(err);

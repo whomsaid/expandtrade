@@ -1,27 +1,77 @@
 import { query, queryOne } from '../config/db.js';
+import { getCached, invalidateCache, invalidatePrefix, setCached } from '../services/cacheService.js';
+
+const TENANT_CACHE_TTL_MS = 15_000;
+
+export function invalidateBusinessTenantCache(businessId) {
+  if (!businessId) return;
+  invalidateCache(`tenant:biz:${businessId}`);
+  invalidateCache(`tenant:branches:${businessId}`);
+  invalidatePrefix(`tenant:member:${businessId}:`);
+  invalidatePrefix('tenant:default-biz:');
+}
+
+export function invalidateUserTenantCache(userId) {
+  if (!userId) return;
+  invalidatePrefix(`tenant:default-biz:${userId}:`);
+  invalidatePrefix('tenant:member:');
+}
+
+export function invalidateMemberPermsCache(memberId) {
+  if (!memberId) return;
+  invalidatePrefix(`tenant:perms:${memberId}:`);
+}
 
 export async function loadMemberPermissions(memberId, roleId) {
-  const rolePerms = await query(
-    `SELECT p.perm_key
-     FROM role_permissions rp
-     JOIN permissions p ON p.id = rp.permission_id
-     WHERE rp.role_id = ?`,
-    [roleId]
-  );
-  const permSet = new Set(rolePerms.map((r) => r.perm_key));
+  const cacheKey = `tenant:perms:${memberId}:${roleId}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
 
-  const overrides = await query(
-    `SELECT p.perm_key, mp.is_allowed
-     FROM member_permissions mp
-     JOIN permissions p ON p.id = mp.permission_id
-     WHERE mp.business_member_id = ?`,
-    [memberId]
-  );
+  const [rolePerms, overrides] = await Promise.all([
+    query(
+      `SELECT p.perm_key
+       FROM role_permissions rp
+       JOIN permissions p ON p.id = rp.permission_id
+       WHERE rp.role_id = ?`,
+      [roleId]
+    ),
+    query(
+      `SELECT p.perm_key, mp.is_allowed
+       FROM member_permissions mp
+       JOIN permissions p ON p.id = mp.permission_id
+       WHERE mp.business_member_id = ?`,
+      [memberId]
+    ),
+  ]);
+  const permSet = new Set(rolePerms.map((r) => r.perm_key));
   for (const ov of overrides) {
     if (ov.is_allowed) permSet.add(ov.perm_key);
     else permSet.delete(ov.perm_key);
   }
-  return Array.from(permSet);
+  const perms = Array.from(permSet);
+  setCached(cacheKey, perms, TENANT_CACHE_TTL_MS);
+  return perms;
+}
+
+async function getAllPermissionKeys() {
+  const cached = getCached('tenant:all-perms');
+  if (cached) return cached;
+  const allPerms = await query('SELECT perm_key FROM permissions');
+  const keys = allPerms.map((p) => p.perm_key);
+  setCached('tenant:all-perms', keys, 5 * 60 * 1000);
+  return keys;
+}
+
+async function getActiveBranches(businessId) {
+  const key = `tenant:branches:${businessId}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const rows = await query(
+    'SELECT id, is_main FROM branches WHERE business_id = ? AND is_active = 1 ORDER BY is_main DESC, id ASC',
+    [businessId]
+  );
+  setCached(key, rows, TENANT_CACHE_TTL_MS);
+  return rows;
 }
 
 export async function requireBusiness(req, res, next) {
@@ -52,32 +102,39 @@ export async function requireBusiness(req, res, next) {
     }
 
     if (!businessId) {
-      const assignedMembership = await queryOne(
-        `SELECT bm.business_id
-         FROM business_members bm
-         JOIN businesses b ON b.id = bm.business_id
-         WHERE bm.user_id = ?
-           AND bm.status = 'active'
-           AND b.status != 'deleted'
-           AND b.deleted_at IS NULL
-         ORDER BY CASE WHEN b.status = 'active' THEN 0 ELSE 1 END, bm.id ASC
-         LIMIT 1`,
-        [req.user.id]
-      );
-
-      if (assignedMembership?.business_id) {
-        businessId = Number(assignedMembership.business_id);
-      } else if (isSuperAdmin) {
-        const defaultBiz = await queryOne(
-          `SELECT id
-           FROM businesses
-           WHERE status != 'deleted' AND deleted_at IS NULL
-           ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, id DESC
-           LIMIT 1`
+      const defKey = `tenant:default-biz:${req.user.id}:${isSuperAdmin ? 1 : 0}`;
+      const cachedDef = getCached(defKey);
+      if (cachedDef) {
+        businessId = cachedDef;
+      } else {
+        const assignedMembership = await queryOne(
+          `SELECT bm.business_id
+           FROM business_members bm
+           JOIN businesses b ON b.id = bm.business_id
+           WHERE bm.user_id = ?
+             AND bm.status = 'active'
+             AND b.status != 'deleted'
+             AND b.deleted_at IS NULL
+           ORDER BY CASE WHEN b.status = 'active' THEN 0 ELSE 1 END, bm.id ASC
+           LIMIT 1`,
+          [req.user.id]
         );
-        if (defaultBiz?.id) {
-          businessId = Number(defaultBiz.id);
+
+        if (assignedMembership?.business_id) {
+          businessId = Number(assignedMembership.business_id);
+        } else if (isSuperAdmin) {
+          const defaultBiz = await queryOne(
+            `SELECT id
+             FROM businesses
+             WHERE status != 'deleted' AND deleted_at IS NULL
+             ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, id DESC
+             LIMIT 1`
+          );
+          if (defaultBiz?.id) {
+            businessId = Number(defaultBiz.id);
+          }
         }
+        if (businessId) setCached(defKey, businessId, TENANT_CACHE_TTL_MS);
       }
     }
 
@@ -88,10 +145,13 @@ export async function requireBusiness(req, res, next) {
       });
     }
 
-    const business = await queryOne(
-      'SELECT * FROM businesses WHERE id = ?',
-      [businessId]
-    );
+    const bizKey = `tenant:biz:${businessId}`;
+    let business = getCached(bizKey);
+    if (!business) {
+      business = await queryOne('SELECT * FROM businesses WHERE id = ?', [businessId]);
+      if (business) setCached(bizKey, business, TENANT_CACHE_TTL_MS);
+    }
+
     if (!business || business.status === 'deleted' || business.deleted_at) {
       return res.status(404).json({ error: 'Business workspace not found' });
     }
@@ -107,13 +167,18 @@ export async function requireBusiness(req, res, next) {
       }
     }
 
-    let membership = await queryOne(
-      `SELECT bm.*, r.code AS role_code, r.name AS role_name
-       FROM business_members bm
-       JOIN roles r ON r.id = bm.role_id
-       WHERE bm.business_id = ? AND bm.user_id = ? AND bm.status = 'active'`,
-      [businessId, req.user.id]
-    );
+    const memKey = `tenant:member:${businessId}:${req.user.id}`;
+    let membership = getCached(memKey);
+    if (!membership) {
+      membership = await queryOne(
+        `SELECT bm.*, r.code AS role_code, r.name AS role_name
+         FROM business_members bm
+         JOIN roles r ON r.id = bm.role_id
+         WHERE bm.business_id = ? AND bm.user_id = ? AND bm.status = 'active'`,
+        [businessId, req.user.id]
+      );
+      if (membership) setCached(memKey, membership, TENANT_CACHE_TTL_MS);
+    }
 
     if (!membership && isSuperAdmin) {
       membership = {
@@ -137,21 +202,18 @@ export async function requireBusiness(req, res, next) {
       });
     }
 
-    let permissions;
-    if (isSuperAdmin || membership.is_super_admin_override) {
-      const allPerms = await query('SELECT perm_key FROM permissions');
-      permissions = allPerms.map((p) => p.perm_key);
-    } else {
-      permissions = await loadMemberPermissions(membership.id, membership.role_id);
-    }
+    const [permissions, branches] = await Promise.all([
+      isSuperAdmin || membership.is_super_admin_override
+        ? getAllPermissionKeys()
+        : loadMemberPermissions(membership.id, membership.role_id),
+      getActiveBranches(businessId),
+    ]);
+
     const requestedBranchId = Number(req.headers['x-branch-id'] || req.query.branchId || req.body?.branch_id || 0);
 
     let effectiveBranchId = membership.assigned_branch_id || null;
     if (requestedBranchId) {
-      const branch = await queryOne(
-        'SELECT id FROM branches WHERE id = ? AND business_id = ? AND is_active = 1',
-        [requestedBranchId, businessId]
-      );
+      const branch = branches.find((b) => Number(b.id) === requestedBranchId);
       if (!branch) {
         return res.status(403).json({ error: 'Branch does not belong to this business or is inactive' });
       }
@@ -162,11 +224,7 @@ export async function requireBusiness(req, res, next) {
     }
 
     if (!effectiveBranchId) {
-      const mainBranch = await queryOne(
-        'SELECT id FROM branches WHERE business_id = ? AND is_active = 1 ORDER BY is_main DESC, id ASC LIMIT 1',
-        [businessId]
-      );
-      effectiveBranchId = mainBranch?.id || null;
+      effectiveBranchId = branches[0]?.id || null;
     }
 
     req.business = business;

@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT NULL,
   must_change_password INTEGER NOT NULL DEFAULT 0,
   is_email_verified INTEGER NOT NULL DEFAULT 0,
+  is_phone_verified INTEGER NOT NULL DEFAULT 0,
+  whatsapp_opt_in INTEGER NOT NULL DEFAULT 0,
+  whatsapp_opted_out_at TEXT NULL,
   is_active INTEGER NOT NULL DEFAULT 1,
   is_platform_admin INTEGER NOT NULL DEFAULT 0,
   two_factor_enabled INTEGER NOT NULL DEFAULT 0,
@@ -109,6 +112,7 @@ CREATE TABLE IF NOT EXISTS businesses (
   description TEXT NULL,
   email TEXT NOT NULL,
   phone TEXT NOT NULL,
+  whatsapp_number TEXT NULL,
   country TEXT NOT NULL DEFAULT 'Rwanda',
   province TEXT NOT NULL DEFAULT 'Kigali City',
   district TEXT NOT NULL DEFAULT 'Gasabo',
@@ -350,6 +354,9 @@ CREATE TABLE IF NOT EXISTS customers (
   loyalty_points INTEGER NOT NULL DEFAULT 0,
   outstanding_balance REAL NOT NULL DEFAULT 0,
   notes TEXT NULL,
+  whatsapp_opt_in INTEGER NOT NULL DEFAULT 0,
+  whatsapp_opted_out_at TEXT NULL,
+  has_whatsapp TEXT NOT NULL DEFAULT 'unknown',
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
@@ -1202,6 +1209,10 @@ CREATE TABLE IF NOT EXISTS background_jobs (
 CREATE TABLE IF NOT EXISTS otp_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT NOT NULL,
+  phone TEXT NULL,
+  channel TEXT NOT NULL DEFAULT 'email',
+  destination_masked TEXT NULL,
+  provider_message_id TEXT NULL,
   user_id INTEGER NULL,
   purpose TEXT NOT NULL DEFAULT 'registration',
   otp_hash TEXT NOT NULL,
@@ -1212,6 +1223,36 @@ CREATE TABLE IF NOT EXISTS otp_tokens (
   used_at TEXT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS whatsapp_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NULL,
+  user_id INTEGER NULL,
+  customer_id INTEGER NULL,
+  entity_type TEXT NULL,
+  entity_id INTEGER NULL,
+  phone_e164 TEXT NOT NULL,
+  direction TEXT NOT NULL DEFAULT 'outbound',
+  message_type TEXT NOT NULL DEFAULT 'text',
+  template_name TEXT NULL,
+  body TEXT NOT NULL,
+  external_message_id TEXT NULL,
+  status TEXT NOT NULL DEFAULT 'queued',
+  error_code TEXT NULL,
+  error_message TEXT NULL,
+  sent_by_user_id INTEGER NULL,
+  status_updated_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_type TEXT NOT NULL,
+  external_message_id TEXT NULL,
+  phone_e164 TEXT NULL,
+  payload_json TEXT NOT NULL,
+  processed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `;
 
@@ -1263,6 +1304,10 @@ async function ensureMySqlSchemaAndIndexes(pool) {
     CREATE TABLE IF NOT EXISTS otp_tokens (
       id INT AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(190) NOT NULL,
+      phone VARCHAR(32) NULL,
+      channel VARCHAR(24) NOT NULL DEFAULT 'email',
+      destination_masked VARCHAR(190) NULL,
+      provider_message_id VARCHAR(190) NULL,
       user_id INT NULL,
       purpose VARCHAR(40) NOT NULL DEFAULT 'registration',
       otp_hash VARCHAR(128) NOT NULL,
@@ -1275,11 +1320,73 @@ async function ensureMySqlSchemaAndIndexes(pool) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      business_id INT NULL,
+      user_id INT NULL,
+      customer_id INT NULL,
+      entity_type VARCHAR(48) NULL,
+      entity_id INT NULL,
+      phone_e164 VARCHAR(32) NOT NULL,
+      direction VARCHAR(16) NOT NULL DEFAULT 'outbound',
+      message_type VARCHAR(24) NOT NULL DEFAULT 'text',
+      template_name VARCHAR(120) NULL,
+      body TEXT NOT NULL,
+      external_message_id VARCHAR(190) NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'queued',
+      error_code VARCHAR(48) NULL,
+      error_message VARCHAR(255) NULL,
+      sent_by_user_id INT NULL,
+      status_updated_at VARCHAR(48) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      event_type VARCHAR(64) NOT NULL,
+      external_message_id VARCHAR(190) NULL,
+      phone_e164 VARCHAR(32) NULL,
+      payload_json LONGTEXT NOT NULL,
+      processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  const ensureMySqlColumn = async (table, col, ddl) => {
+    try {
+      const [rows] = await pool.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1`,
+        [table, col]
+      );
+      if (!rows.length) {
+        await pool.query(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+      }
+    } catch {
+      // Ignore if table not present yet
+    }
+  };
+
+  await ensureMySqlColumn('users', 'is_phone_verified', 'is_phone_verified TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureMySqlColumn('users', 'whatsapp_opt_in', 'whatsapp_opt_in TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureMySqlColumn('users', 'whatsapp_opted_out_at', 'whatsapp_opted_out_at VARCHAR(48) NULL');
+  await ensureMySqlColumn('otp_tokens', 'phone', 'phone VARCHAR(32) NULL');
+  await ensureMySqlColumn('otp_tokens', 'channel', "channel VARCHAR(24) NOT NULL DEFAULT 'email'");
+  await ensureMySqlColumn('otp_tokens', 'destination_masked', 'destination_masked VARCHAR(190) NULL');
+  await ensureMySqlColumn('otp_tokens', 'provider_message_id', 'provider_message_id VARCHAR(190) NULL');
+  await ensureMySqlColumn('customers', 'whatsapp_opt_in', 'whatsapp_opt_in TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureMySqlColumn('customers', 'whatsapp_opted_out_at', 'whatsapp_opted_out_at VARCHAR(48) NULL');
+  await ensureMySqlColumn('customers', 'has_whatsapp', "has_whatsapp VARCHAR(16) NOT NULL DEFAULT 'unknown'");
+  await ensureMySqlColumn('businesses', 'whatsapp_number', 'whatsapp_number VARCHAR(32) NULL');
+
   const indexes = [
     ['businesses', 'idx_businesses_pub_cat_dist', 'status, is_public_listed, deleted_at, category, district, id DESC'],
     ['products', 'idx_products_biz_status', 'business_id, status'],
     ['inventory', 'idx_inventory_product', 'product_id'],
     ['inventory', 'idx_inventory_biz_branch', 'business_id, branch_id'],
+    ['sales', 'idx_sales_customer', 'customer_id'],
+    ['sales', 'idx_sales_biz_branch_status_date', 'business_id, branch_id, sale_status, created_at'],
     ['sale_items', 'idx_sale_items_sale', 'sale_id'],
     ['sale_items', 'idx_sale_items_prod', 'product_id'],
     ['expenses', 'idx_expenses_biz_status_branch', 'business_id, approval_status, branch_id'],
@@ -1291,6 +1398,11 @@ async function ensureMySqlSchemaAndIndexes(pool) {
     ['video_upload_sessions', 'idx_vus_biz_user', 'business_id, user_id, status'],
     ['background_jobs', 'idx_bg_jobs_user', 'user_id, status'],
     ['otp_tokens', 'idx_otp_email_purpose', 'email, purpose, id DESC'],
+    ['otp_tokens', 'idx_otp_phone_purpose', 'phone, purpose, id DESC'],
+    ['users', 'idx_users_phone', 'phone'],
+    ['customers', 'idx_customers_biz_phone', 'business_id, phone'],
+    ['whatsapp_messages', 'idx_wa_msg_biz_phone', 'business_id, phone_e164, id DESC'],
+    ['whatsapp_messages', 'idx_wa_msg_ext', 'external_message_id'],
   ];
 
   for (const [table, indexName, cols] of indexes) {
@@ -1364,18 +1476,29 @@ export async function initDatabase() {
   ensureColumn('users', 'must_change_password', 'must_change_password INTEGER NOT NULL DEFAULT 0');
   ensureColumn('users', 'preferred_language', "preferred_language TEXT NOT NULL DEFAULT 'en'");
   ensureColumn('users', 'theme_preference', "theme_preference TEXT NOT NULL DEFAULT 'system'");
+  ensureColumn('users', 'is_phone_verified', 'is_phone_verified INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('users', 'whatsapp_opt_in', 'whatsapp_opt_in INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('users', 'whatsapp_opted_out_at', 'whatsapp_opted_out_at TEXT NULL');
   ensureColumn('users', 'bio', 'bio TEXT NULL');
   ensureColumn('users', 'location', 'location TEXT NULL');
   ensureColumn('users', 'privacy_settings_json', 'privacy_settings_json TEXT NULL');
   ensureColumn('users', 'dashboard_preferences_json', 'dashboard_preferences_json TEXT NULL');
   ensureColumn('notification_preferences', 'payroll_alerts', 'payroll_alerts INTEGER NOT NULL DEFAULT 1');
   ensureColumn('businesses', 'business_code', 'business_code TEXT NULL');
+  ensureColumn('businesses', 'whatsapp_number', 'whatsapp_number TEXT NULL');
   ensureColumn('businesses', 'is_public_listed', 'is_public_listed INTEGER NOT NULL DEFAULT 1');
   ensureColumn('businesses', 'deleted_at', 'deleted_at TEXT NULL');
   ensureColumn('orders', 'customer_user_id', 'customer_user_id INTEGER NULL');
   ensureColumn('orders', 'idempotency_key', 'idempotency_key TEXT NULL');
   ensureColumn('contact_inquiries', 'business_id', 'business_id INTEGER NULL');
   ensureColumn('contact_inquiries', 'user_id', 'user_id INTEGER NULL');
+  ensureColumn('otp_tokens', 'phone', 'phone TEXT NULL');
+  ensureColumn('otp_tokens', 'channel', "channel TEXT NOT NULL DEFAULT 'email'");
+  ensureColumn('otp_tokens', 'destination_masked', 'destination_masked TEXT NULL');
+  ensureColumn('otp_tokens', 'provider_message_id', 'provider_message_id TEXT NULL');
+  ensureColumn('customers', 'whatsapp_opt_in', 'whatsapp_opt_in INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('customers', 'whatsapp_opted_out_at', 'whatsapp_opted_out_at TEXT NULL');
+  ensureColumn('customers', 'has_whatsapp', "has_whatsapp TEXT NOT NULL DEFAULT 'unknown'");
   sqliteDb.exec(`
     CREATE INDEX IF NOT EXISTS idx_businesses_public ON businesses(status, is_public_listed, deleted_at, id DESC);
     CREATE INDEX IF NOT EXISTS idx_businesses_pub_cat_dist ON businesses(status, is_public_listed, deleted_at, category, district, id DESC);
@@ -1384,6 +1507,8 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_products_biz_status ON products(business_id, status);
     CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory(product_id);
     CREATE INDEX IF NOT EXISTS idx_inventory_biz_branch ON inventory(business_id, branch_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_biz_branch_status_date ON sales(business_id, branch_id, sale_status, created_at);
     CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
     CREATE INDEX IF NOT EXISTS idx_sale_items_prod ON sale_items(product_id);
     CREATE INDEX IF NOT EXISTS idx_videos_pub ON business_videos(is_published, business_id, id DESC);
@@ -1419,6 +1544,11 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_vus_biz_user ON video_upload_sessions(business_id, user_id, status);
     CREATE INDEX IF NOT EXISTS idx_bg_jobs_user ON background_jobs(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_otp_email_purpose ON otp_tokens(email, purpose, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_otp_phone_purpose ON otp_tokens(phone, purpose, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+    CREATE INDEX IF NOT EXISTS idx_customers_biz_phone ON customers(business_id, phone);
+    CREATE INDEX IF NOT EXISTS idx_wa_msg_biz_phone ON whatsapp_messages(business_id, phone_e164, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_wa_msg_ext ON whatsapp_messages(external_message_id);
   `);
   activeDialect = 'sqlite';
   console.log('[DB] Connected to persistent SQLite database at', dbPath);

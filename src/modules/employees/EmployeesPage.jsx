@@ -5,6 +5,7 @@ import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
+import { WhatsAppContactButton } from '../../components/WhatsAppContactModal.jsx';
 import { formatMoney } from '../../utils/format.js';
 
 const ALLOWED_EMPLOYEE_ROLE_CODES = [
@@ -154,7 +155,16 @@ export default function EmployeesPage() {
                       <UserAvatar src={m.avatar_url} name={m.full_name} size="sm" />
                       <div className="min-w-0">
                         <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">{m.full_name}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{m.email} · {m.phone}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2">
+                          <span className="truncate">{m.email} · {m.phone}</span>
+                          <WhatsAppContactButton
+                            compact
+                            phone={m.phone}
+                            name={m.full_name}
+                            entityType="employee"
+                            entityId={m.user_id || m.id}
+                          />
+                        </div>
                       </div>
                     </div>
                   </td>

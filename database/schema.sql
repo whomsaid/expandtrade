@@ -13,13 +13,17 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   avatar_url VARCHAR(500) NULL,
   is_email_verified TINYINT(1) NOT NULL DEFAULT 0,
+  is_phone_verified TINYINT(1) NOT NULL DEFAULT 0,
+  whatsapp_opt_in TINYINT(1) NOT NULL DEFAULT 0,
+  whatsapp_opted_out_at VARCHAR(48) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   is_platform_admin TINYINT(1) NOT NULL DEFAULT 0,
   two_factor_enabled TINYINT(1) NOT NULL DEFAULT 0,
   preferred_language VARCHAR(10) NOT NULL DEFAULT 'en',
   last_login_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_users_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_sessions (
@@ -102,6 +106,7 @@ CREATE TABLE IF NOT EXISTS businesses (
   description TEXT NULL,
   email VARCHAR(190) NOT NULL,
   phone VARCHAR(40) NOT NULL,
+  whatsapp_number VARCHAR(32) NULL,
   country VARCHAR(80) NOT NULL DEFAULT 'Rwanda',
   province VARCHAR(100) NOT NULL DEFAULT 'Kigali City',
   district VARCHAR(100) NOT NULL DEFAULT 'Gasabo',
@@ -301,6 +306,9 @@ CREATE TABLE IF NOT EXISTS customers (
   loyalty_points INT NOT NULL DEFAULT 0,
   outstanding_balance DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   notes TEXT NULL,
+  whatsapp_opt_in TINYINT(1) NOT NULL DEFAULT 0,
+  whatsapp_opted_out_at VARCHAR(48) NULL,
+  has_whatsapp ENUM('unknown', 'yes', 'no') NOT NULL DEFAULT 'unknown',
   status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_cust_biz (business_id, phone),
@@ -1039,6 +1047,61 @@ CREATE TABLE IF NOT EXISTS recruitment_notes (
   CONSTRAINT fk_rn_app FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE CASCADE,
   CONSTRAINT fk_rn_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
   CONSTRAINT fk_rn_user FOREIGN KEY (author_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 13. MULTI-CHANNEL OTP VERIFICATION & WHATSAPP MESSAGING
+CREATE TABLE IF NOT EXISTS otp_tokens (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(190) NOT NULL,
+  phone VARCHAR(32) NULL,
+  channel VARCHAR(24) NOT NULL DEFAULT 'email',
+  destination_masked VARCHAR(190) NULL,
+  provider_message_id VARCHAR(190) NULL,
+  user_id INT UNSIGNED NULL,
+  purpose VARCHAR(40) NOT NULL DEFAULT 'registration',
+  otp_hash VARCHAR(128) NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  max_attempts INT NOT NULL DEFAULT 5,
+  ip_address VARCHAR(64) NULL,
+  expires_at VARCHAR(48) NOT NULL,
+  used_at VARCHAR(48) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_otp_email_purpose (email, purpose, id),
+  INDEX idx_otp_phone_purpose (phone, purpose, id),
+  CONSTRAINT fk_otp_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_messages (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NULL,
+  user_id INT UNSIGNED NULL,
+  customer_id INT UNSIGNED NULL,
+  entity_type VARCHAR(48) NULL,
+  entity_id INT UNSIGNED NULL,
+  phone_e164 VARCHAR(32) NOT NULL,
+  direction ENUM('inbound', 'outbound') NOT NULL DEFAULT 'outbound',
+  message_type VARCHAR(24) NOT NULL DEFAULT 'text',
+  template_name VARCHAR(120) NULL,
+  body TEXT NOT NULL,
+  external_message_id VARCHAR(190) NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'queued',
+  error_code VARCHAR(48) NULL,
+  error_message VARCHAR(255) NULL,
+  sent_by_user_id INT UNSIGNED NULL,
+  status_updated_at VARCHAR(48) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_wa_msg_biz_phone (business_id, phone_e164, id),
+  INDEX idx_wa_msg_ext (external_message_id),
+  CONSTRAINT fk_wam_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  event_type VARCHAR(64) NOT NULL,
+  external_message_id VARCHAR(190) NULL,
+  phone_e164 VARCHAR(32) NULL,
+  payload_json LONGTEXT NOT NULL,
+  processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

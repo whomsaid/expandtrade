@@ -3,8 +3,8 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import { body } from 'express-validator';
 import { execute, query, queryOne, roundMoney, transaction } from '../config/db.js';
-import { authenticate, requirePlatformAdmin, requireProfileImage } from '../middleware/auth.js';
-import { requireBusiness, requirePermission } from '../middleware/tenant.js';
+import { authenticate, invalidateUserAuthCache, requirePlatformAdmin, requireProfileImage } from '../middleware/auth.js';
+import { invalidateBusinessTenantCache, requireBusiness, requirePermission } from '../middleware/tenant.js';
 import { cleanupMulterFiles, imageUpload, platformLogoUpload, removeUploadedFile, verifyFileNonEmpty, verifyImageSignature, verifyPlatformLogoFile } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, emitToBusiness, logAudit } from '../services/auditService.js';
@@ -254,6 +254,12 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
     const canViewFinance = ['business_owner', 'business_admin'].includes(req.membership.role_code) || req.permissions.includes('finance.view');
     const canViewPayroll = ['business_owner', 'business_admin'].includes(req.membership.role_code) || req.permissions.includes('payroll.view');
 
+    const dashCacheKey = `dashboard:${req.businessId}:${filterBranchId || 'all'}:${canViewFinance ? 1 : 0}:${canViewPayroll ? 1 : 0}`;
+    const cachedDash = getCached(dashCacheKey);
+    if (cachedDash) {
+      return res.json(cachedDash);
+    }
+
     const now = new Date();
     const todayIso = now.toISOString().slice(0, 10);
     const todayStart = `${todayIso} 00:00:00`;
@@ -261,14 +267,12 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
     const yearStart = `${todayIso.slice(0, 4)}-01-01 00:00:00`;
     const twoWeeksAgo = new Date(now.getTime() - 14 * 86400 * 1000).toISOString().slice(0, 10) + ' 00:00:00';
 
-    const salesPeriodParams = filterBranchId
-      ? [req.businessId, yearStart, filterBranchId]
-      : [req.businessId, yearStart];
+    const consolidatedSalesParams = filterBranchId
+      ? [todayStart, todayStart, monthStart, req.businessId, yearStart, filterBranchId]
+      : [todayStart, todayStart, monthStart, req.businessId, yearStart];
 
     const [
-      salesYearSummary,
-      today,
-      month,
+      salesAgg,
       exp,
       cogs,
       invStats,
@@ -285,19 +289,15 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
       payrollAcct,
     ] = await Promise.all([
       queryOne(
-        `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}`,
-        salesPeriodParams
-      ),
-      queryOne(
-        `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}`,
-        filterBranchId ? [req.businessId, todayStart, filterBranchId] : [req.businessId, todayStart]
-      ),
-      queryOne(
-        `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-         FROM sales WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}`,
-        filterBranchId ? [req.businessId, monthStart, filterBranchId] : [req.businessId, monthStart]
+        `SELECT
+           COALESCE(SUM(total_amount), 0) AS year_total,
+           COUNT(*) AS year_count,
+           COALESCE(SUM(CASE WHEN created_at >= ? THEN total_amount ELSE 0 END), 0) AS today_total,
+           SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS today_count,
+           COALESCE(SUM(CASE WHEN created_at >= ? THEN total_amount ELSE 0 END), 0) AS month_total
+         FROM sales
+         WHERE business_id = ? AND sale_status NOT IN ('cancelled', 'refunded') AND created_at >= ?${branchFilter}`,
+        consolidatedSalesParams
       ),
       queryOne(
         `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE business_id = ? AND approval_status = 'approved'${branchFilter}`,
@@ -392,7 +392,6 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
         : Promise.resolve(null),
     ]);
 
-    const year = salesYearSummary;
     const payrollSummary = canViewPayroll
       ? {
           active_employees: Number(payrollCfgAgg?.active_employees || 0),
@@ -405,15 +404,16 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
         }
       : null;
 
-    const grossProfit = roundMoney(Number(year.total) - Number(cogs.total));
+    const yearTotal = Number(salesAgg?.year_total || 0);
+    const grossProfit = roundMoney(yearTotal - Number(cogs.total));
     const netProfit = roundMoney(grossProfit - Number(exp.total));
 
-    res.json({
+    const payload = {
       kpis: {
-        sales_today: roundMoney(today.total),
-        sales_today_count: Number(today.count),
-        sales_month: roundMoney(month.total),
-        sales_year: roundMoney(year.total),
+        sales_today: roundMoney(salesAgg?.today_total || 0),
+        sales_today_count: Number(salesAgg?.today_count || 0),
+        sales_month: roundMoney(salesAgg?.month_total || 0),
+        sales_year: roundMoney(yearTotal),
         total_expenses: canViewFinance ? roundMoney(exp.total) : null,
         gross_profit: canViewFinance ? grossProfit : null,
         net_operating_profit: canViewFinance ? netProfit : null,
@@ -443,7 +443,10 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
         sales_by_branch: salesByBranch,
       },
       recentActivities,
-    });
+    };
+
+    setCached(dashCacheKey, payload, 10_000);
+    res.json(payload);
   } catch (err) {
     next(err);
   }
@@ -1179,6 +1182,7 @@ router.patch('/admin/businesses/:id/status', authenticate, requirePlatformAdmin,
     }
     await execute(`UPDATE businesses SET status = ?, updated_at = datetime('now') WHERE id = ?`, [status, req.params.id]);
     invalidatePrefix('public:businesses:');
+    invalidateBusinessTenantCache(Number(req.params.id));
     await logAudit({
       businessId: Number(req.params.id),
       userId: req.user.id,
@@ -1216,6 +1220,8 @@ router.delete('/admin/businesses/:id', authenticate, requirePlatformAdmin, async
         [biz.id]
       );
     });
+    invalidatePrefix('public:businesses:');
+    invalidateBusinessTenantCache(biz.id);
 
     await logAudit({
       businessId: biz.id,
@@ -1641,6 +1647,7 @@ router.patch('/admin/users/:id/status', authenticate, requirePlatformAdmin, asyn
     if (!activeVal) {
       await execute('UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ?', [targetId]);
     }
+    invalidateUserAuthCache(targetId, activeVal ? null : '');
     await logAudit({
       userId: req.user.id,
       action: activeVal ? 'platform.user_activated' : 'platform.user_deactivated',
@@ -1658,6 +1665,7 @@ router.post('/admin/users/:id/revoke-sessions', authenticate, requirePlatformAdm
   try {
     const targetId = Number(req.params.id);
     await execute('UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ?', [targetId]);
+    invalidateUserAuthCache(targetId, '');
     await logAudit({
       userId: req.user.id,
       action: 'platform.sessions_revoked',
@@ -1675,6 +1683,7 @@ router.patch('/admin/users/:id/verify-email', authenticate, requirePlatformAdmin
   try {
     const targetId = Number(req.params.id);
     await execute(`UPDATE users SET is_email_verified = 1, updated_at = datetime('now') WHERE id = ?`, [targetId]);
+    invalidateUserAuthCache(targetId);
     await logAudit({
       userId: req.user.id,
       action: 'platform.user_email_verified',
@@ -1707,6 +1716,7 @@ router.post(
         [hash, targetId]
       );
       await execute('UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ?', [targetId]);
+      invalidateUserAuthCache(targetId, '');
       await logAudit({
         userId: req.user.id,
         action: 'platform.user_password_reset',
@@ -2008,7 +2018,7 @@ router.post(
       ].join('\n');
 
       const contactSubject = `BizTrade Africa Inquiry from ${cleanName}${business_name ? ` (${business_name})` : ''}`;
-      void sendMail({
+      const mailResult = await sendMail({
         to: recipients,
         replyTo: cleanEmail,
         subject: contactSubject,
@@ -2035,7 +2045,10 @@ router.post(
       res.status(201).json({
         id: insRes.insertId,
         routed_to: 'allofme140@gmail.com',
-        message: 'Thank you! Your inquiry has been sent to our support team (allofme140@gmail.com) and we will reach out shortly.',
+        email_delivered: Boolean(mailResult.delivered),
+        message: mailResult.delivered
+          ? 'Thank you! Your inquiry has been delivered to our support team (allofme140@gmail.com) and we will reach out shortly.'
+          : 'Your inquiry has been saved to our platform support team inbox. Email forwarding is temporarily unavailable.',
       });
     } catch (err) {
       next(err);
