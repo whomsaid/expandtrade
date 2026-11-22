@@ -162,7 +162,7 @@ router.get('/public/businesses', async (req, res, next) => {
 router.get('/public/businesses/:slug', async (req, res, next) => {
   try {
     const business = await queryOne(
-      `SELECT id, business_code, name, slug, category, logo_url, description, email, phone,
+      `SELECT id, business_code, name, slug, category, logo_url, description, email, phone, phone_on_whatsapp,
               country, province, district, physical_address, currency_code, tax_enabled, default_tax_rate,
               operating_hours
        FROM businesses

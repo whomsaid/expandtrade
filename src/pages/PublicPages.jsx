@@ -20,7 +20,6 @@ import {
   Layers,
   Mail,
   MapPin,
-  MessageCircle,
   MessageSquare,
   Package,
   Phone,
@@ -42,11 +41,11 @@ import { RevealBlock } from '../hooks/useRevealOnScroll.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 import VideoAdPlayer from '../components/VideoAdPlayer.jsx';
+import WhatsAppContactButton from '../components/WhatsAppContactButton.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { usePlatformConfig } from '../context/PlatformConfigContext.jsx';
 import { api } from '../services/api.js';
 import { formatDate, formatDateTime, formatMoney } from '../utils/format.js';
-import { buildWhatsAppDeepLink } from '../utils/phone.js';
 import heroKigaliImg from '../assets/images/hero_kigali_commerce_1794724575172.jpg';
 import featurePosImg from '../assets/images/feature_pos_inventory_1794724576072.jpg';
 import featureRetailPosImg from '../assets/images/feature_retail_pos_1795098957916.jpg';
@@ -1050,17 +1049,13 @@ export function PublicBusinessDetailPage() {
                 {data.business.operating_hours && (
                   <div>{t('public.hours')}: <span className="font-medium text-slate-900 dark:text-slate-100">{data.business.operating_hours}</span></div>
                 )}
-                {buildWhatsAppDeepLink(data.business.whatsapp_number || data.business.phone) && (
+                {Boolean(data.business.phone_on_whatsapp) && (
                   <div className="pt-1">
-                    <a
-                      href={buildWhatsAppDeepLink(data.business.whatsapp_number || data.business.phone)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      {t('whatsapp.chatOnWhatsApp')}
-                    </a>
+                    <WhatsAppContactButton
+                      phone={data.business.phone}
+                      available={Boolean(data.business.phone_on_whatsapp)}
+                      label={t('whatsapp.chatOnWhatsApp')}
+                    />
                   </div>
                 )}
               </div>

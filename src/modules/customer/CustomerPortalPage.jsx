@@ -53,6 +53,7 @@ export default function CustomerPortalPage() {
   const [profileForm, setProfileForm] = useState({
     full_name: user?.full_name || '',
     phone: user?.phone || '',
+    whatsapp_available: Boolean(user?.whatsapp_available),
     bio: user?.bio || '',
     location: user?.location || '',
     default_address: '',
@@ -108,6 +109,7 @@ export default function CustomerPortalPage() {
         setProfileForm({
           full_name: pRes.data.user?.full_name || '',
           phone: pRes.data.user?.phone || '',
+          whatsapp_available: Boolean(pRes.data.user?.whatsapp_available ?? user?.whatsapp_available),
           bio: pRes.data.user?.bio || user?.bio || '',
           location: pRes.data.user?.location || user?.location || '',
           default_address: pRes.data.profile?.default_address || '',
@@ -120,7 +122,7 @@ export default function CustomerPortalPage() {
     } catch (err) {
       setError(err.message);
     }
-  }, [user?.bio, user?.location]);
+  }, [user?.bio, user?.location, user?.whatsapp_available]);
 
   const loadPublicDirectory = useCallback(async () => {
     if (dirAbortRef.current) {
@@ -263,6 +265,7 @@ export default function CustomerPortalPage() {
       await api.put('/auth/profile', {
         full_name: profileForm.full_name,
         phone: profileForm.phone,
+        whatsapp_available: profileForm.whatsapp_available,
         bio: profileForm.bio,
         location: profileForm.location,
       });
@@ -874,6 +877,14 @@ export default function CustomerPortalPage() {
                     <input value={profileForm.preferred_currency} onChange={(e) => setProfileForm({ ...profileForm, preferred_currency: e.target.value })} className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono" />
                   </div>
                 </div>
+                <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 pt-1">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(profileForm.whatsapp_available)}
+                    onChange={(e) => setProfileForm({ ...profileForm, whatsapp_available: e.target.checked })}
+                  />
+                  <span>{t('whatsapp.availableOnRegisteredPhone', { defaultValue: 'My registered phone number is available on WhatsApp' })}</span>
+                </label>
                 <button type="submit" disabled={Boolean(savingAction)} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">
                   {savingAction === 'profile' ? t('common.saving') : t('customerPortal.saveProfile')}
                 </button>

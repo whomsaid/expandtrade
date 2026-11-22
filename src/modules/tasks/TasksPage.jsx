@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Megaphone, Plus, Send } from 'lucide-react';
+import { Check, CheckCheck, Megaphone, Plus, Send } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
@@ -9,12 +9,13 @@ import { formatDate, formatDateTime } from '../../utils/format.js';
 
 export default function TasksPage() {
   const { t } = useTranslation();
-  const { activeBusinessId, socket, hasPermission } = useAuth();
+  const { user, activeBusinessId, socket, hasPermission } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [msgText, setMsgText] = useState('');
+  const [recipientUserId, setRecipientUserId] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAnnModal, setShowAnnModal] = useState(false);
   const [taskForm, setTaskForm] = useState({ title: '', description: '', assigned_to_user_id: '', priority: 'medium', deadline: '' });
@@ -22,6 +23,15 @@ export default function TasksPage() {
   const [error, setError] = useState('');
   const [modalError, setModalError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const markMessagesRead = useCallback(async () => {
+    if (!activeBusinessId) return;
+    try {
+      await api.patch('/messages/read');
+    } catch {
+      // non-fatal
+    }
+  }, [activeBusinessId]);
 
   const loadAll = useCallback(async () => {
     if (!activeBusinessId) return;
@@ -33,14 +43,19 @@ export default function TasksPage() {
         api.get('/messages'),
         hasPermission('employees.view') ? api.get('/members') : Promise.resolve({ data: { members: [] } }),
       ]);
+      const loadedMessages = mRes.data.messages || [];
       setTasks(tRes.data.tasks || []);
       setAnnouncements(aRes.data.announcements || []);
-      setMessages(mRes.data.messages || []);
+      setMessages(loadedMessages);
       setMembers(memRes.data.members || []);
+
+      if (loadedMessages.some((m) => !m.is_read && m.sender_user_id !== user?.id)) {
+        markMessagesRead();
+      }
     } catch (err) {
       setError(err.message);
     }
-  }, [activeBusinessId]);
+  }, [activeBusinessId, hasPermission, markMessagesRead, user?.id]);
 
   useEffect(() => {
     loadAll();
@@ -48,17 +63,31 @@ export default function TasksPage() {
 
   useEffect(() => {
     if (!socket) return;
-    const onNewMsg = (msg) => setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    const onNewMsg = (msg) => {
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      if (msg.sender_user_id !== user?.id) {
+        markMessagesRead();
+      }
+    };
+    const onMsgRead = (evt) => {
+      if (!evt?.messageIds?.length) return;
+      const idSet = new Set(evt.messageIds);
+      setMessages((prev) =>
+        prev.map((m) => (idSet.has(m.id) ? { ...m, is_read: true, read_at: evt.readAt || m.read_at } : m))
+      );
+    };
     const onUpdate = () => loadAll();
     socket.on('message:new', onNewMsg);
+    socket.on('message:read', onMsgRead);
     socket.on('task:updated', onUpdate);
     socket.on('announcement:created', onUpdate);
     return () => {
       socket.off('message:new', onNewMsg);
+      socket.off('message:read', onMsgRead);
       socket.off('task:updated', onUpdate);
       socket.off('announcement:created', onUpdate);
     };
-  }, [socket, loadAll]);
+  }, [socket, loadAll, markMessagesRead, user?.id]);
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
@@ -99,7 +128,11 @@ export default function TasksPage() {
     if (!msgText.trim()) return;
     setError('');
     try {
-      await api.post('/messages', { body: msgText.trim(), channel_type: 'general' });
+      await api.post('/messages', {
+        body: msgText.trim(),
+        channel_type: recipientUserId ? 'direct' : 'general',
+        recipient_user_id: recipientUserId ? Number(recipientUserId) : null,
+      });
       setMsgText('');
     } catch (err) {
       setError(err.message);
@@ -115,6 +148,8 @@ export default function TasksPage() {
       setError(err.message);
     }
   };
+
+  const otherMembers = members.filter((m) => m.user_id !== user?.id && m.status === 'active');
 
   return (
     <div className="space-y-6">
@@ -156,36 +191,36 @@ export default function TasksPage() {
                     urgent: t('tasks.priorityUrgent'),
                   }[task.priority] || task.priority;
                   return (
-                  <div key={task.id} className="py-3 space-y-2 text-xs">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{task.title}</div>
-                        <div className="text-slate-600 dark:text-slate-300 mt-0.5">{task.description}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1.5 flex-wrap">
-                          {task.assigned_to_name && (
-                            <UserAvatar src={task.assigned_to_avatar} name={task.assigned_to_name} size="xs" />
-                          )}
-                          <span>
-                            {t('tasks.assignedMeta', {
-                              name: task.assigned_to_name || t('tasks.unassigned'),
-                              priority: priorityLabel,
-                              due: formatDate(task.deadline),
-                            })}
-                          </span>
+                    <div key={task.id} className="py-3 space-y-2 text-xs">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">{task.title}</div>
+                          <div className="text-slate-600 dark:text-slate-300 mt-0.5">{task.description}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                            {task.assigned_to_name && (
+                              <UserAvatar src={task.assigned_to_avatar} name={task.assigned_to_name} size="xs" />
+                            )}
+                            <span>
+                              {t('tasks.assignedMeta', {
+                                name: task.assigned_to_name || t('tasks.unassigned'),
+                                priority: priorityLabel,
+                                due: formatDate(task.deadline),
+                              })}
+                            </span>
+                          </div>
                         </div>
+                        <select
+                          value={task.status}
+                          onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                          className="px-2 py-1 border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs"
+                        >
+                          <option value="pending">{t('status.pending')}</option>
+                          <option value="in_progress">{t('status.in_progress')}</option>
+                          <option value="completed">{t('status.completed')}</option>
+                          <option value="cancelled">{t('status.cancelled')}</option>
+                        </select>
                       </div>
-                      <select
-                        value={task.status}
-                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                        className="px-2 py-1 border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs"
-                      >
-                        <option value="pending">{t('status.pending')}</option>
-                        <option value="in_progress">{t('status.in_progress')}</option>
-                        <option value="completed">{t('status.completed')}</option>
-                        <option value="cancelled">{t('status.cancelled')}</option>
-                      </select>
                     </div>
-                  </div>
                   );
                 })
               )}
@@ -213,9 +248,9 @@ export default function TasksPage() {
           </div>
         </div>
 
-        {/* Real-time Business Team Chat */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col h-[520px]">
-          <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        {/* Real-time Internal Business Team Chat with Accurate Sent/Read States */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col h-[540px]">
+          <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('tasks.teamChannelTitle')}</h2>
             <StatusBadge status="active" />
           </div>
@@ -223,30 +258,69 @@ export default function TasksPage() {
             {messages.length === 0 ? (
               <div className="text-center text-xs text-slate-400 dark:text-slate-500 py-10">{t('tasks.noMessages')}</div>
             ) : (
-              messages.map((m) => (
-                <div key={m.id} className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-lg border border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <UserAvatar src={m.sender_avatar} name={m.sender_name} size="xs" />
-                      <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">{m.sender_name}</span>
+              messages.map((m) => {
+                const isMine = m.sender_user_id === user?.id;
+                return (
+                  <div key={m.id} className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-lg border border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <UserAvatar src={m.sender_avatar} name={m.sender_name} size="xs" />
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">{m.sender_name}</span>
+                        {m.recipient_user_id && (
+                          <span className="text-[10px] font-medium text-sky-700 dark:text-sky-400 truncate">
+                            → {m.recipient_name || t('tasks.directTag')}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums shrink-0">{formatDateTime(m.created_at)}</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums shrink-0">{formatDateTime(m.created_at)}</span>
+                    <p className="text-slate-700 dark:text-slate-300 pl-8">{m.body}</p>
+                    {isMine && (
+                      <div className="pl-8 flex items-center gap-1 text-[10px] tabular-nums">
+                        {m.is_read ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-medium">
+                            <CheckCheck className="w-3 h-3" />
+                            {m.read_at ? t('tasks.readAt', { time: formatDateTime(m.read_at) }) : t('tasks.readState')}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500">
+                            <Check className="w-3 h-3" />
+                            {t('tasks.sentState')}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-slate-700 dark:text-slate-300 pl-8">{m.body}</p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
-          <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 dark:border-slate-800 flex gap-2">
-            <input
-              value={msgText}
-              onChange={(e) => setMsgText(e.target.value)}
-              placeholder={t('tasks.messagePlaceholder')}
-              className="flex-1 px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            />
-            <button type="submit" className="px-3.5 py-2 bg-[#0B192C] dark:bg-sky-600 text-white rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
-              <Send className="w-3.5 h-3.5" />
-            </button>
+          <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            {otherMembers.length > 0 && (
+              <select
+                value={recipientUserId}
+                onChange={(e) => setRecipientUserId(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-[11px] border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+              >
+                <option value="">{t('tasks.allTeamChannel')}</option>
+                {otherMembers.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {t('tasks.directToMember', { name: m.full_name })}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className="flex gap-2">
+              <input
+                value={msgText}
+                onChange={(e) => setMsgText(e.target.value)}
+                placeholder={t('tasks.messagePlaceholder')}
+                className="flex-1 px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              />
+              <button type="submit" className="px-3.5 py-2 bg-[#0B192C] dark:bg-sky-600 text-white rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </form>
         </div>
       </div>

@@ -100,8 +100,7 @@ export async function authenticate(req, res, next) {
     const row = await queryOne(
       `SELECT u.id, u.full_name, u.email, u.phone, u.avatar_url, u.bio, u.location,
               u.privacy_settings_json, u.dashboard_preferences_json,
-              u.must_change_password, u.is_email_verified, u.is_phone_verified,
-              u.whatsapp_opt_in, u.whatsapp_opted_out_at,
+              u.must_change_password, u.is_email_verified, u.whatsapp_available,
               u.is_active, u.is_platform_admin,
               u.preferred_language, u.theme_preference, us.is_revoked
        FROM user_sessions us

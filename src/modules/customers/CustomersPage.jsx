@@ -5,7 +5,7 @@ import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDate, formatMoney } from '../../utils/format.js';
 import UserAvatar from '../../components/UserAvatar.jsx';
-import { WhatsAppContactButton } from '../../components/WhatsAppContactModal.jsx';
+import WhatsAppContactButton from '../../components/WhatsAppContactButton.jsx';
 
 export default function CustomersPage() {
   const { t } = useTranslation();
@@ -16,7 +16,7 @@ export default function CustomersPage() {
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState({ sales: [], notes: [] });
   const [noteInput, setNoteInput] = useState({ note_type: 'general', content: '' });
-  const [form, setForm] = useState({ full_name: '', phone: '+250', email: '', address: '', customer_type: 'retail', notes: '', whatsapp_opt_in: false });
+  const [form, setForm] = useState({ full_name: '', phone: '+250', email: '', address: '', customer_type: 'retail', notes: '' });
   const [error, setError] = useState('');
   const [modalError, setModalError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -64,7 +64,7 @@ export default function CustomersPage() {
     try {
       await api.post('/customers', form);
       setShowCreate(false);
-      setForm({ full_name: '', phone: '+250', email: '', address: '', customer_type: 'retail', notes: '', whatsapp_opt_in: false });
+      setForm({ full_name: '', phone: '+250', email: '', address: '', customer_type: 'retail', notes: '' });
       await loadCustomers();
     } catch (err) {
       setModalError(err.message);
@@ -171,17 +171,8 @@ export default function CustomersPage() {
                 </div>
                 <WhatsAppContactButton
                   phone={selected.phone}
-                  name={selected.full_name}
-                  customerId={selected.id}
-                  entityType="customer"
-                  entityId={selected.id}
-                  whatsappOptIn={Boolean(selected.whatsapp_opt_in)}
-                  hasWhatsapp={selected.has_whatsapp}
-                  optedOutAt={selected.whatsapp_opted_out_at}
-                  onConsentChanged={(val) => {
-                    setSelected((prev) => (prev ? { ...prev, whatsapp_opt_in: val, whatsapp_opted_out_at: val ? null : new Date().toISOString() } : prev));
-                    loadCustomers();
-                  }}
+                  available={Boolean(selected.whatsapp_available)}
+                  showUnavailableLabel
                 />
               </div>
               <div>
@@ -243,14 +234,6 @@ export default function CustomersPage() {
                 <option value="corporate">{t('customers.typeCorporate')}</option>
               </select>
               <input placeholder={t('customers.addressPlaceholder')} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-              <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 pt-1">
-                <input
-                  type="checkbox"
-                  checked={Boolean(form.whatsapp_opt_in)}
-                  onChange={(e) => setForm({ ...form, whatsapp_opt_in: e.target.checked })}
-                />
-                <span>{t('whatsapp.customerConsentOptIn')}</span>
-              </label>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" disabled={saving} onClick={() => setShowCreate(false)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
                 <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50">{saving ? t('common.saving') : t('customers.saveCustomer')}</button>

@@ -1,0 +1,147 @@
+import express from 'express';
+import { getDialect, query, queryOne, execute } from '../config/db.js';
+import { authenticate, requirePlatformAdmin } from '../middleware/auth.js';
+import { isSmtpConfigured } from '../services/mailService.js';
+import {
+  recordMonitoringEvent,
+  runSystemVerificationSuite,
+  seedRequirementsRegister,
+} from '../services/monitoringService.js';
+
+const router = express.Router();
+
+// Super Admin ONLY: Monitoring Dashboard Overview + Verification Register
+router.get('/admin/monitoring/overview', authenticate, requirePlatformAdmin, async (_req, res, next) => {
+  try {
+    await seedRequirementsRegister();
+    const [requirements, recentRuns, recentEvents, stats] = await Promise.all([
+      query('SELECT * FROM requirements_register ORDER BY requirement_id ASC'),
+      query('SELECT * FROM monitoring_runs ORDER BY id DESC LIMIT 20'),
+      query('SELECT * FROM monitoring_events ORDER BY id DESC LIMIT 50'),
+      queryOne(`
+        SELECT
+          (SELECT COUNT(*) FROM monitoring_events WHERE severity = 'critical' AND resolved = 0) AS unresolved_critical,
+          (SELECT COUNT(*) FROM monitoring_events WHERE category = 'security' AND resolved = 0) AS security_alerts,
+          (SELECT COUNT(*) FROM login_attempts WHERE was_successful = 0) AS failed_logins_total,
+          (SELECT COUNT(*) FROM businesses WHERE deleted_at IS NULL) AS active_businesses,
+          (SELECT COUNT(*) FROM users WHERE is_active = 1) AS active_users
+      `),
+    ]);
+
+    res.json({
+      systemHealth: {
+        dialect: getDialect(),
+        smtpConfigured: isSmtpConfigured(),
+        uptimeSeconds: Math.round(process.uptime()),
+        memoryRssMb: Math.round((process.memoryUsage().rss / (1024 * 1024)) * 10) / 10,
+        nodeVersion: process.version,
+        timestamp: new Date().toISOString(),
+      },
+      stats: stats || {},
+      requirements,
+      recentRuns,
+      recentEvents,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Super Admin ONLY: Trigger repeatable verification suite on demand
+router.post('/admin/monitoring/run', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const result = await runSystemVerificationSuite({
+      triggerType: 'manual',
+      triggeredByUserId: req.user.id,
+    });
+    await recordMonitoringEvent({
+      severity: result.failed_count > 0 ? 'warning' : 'info',
+      category: 'verification',
+      module: 'Verification Runner',
+      message: `Manual QA run completed: ${result.passed_count}/${result.total_count} checks passed (avg ${result.avg_response_ms}ms).`,
+    });
+    res.json({ result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Super Admin ONLY: Resolve monitoring event
+router.patch('/admin/monitoring/events/:id/resolve', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    await execute('UPDATE monitoring_events SET resolved = 1 WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Monitoring alert marked as resolved.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Super Admin ONLY: Complete Platform Database Backup Export (JSON Snapshot)
+router.get('/admin/backup', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const tableNames = [
+      'users',
+      'platform_settings',
+      'subscription_plans',
+      'businesses',
+      'business_settings',
+      'branches',
+      'business_admins',
+      'business_members',
+      'categories',
+      'suppliers',
+      'products',
+      'product_images',
+      'inventory',
+      'customers',
+      'sales',
+      'sale_items',
+      'orders',
+      'order_items',
+      'expenses',
+      'income',
+      'tasks',
+      'announcements',
+      'messages',
+      'job_vacancies',
+      'job_applications',
+      'requirements_register',
+    ];
+    const snapshot = {
+      exported_at: new Date().toISOString(),
+      exported_by_user_id: req.user.id,
+      platform: 'BizTrade Africa (BTA)',
+      dialect: getDialect(),
+      tables: {},
+    };
+
+    for (const tbl of tableNames) {
+      try {
+        const rows = await query(`SELECT * FROM ${tbl}`);
+        // Strip password hashes from backup JSON for security hygiene
+        snapshot.tables[tbl] =
+          tbl === 'users'
+            ? rows.map(({ password_hash: _ph, ...safe }) => safe)
+            : rows;
+      } catch {
+        snapshot.tables[tbl] = [];
+      }
+    }
+
+    await recordMonitoringEvent({
+      severity: 'info',
+      category: 'health',
+      module: 'Database Backup',
+      message: `Super Admin exported full database snapshot (${Object.keys(snapshot.tables).length} tables).`,
+    });
+
+    const filename = `bta-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(snapshot, null, 2));
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;

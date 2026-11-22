@@ -85,8 +85,8 @@ router.post(
 
       const result = await transaction(async (tx) => {
         const bizRes = await tx.execute(
-          `INSERT INTO businesses (business_code, owner_user_id, name, slug, category, description, email, phone, country, province, district, physical_address, currency_code, timezone, tax_enabled, default_tax_rate, tax_identification_number, operating_hours)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO businesses (business_code, owner_user_id, name, slug, category, description, email, phone, country, province, district, physical_address, currency_code, timezone, tax_enabled, default_tax_rate, tax_identification_number, operating_hours, setup_completed)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
           [
             businessCode,
             req.user.id,
@@ -217,6 +217,7 @@ router.put(
         description,
         email,
         phone,
+        phone_on_whatsapp,
         country,
         province,
         district,
@@ -227,7 +228,6 @@ router.put(
         default_tax_rate,
         tax_identification_number,
         operating_hours,
-        whatsapp_number,
         language,
         date_format,
         receipt_header,
@@ -245,7 +245,7 @@ router.put(
            description = COALESCE(?, description),
            email = COALESCE(?, email),
            phone = COALESCE(?, phone),
-           whatsapp_number = COALESCE(?, whatsapp_number),
+           phone_on_whatsapp = COALESCE(?, phone_on_whatsapp),
            country = COALESCE(?, country),
            province = COALESCE(?, province),
            district = COALESCE(?, district),
@@ -259,7 +259,9 @@ router.put(
            updated_at = datetime('now')
          WHERE id = ?`,
         [
-          name, category, description, email, phone, whatsapp_number ?? null, country, province, district,
+          name, category, description, email, phone,
+          phone_on_whatsapp !== undefined ? (phone_on_whatsapp ? 1 : 0) : null,
+          country, province, district,
           physical_address, currency_code, timezone,
           tax_enabled !== undefined ? (tax_enabled ? 1 : 0) : null,
           default_tax_rate !== undefined ? Number(default_tax_rate) : null,
@@ -304,6 +306,251 @@ router.put(
       invalidateBusinessTenantCache(req.businessId);
       const updated = await queryOne('SELECT * FROM businesses WHERE id = ?', [req.businessId]);
       res.json({ business: updated, message: 'Business settings saved' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Guided Business Onboarding Progress & Completion Gate
+router.get('/businesses/current/onboarding', authenticate, requireBusiness, async (req, res, next) => {
+  try {
+    const [settings, mainBranch, counts] = await Promise.all([
+      queryOne('SELECT * FROM business_settings WHERE business_id = ?', [req.businessId]),
+      queryOne('SELECT * FROM branches WHERE business_id = ? ORDER BY is_main DESC, id ASC LIMIT 1', [req.businessId]),
+      queryOne(
+        `SELECT
+           (SELECT COUNT(*) FROM branches WHERE business_id = ? AND is_active = 1) AS branch_count,
+           (SELECT COUNT(*) FROM products WHERE business_id = ? AND status != 'archived') AS product_count,
+           (SELECT COUNT(*) FROM categories WHERE business_id = ?) AS category_count`,
+        [req.businessId, req.businessId, req.businessId]
+      ),
+    ]);
+
+    let steps = {};
+    try {
+      steps = req.business.setup_steps_json ? JSON.parse(req.business.setup_steps_json) : {};
+    } catch {
+      steps = {};
+    }
+
+    const identityComplete = Boolean(
+      req.business.name &&
+      req.business.category &&
+      req.business.phone &&
+      req.business.physical_address &&
+      req.business.district
+    );
+    const branchComplete = Boolean(mainBranch && mainBranch.name && mainBranch.address);
+    const financeComplete = Boolean(req.business.currency_code && settings?.receipt_header);
+    const readinessComplete = Boolean(steps.readiness) || Boolean(req.business.setup_completed);
+
+    res.json({
+      setup_completed: Boolean(req.business.setup_completed),
+      business: req.business,
+      settings,
+      mainBranch,
+      counts: counts || { branch_count: 0, product_count: 0, category_count: 0 },
+      steps: {
+        identity: Boolean(steps.identity ?? identityComplete),
+        branch: Boolean(steps.branch ?? branchComplete),
+        finance: Boolean(steps.finance ?? financeComplete),
+        readiness: readinessComplete,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch(
+  '/businesses/current/onboarding',
+  authenticate,
+  requireBusiness,
+  requirePermission('settings.manage'),
+  async (req, res, next) => {
+    try {
+      const { step, data = {}, complete = false } = req.body;
+      let steps = {};
+      try {
+        steps = req.business.setup_steps_json ? JSON.parse(req.business.setup_steps_json) : {};
+      } catch {
+        steps = {};
+      }
+
+      if (step === 'identity') {
+        const {
+          name,
+          category,
+          description,
+          phone,
+          phone_on_whatsapp,
+          country,
+          province,
+          district,
+          physical_address,
+          operating_hours,
+        } = data;
+        if (!String(name || req.business.name || '').trim() || !String(physical_address || req.business.physical_address || '').trim()) {
+          return res.status(422).json({ error: 'Business name and physical address are required in Step 1.' });
+        }
+        await execute(
+          `UPDATE businesses SET
+             name = COALESCE(?, name),
+             category = COALESCE(?, category),
+             description = COALESCE(?, description),
+             phone = COALESCE(?, phone),
+             phone_on_whatsapp = COALESCE(?, phone_on_whatsapp),
+             country = COALESCE(?, country),
+             province = COALESCE(?, province),
+             district = COALESCE(?, district),
+             physical_address = COALESCE(?, physical_address),
+             operating_hours = COALESCE(?, operating_hours),
+             updated_at = datetime('now')
+           WHERE id = ?`,
+          [
+            name?.trim() || null,
+            category?.trim() || null,
+            description !== undefined ? description : null,
+            phone?.trim() || null,
+            phone_on_whatsapp !== undefined ? (phone_on_whatsapp ? 1 : 0) : null,
+            country?.trim() || null,
+            province?.trim() || null,
+            district?.trim() || null,
+            physical_address?.trim() || null,
+            operating_hours !== undefined ? operating_hours : null,
+            req.businessId,
+          ]
+        );
+        steps.identity = true;
+      } else if (step === 'branch') {
+        const { branch_name, branch_address, branch_phone, branch_district, branch_province } = data;
+        const mainBranch = await queryOne(
+          'SELECT id FROM branches WHERE business_id = ? ORDER BY is_main DESC, id ASC LIMIT 1',
+          [req.businessId]
+        );
+        if (!mainBranch) {
+          return res.status(400).json({ error: 'Main branch record was not found.' });
+        }
+        if (!String(branch_name || '').trim() || !String(branch_address || '').trim()) {
+          return res.status(422).json({ error: 'Main branch name and address are required in Step 2.' });
+        }
+        await execute(
+          `UPDATE branches SET
+             name = ?,
+             address = ?,
+             phone = COALESCE(?, phone),
+             district = COALESCE(?, district),
+             province = COALESCE(?, province)
+           WHERE id = ? AND business_id = ?`,
+          [
+            branch_name.trim(),
+            branch_address.trim(),
+            branch_phone?.trim() || null,
+            branch_district?.trim() || null,
+            branch_province?.trim() || null,
+            mainBranch.id,
+            req.businessId,
+          ]
+        );
+        steps.branch = true;
+      } else if (step === 'finance') {
+        const {
+          currency_code,
+          timezone,
+          tax_enabled,
+          default_tax_rate,
+          tax_identification_number,
+          receipt_header,
+          receipt_footer,
+          enabled_payment_methods,
+          language,
+        } = data;
+        if (!String(currency_code || req.business.currency_code || '').trim()) {
+          return res.status(422).json({ error: 'Currency code is required in Step 3.' });
+        }
+        await execute(
+          `UPDATE businesses SET
+             currency_code = COALESCE(?, currency_code),
+             timezone = COALESCE(?, timezone),
+             tax_enabled = COALESCE(?, tax_enabled),
+             default_tax_rate = COALESCE(?, default_tax_rate),
+             tax_identification_number = COALESCE(?, tax_identification_number),
+             updated_at = datetime('now')
+           WHERE id = ?`,
+          [
+            currency_code?.trim().toUpperCase() || null,
+            timezone?.trim() || null,
+            tax_enabled !== undefined ? (tax_enabled ? 1 : 0) : null,
+            default_tax_rate !== undefined && default_tax_rate !== '' ? Number(default_tax_rate) : null,
+            tax_identification_number !== undefined ? tax_identification_number : null,
+            req.businessId,
+          ]
+        );
+        await execute(
+          `UPDATE business_settings SET
+             language = COALESCE(?, language),
+             receipt_header = COALESCE(?, receipt_header),
+             receipt_footer = COALESCE(?, receipt_footer),
+             enabled_payment_methods = COALESCE(?, enabled_payment_methods),
+             updated_at = datetime('now')
+           WHERE business_id = ?`,
+          [
+            language || null,
+            receipt_header !== undefined ? receipt_header : null,
+            receipt_footer !== undefined ? receipt_footer : null,
+            Array.isArray(enabled_payment_methods) && enabled_payment_methods.length > 0
+              ? JSON.stringify(enabled_payment_methods)
+              : null,
+            req.businessId,
+          ]
+        );
+        steps.finance = true;
+      } else if (step === 'readiness') {
+        const { initial_category } = data;
+        if (initial_category && String(initial_category).trim()) {
+          const existingCat = await queryOne(
+            'SELECT id FROM categories WHERE business_id = ? AND name = ?',
+            [req.businessId, String(initial_category).trim()]
+          );
+          if (!existingCat) {
+            await execute('INSERT INTO categories (business_id, name, description) VALUES (?, ?, ?)', [
+              req.businessId,
+              String(initial_category).trim(),
+              'Initial category added during onboarding',
+            ]);
+          }
+        }
+        steps.readiness = true;
+      }
+
+      const allCompleted = Boolean(complete || (steps.identity && steps.branch && steps.finance && steps.readiness));
+      if (complete && (!steps.identity || !steps.branch || !steps.finance)) {
+        return res.status(422).json({ error: 'Please complete Steps 1, 2, and 3 before finishing business setup.' });
+      }
+
+      await execute(
+        `UPDATE businesses SET setup_steps_json = ?, setup_completed = ?, updated_at = datetime('now') WHERE id = ?`,
+        [JSON.stringify(steps), allCompleted ? 1 : req.business.setup_completed ? 1 : 0, req.businessId]
+      );
+
+      invalidatePrefix('public:businesses:');
+      invalidateBusinessTenantCache(req.businessId);
+      await logAudit({
+        businessId: req.businessId,
+        userId: req.user.id,
+        action: allCompleted ? 'business.onboarding_completed' : `business.onboarding_step_${step || 'update'}`,
+        entityType: 'business',
+        entityId: req.businessId,
+      });
+
+      const updated = await queryOne('SELECT * FROM businesses WHERE id = ?', [req.businessId]);
+      res.json({
+        setup_completed: Boolean(updated.setup_completed),
+        steps,
+        business: updated,
+        message: allCompleted ? 'Business setup completed! Workspace unlocked.' : 'Setup progress saved.',
+      });
     } catch (err) {
       next(err);
     }
@@ -464,6 +711,7 @@ router.get('/members', authenticate, requireBusiness, requirePermission('employe
   try {
     const members = await query(
       `SELECT bm.*, u.full_name, u.email, u.phone, u.avatar_url, u.last_login_at,
+              COALESCE(u.whatsapp_available, 0) AS whatsapp_available,
               r.code AS role_code, r.name AS role_name, b.name AS branch_name,
               (SELECT COUNT(*) FROM sales s WHERE s.business_id = bm.business_id AND s.cashier_user_id = bm.user_id) AS sales_count,
               (SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s WHERE s.business_id = bm.business_id AND s.cashier_user_id = bm.user_id AND s.sale_status NOT IN ('cancelled', 'refunded')) AS total_sales_amount

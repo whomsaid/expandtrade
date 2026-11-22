@@ -6,12 +6,15 @@ export default function BrandLogo({
   textClassName = '',
   imgClassName = 'h-8 w-auto max-w-[140px] object-contain shrink-0',
   showWordmarkWithImage = true,
+  compactBrand = true,
+  inverted = false,
 }) {
   const { config } = usePlatformConfig();
   const [imgFailed, setImgFailed] = useState(false);
 
   const logoUrl = (config?.platform_logo_url || '').trim();
   const platformName = (config?.platform_name || 'BizTrade Africa').trim();
+  const displayMark = compactBrand ? 'BTA' : platformName;
 
   useEffect(() => {
     setImgFailed(false);
@@ -21,7 +24,10 @@ export default function BrandLogo({
 
   if (hasValidLogo) {
     return (
-      <span className={`inline-flex items-center gap-2.5 whitespace-nowrap shrink-0 ${className}`}>
+      <span
+        title={platformName}
+        className={`inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${className}`}
+      >
         <img
           src={logoUrl}
           alt={platformName}
@@ -31,7 +37,7 @@ export default function BrandLogo({
         />
         {showWordmarkWithImage && (
           <span className={`font-bold tracking-tight whitespace-nowrap ${textClassName}`}>
-            {platformName}
+            {displayMark}
           </span>
         )}
       </span>
@@ -39,8 +45,23 @@ export default function BrandLogo({
   }
 
   return (
-    <span className={`inline-flex items-center font-bold tracking-tight whitespace-nowrap shrink-0 ${textClassName} ${className}`}>
-      {platformName}
+    <span
+      title={platformName}
+      className={`inline-flex items-center gap-2 font-bold tracking-tight whitespace-nowrap shrink-0 ${className}`}
+    >
+      {compactBrand ? (
+        <span
+          className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md text-sm font-extrabold tracking-tight ${
+            inverted
+              ? 'bg-sky-600 text-white'
+              : 'bg-[#0B192C] dark:bg-sky-600 text-white'
+          }`}
+        >
+          BTA
+        </span>
+      ) : (
+        <span className={textClassName}>{platformName}</span>
+      )}
     </span>
   );
 }

@@ -4,10 +4,14 @@ import { useTranslation } from 'react-i18next';
 import {
   Activity,
   Building2,
+  CheckCircle2,
   CreditCard,
+  Database,
+  Download,
   Image as ImageIcon,
   KeyRound,
   LifeBuoy,
+  Play,
   Plus,
   RefreshCw,
   Settings,
@@ -22,7 +26,7 @@ import { usePlatformConfig } from '../../context/PlatformConfigContext.jsx';
 import ProfilePhotoUploader from '../../components/ProfilePhotoUploader.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
-import { AFRICAN_COUNTRIES, BUSINESS_CATEGORIES, formatDate, formatMoney } from '../../utils/format.js';
+import { AFRICAN_COUNTRIES, BUSINESS_CATEGORIES, formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
 
 const TABS = [
   { id: 'activities', labelKey: 'superAdmin.tabActivities', icon: Activity },
@@ -30,6 +34,7 @@ const TABS = [
   { id: 'users', labelKey: 'superAdmin.tabUsers', icon: Users },
   { id: 'plans', labelKey: 'superAdmin.tabPlans', icon: CreditCard },
   { id: 'support', labelKey: 'superAdmin.tabSupport', icon: LifeBuoy },
+  { id: 'monitoring', labelKey: 'superAdmin.tabMonitoring', icon: CheckCircle2 },
   { id: 'settings', labelKey: 'superAdmin.tabSettings', icon: Settings },
   { id: 'credentials', labelKey: 'superAdmin.tabCredentials', icon: KeyRound },
 ];
@@ -136,6 +141,8 @@ export default function SuperAdminPage() {
     password: '',
     admin_level: 'super_admin',
   });
+  const [monitoring, setMonitoring] = useState(null);
+  const [loadingMonitoring, setLoadingMonitoring] = useState(false);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -150,9 +157,27 @@ export default function SuperAdminPage() {
     }
   }, []);
 
+  const loadMonitoring = useCallback(async () => {
+    setLoadingMonitoring(true);
+    try {
+      const res = await api.get('/admin/monitoring/overview');
+      setMonitoring(res.data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingMonitoring(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadOverview();
   }, [loadOverview]);
+
+  useEffect(() => {
+    if (tab === 'monitoring') {
+      loadMonitoring();
+    }
+  }, [tab, loadMonitoring]);
 
   useEffect(() => {
     if (user) {
@@ -650,6 +675,62 @@ export default function SuperAdminPage() {
       setNewAdmin({ full_name: '', email: '', phone: '+250', password: '', admin_level: 'super_admin' });
       showFlash(res.data.message);
       await loadOverview();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleRunVerification = async () => {
+    if (busyAction) return;
+    setBusyAction('run-verification');
+    setError('');
+    try {
+      const res = await api.post('/admin/monitoring/run');
+      const r = res.data.result;
+      showFlash(t('superAdmin.qaRunCompleted', { passed: r.passed_count, total: r.total_count, avg: r.avg_response_ms }));
+      await loadMonitoring();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleResolveMonitoringEvent = async (eventId) => {
+    if (busyAction) return;
+    setBusyAction(`resolve-${eventId}`);
+    setError('');
+    try {
+      const res = await api.patch(`/admin/monitoring/events/${eventId}/resolve`);
+      showFlash(res.data.message);
+      await loadMonitoring();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    if (busyAction) return;
+    setBusyAction('download-backup');
+    setError('');
+    try {
+      const res = await api.get('/admin/backup', { responseType: 'blob' });
+      const blobUrl = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `bta-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      showFlash(t('superAdmin.backupDownloadedMsg'));
+      if (tab === 'monitoring') {
+        await loadMonitoring();
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1370,7 +1451,164 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* TAB 6: Platform Settings */}
+      {/* TAB 6: Monitoring, Verification Register & Backup */}
+      {tab === 'monitoring' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-bold text-[#0B192C] dark:text-slate-100">{t('superAdmin.monitoringHeading')}</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('superAdmin.monitoringDesc')}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={Boolean(busyAction)}
+                onClick={handleRunVerification}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50 whitespace-nowrap shrink-0"
+              >
+                <Play className="w-3.5 h-3.5" />
+                {busyAction === 'run-verification' ? t('superAdmin.runningVerificationBtn') : t('superAdmin.runVerificationBtn')}
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(busyAction)}
+                onClick={handleDownloadBackup}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 whitespace-nowrap shrink-0"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {busyAction === 'download-backup' ? t('superAdmin.exportingBackupBtn') : t('superAdmin.downloadBackupBtn')}
+              </button>
+            </div>
+          </div>
+
+          {loadingMonitoring && !monitoring ? (
+            <div className="text-xs text-slate-500 dark:text-slate-400 py-6">{t('superAdmin.loadingMonitoring')}</div>
+          ) : monitoring ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1"><Database className="w-3 h-3" /> {t('superAdmin.healthDbEngine')}</div>
+                  <div className="text-sm font-bold uppercase text-slate-900 dark:text-slate-100 mt-1">{monitoring.systemHealth?.dialect || 'sqlite'}</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('superAdmin.healthSmtpStatus')}</div>
+                  <div className={`text-sm font-bold mt-1 ${monitoring.systemHealth?.smtpConfigured ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                    {monitoring.systemHealth?.smtpConfigured ? t('superAdmin.smtpConfigured') : t('superAdmin.smtpMissing')}
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('superAdmin.healthMemory')}</div>
+                  <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100 mt-1">{monitoring.systemHealth?.memoryRssMb || 0} MB</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('superAdmin.healthUptime')}</div>
+                  <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100 mt-1">{monitoring.systemHealth?.uptimeSeconds || 0}s</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('superAdmin.healthSecurityAlerts')}</div>
+                  <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100 mt-1">{monitoring.stats?.security_alerts || 0}</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('superAdmin.healthFailedLogins')}</div>
+                  <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100 mt-1">{monitoring.stats?.failed_logins_total || 0}</div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {t('superAdmin.requirementsRegisterTitle')}
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                    <tr>
+                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqId')}</th>
+                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqCategory')}</th>
+                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqTitle')}</th>
+                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqStatus')}</th>
+                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqVerifiedAt')}</th>
+                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqEvidence')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {(monitoring.requirements || []).map((req) => (
+                      <tr key={req.requirement_id}>
+                        <td className="py-2.5 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{req.requirement_id}</td>
+                        <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">{req.module}</td>
+                        <td className="py-2.5 px-4 font-medium text-slate-900 dark:text-slate-100">{req.title}</td>
+                        <td className="py-2.5 px-4"><StatusBadge status={req.status} /></td>
+                        <td className="py-2.5 px-4 tabular-nums text-slate-500 dark:text-slate-400">
+                          {req.last_verified_at ? formatDateTime(req.last_verified_at) : '—'}
+                        </td>
+                        <td className="py-2.5 px-4 text-slate-600 dark:text-slate-300 max-w-md">{req.evidence || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.recentRunsTitle')}</h3>
+                  {(monitoring.recentRuns || []).length === 0 ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('superAdmin.noRunsYet')}</p>
+                  ) : (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-80 overflow-y-auto">
+                      {monitoring.recentRuns.map((run) => (
+                        <div key={run.id} className="py-2.5 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+                              {run.passed_count}/{run.total_count} {t('superAdmin.checksPassedLabel')} · {run.avg_response_ms}ms
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                              {run.trigger_type} · {formatDateTime(run.created_at)}
+                            </div>
+                          </div>
+                          <StatusBadge status={run.overall_status} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.monitoringEventsTitle')}</h3>
+                  {(monitoring.recentEvents || []).length === 0 ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('superAdmin.noMonitoringEvents')}</p>
+                  ) : (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-80 overflow-y-auto">
+                      {monitoring.recentEvents.map((ev) => (
+                        <div key={ev.id} className="py-2.5 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 dark:text-slate-100">
+                              [{ev.severity.toUpperCase()}] {ev.module}
+                            </div>
+                            <div className="text-slate-600 dark:text-slate-300 mt-0.5">{ev.message}</div>
+                            <div className="text-[11px] text-slate-400 tabular-nums mt-0.5">{formatDateTime(ev.created_at)}</div>
+                          </div>
+                          {ev.resolved ? (
+                            <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold shrink-0">{t('superAdmin.resolvedLabel')}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={Boolean(busyAction)}
+                              onClick={() => handleResolveMonitoringEvent(ev.id)}
+                              className="px-2.5 py-1 text-[11px] font-semibold border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
+                            >
+                              {t('superAdmin.resolveBtn')}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {/* TAB 7: Platform Settings */}
       {tab === 'settings' && (
         <div className="space-y-6 max-w-4xl">
           {/* Official Platform Logo Management (Super Admin Exclusively) */}

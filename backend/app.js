@@ -17,7 +17,8 @@ import videoRoutes from './routes/videoRoutes.js';
 import recruitmentRoutes from './routes/recruitmentRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
-import whatsappRoutes from './routes/whatsappRoutes.js';
+import monitoringRoutes from './routes/monitoringRoutes.js';
+import { recordMonitoringEvent } from './services/monitoringService.js';
 
 export function createBackendApp() {
   const app = express();
@@ -47,23 +48,36 @@ export function createBackendApp() {
       : { origin: true, credentials: true };
 
   app.use(cors(corsOptions));
-  app.use(
-    express.json({
-      limit: '5mb',
-      verify(req, _res, buf) {
-        if (req.originalUrl.startsWith('/api/whatsapp/webhook')) {
-          req.rawBody = buf;
-        }
-      },
-    })
-  );
+  app.use(express.json({ limit: '5mb' }));
   app.use(express.urlencoded({ extended: true }));
 
   app.use('/api', (req, res, next) => {
+    const start = performance.now();
     if (req.path.startsWith('/auth') || req.headers.authorization || req.headers['x-business-id']) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.setHeader('Pragma', 'no-cache');
     }
+    res.on('finish', () => {
+      const durationMs = Math.round((performance.now() - start) * 100) / 100;
+      if (durationMs > 2500 && !req.path.startsWith('/ads/videos/uploads')) {
+        void recordMonitoringEvent({
+          severity: 'warning',
+          category: 'performance',
+          module: req.path,
+          message: `Slow API response (${durationMs}ms) on ${req.method} ${req.originalUrl}`,
+          meta: { statusCode: res.statusCode, durationMs },
+        });
+      }
+      if (res.statusCode === 403 && req.path !== '/auth/me') {
+        void recordMonitoringEvent({
+          severity: 'info',
+          category: 'security',
+          module: req.path,
+          message: `Access denied (403) on ${req.method} ${req.path}`,
+          meta: { ip: req.ip },
+        });
+      }
+    });
     next();
   });
 
@@ -81,8 +95,7 @@ export function createBackendApp() {
     legacyHeaders: false,
     skip: (req) =>
       req.path.startsWith('/ads/videos/uploads') ||
-      req.path.startsWith('/jobs/') ||
-      req.path.startsWith('/whatsapp/webhook'),
+      req.path.startsWith('/jobs/'),
   });
 
   app.use('/uploads', express.static(path.resolve(process.cwd(), 'backend', 'uploads'), { maxAge: '7d' }));
@@ -97,13 +110,12 @@ export function createBackendApp() {
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      res.status(500).json({ status: 'error', error: err.message });
+      res.status(500).json({ status: 'error', error: 'Service temporarily unavailable' });
     }
   });
 
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api', apiLimiter);
-  app.use('/api', whatsappRoutes);
   app.use('/api', jobRoutes);
   app.use('/api', payrollRoutes);
   app.use('/api', businessRoutes);
@@ -114,6 +126,7 @@ export function createBackendApp() {
   app.use('/api', customerRoutes);
   app.use('/api', videoRoutes);
   app.use('/api', recruitmentRoutes);
+  app.use('/api', monitoringRoutes);
 
   app.use('/api/*', (_req, res) => {
     res.status(404).json({ error: 'API endpoint not found' });

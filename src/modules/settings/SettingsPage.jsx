@@ -48,7 +48,7 @@ export default function SettingsPage() {
       activity_tracking: user?.privacy_settings?.activity_tracking !== false,
     },
   });
-  const [whatsappOptIn, setWhatsappOptIn] = useState(Boolean(user?.whatsapp_opt_in));
+  const [whatsappAvailable, setWhatsappAvailable] = useState(Boolean(user?.whatsapp_available));
   const [emailChange, setEmailChange] = useState({
     open: false,
     step: 'request',
@@ -85,7 +85,7 @@ export default function SettingsPage() {
         activity_tracking: user.privacy_settings?.activity_tracking !== false,
       },
     });
-    setWhatsappOptIn(Boolean(user.whatsapp_opt_in));
+    setWhatsappAvailable(Boolean(user.whatsapp_available));
     setDashPrefs({
       ...DEFAULT_DASHBOARD_PREFS,
       ...(user.dashboard_preferences || {}),
@@ -145,16 +145,16 @@ export default function SettingsPage() {
     }
   };
 
-  const handleToggleWhatsappConsent = async (checked) => {
+  const handleToggleWhatsappAvailability = async (checked) => {
     setError('');
     setMessage('');
-    setWhatsappOptIn(checked);
+    setWhatsappAvailable(checked);
     try {
-      const { data } = await api.patch('/auth/whatsapp-consent', { whatsapp_opt_in: checked });
+      const { data } = await api.patch('/auth/whatsapp-availability', { whatsapp_available: checked });
       await refreshMe();
       setMessage(data.message);
     } catch (err) {
-      setWhatsappOptIn(!checked);
+      setWhatsappAvailable(!checked);
       setError(err.message);
     }
   };
@@ -575,12 +575,12 @@ export default function SettingsPage() {
                     }
                   />
                 </label>
-                <label className="flex items-center justify-between py-1">
-                  <span className="text-slate-700 dark:text-slate-300">{t('whatsapp.accountConsentToggle')}</span>
+                <label className="flex items-center justify-between py-1 gap-3">
+                  <span className="text-slate-700 dark:text-slate-300">{t('whatsapp.availableOnRegisteredPhone')}</span>
                   <input
                     type="checkbox"
-                    checked={whatsappOptIn}
-                    onChange={(e) => handleToggleWhatsappConsent(e.target.checked)}
+                    checked={whatsappAvailable}
+                    onChange={(e) => handleToggleWhatsappAvailability(e.target.checked)}
                   />
                 </label>
               </div>
@@ -808,14 +808,24 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('whatsapp.businessWhatsappNumber')}</label>
-            <input
-              value={profile.whatsapp_number || ''}
-              onChange={(e) => setProfile({ ...profile, whatsapp_number: e.target.value })}
-              placeholder="+250788123456"
-              className="w-full sm:max-w-sm px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('settings.phoneNumber')}</label>
+              <input
+                value={profile.phone || ''}
+                onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                placeholder="+250788123456"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+              />
+            </div>
+            <label className="flex items-center gap-2.5 pt-5 text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={Boolean(profile.phone_on_whatsapp)}
+                onChange={(e) => setProfile({ ...profile, phone_on_whatsapp: e.target.checked })}
+              />
+              <span>{t('whatsapp.businessPhoneOnWhatsapp')}</span>
+            </label>
           </div>
 
           <button type="submit" disabled={Boolean(savingAction)} className="px-5 py-2.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60">

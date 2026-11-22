@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Camera, CheckCircle2, Lock, LogOut, Mail, MessageCircle, Smartphone } from 'lucide-react';
+import { Camera, CheckCircle2, Lock, LogOut, Mail } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../components/LanguageSelector.jsx';
 import LogoutConfirmModal from '../components/LogoutConfirmModal.jsx';
@@ -194,7 +194,7 @@ export function RegisterPage() {
     phone: '+250',
     password: '',
     confirm_password: '',
-    whatsapp_opt_in: true,
+    whatsapp_available: false,
   });
 
   const [pendingSession, setPendingSession] = useState(() =>
@@ -202,19 +202,11 @@ export function RegisterPage() {
       ? {
           pending_token: pendingFromState.pending_token,
           masked_email: pendingFromState.masked_email,
-          masked_phone: pendingFromState.masked_phone,
           channels: pendingFromState.channels || {},
         }
       : null
   );
-  const [selectedChannel, setSelectedChannel] = useState(() => {
-    const ch = pendingFromState?.channels;
-    if (ch?.email?.available) return 'email';
-    if (ch?.sms?.available) return 'sms';
-    if (ch?.whatsapp?.available) return 'whatsapp';
-    return 'email';
-  });
-  const [activeSentChannel, setActiveSentChannel] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [expiresAt, setExpiresAt] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -278,24 +270,16 @@ export function RegisterPage() {
         password: form.password,
         confirm_password: form.confirm_password,
         preferred_language: language,
-        whatsapp_opt_in: form.whatsapp_opt_in,
+        whatsapp_available: form.whatsapp_available,
       });
 
       const channels = data.channels || {};
-      const preferred =
-        (channels.email?.available && 'email') ||
-        (channels.sms?.available && 'sms') ||
-        (channels.whatsapp?.available && 'whatsapp') ||
-        'email';
-
       setPendingSession({
         pending_token: data.pending_token,
         masked_email: data.masked_email,
-        masked_phone: data.masked_phone,
         channels,
       });
-      setSelectedChannel(preferred);
-      setActiveSentChannel('');
+      setOtpSent(false);
       setOtp('');
       setExpiresAt(0);
       setSecondsLeft(0);
@@ -309,7 +293,7 @@ export function RegisterPage() {
     }
   };
 
-  const sendOtpViaChannel = async (channelToSend) => {
+  const sendEmailOtp = async () => {
     if (!pendingSession?.pending_token || sendingOtp) return;
     setError('');
     setNotice('');
@@ -317,10 +301,9 @@ export function RegisterPage() {
     try {
       const { data } = await api.post('/auth/registration/send-otp', {
         pending_token: pendingSession.pending_token,
-        channel: channelToSend,
+        channel: 'email',
       });
-      setSelectedChannel(channelToSend);
-      setActiveSentChannel(channelToSend);
+      setOtpSent(true);
       setOtp('');
       applyOtpMetadata(data, 300, 60);
       setNotice(data.message);
@@ -339,8 +322,7 @@ export function RegisterPage() {
     if (!pendingSession?.pending_token) return;
     setError('');
     setNotice('');
-    const targetChannel = activeSentChannel || selectedChannel;
-    if (!activeSentChannel) {
+    if (!otpSent) {
       setError(t('auth.sendCodeFirstHint'));
       return;
     }
@@ -352,7 +334,7 @@ export function RegisterPage() {
     try {
       const { data } = await api.post('/auth/registration/verify-otp', {
         pending_token: pendingSession.pending_token,
-        channel: targetChannel,
+        channel: 'email',
         otp_code: otp.trim(),
       });
       await completeSession(data.token, data.user, data.memberships || []);
@@ -364,31 +346,7 @@ export function RegisterPage() {
     }
   };
 
-  const channelOptions = [
-    {
-      key: 'email',
-      icon: Mail,
-      title: t('auth.channelEmailTitle'),
-      target: pendingSession?.masked_email || form.email,
-      available: Boolean(pendingSession?.channels?.email?.available),
-    },
-    {
-      key: 'sms',
-      icon: Smartphone,
-      title: t('auth.channelSmsTitle'),
-      target: pendingSession?.masked_phone || form.phone,
-      available: Boolean(pendingSession?.channels?.sms?.available),
-    },
-    {
-      key: 'whatsapp',
-      icon: MessageCircle,
-      title: t('auth.channelWhatsappTitle'),
-      target: pendingSession?.masked_phone || form.phone,
-      available: Boolean(pendingSession?.channels?.whatsapp?.available),
-    },
-  ];
-
-  const isSwitchingChannel = Boolean(activeSentChannel && selectedChannel !== activeSentChannel);
+  const emailChannelAvailable = Boolean(pendingSession?.channels?.email?.available);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -481,17 +439,17 @@ export function RegisterPage() {
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  {t('auth.passwordPolicyHint')}
+                  {t('auth.passwordPolicyHint')} · {t('auth.avatarOptionalNote', { defaultValue: 'Profile photo is optional and can be added later in Settings.' })}
                 </p>
                 <label className="flex items-start gap-2.5 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={form.whatsapp_opt_in}
-                    onChange={(e) => setForm({ ...form, whatsapp_opt_in: e.target.checked })}
+                    checked={form.whatsapp_available}
+                    onChange={(e) => setForm({ ...form, whatsapp_available: e.target.checked })}
                     className="mt-0.5 shrink-0"
                   />
                   <span className="text-slate-700 dark:text-slate-300 leading-relaxed">
-                    {t('auth.whatsappOptInLabel')}
+                    {t('auth.whatsappAvailableLabel', { defaultValue: 'My registered phone number is available on WhatsApp (so businesses can contact me via WhatsApp).' })}
                   </span>
                 </label>
                 <button
@@ -518,70 +476,49 @@ export function RegisterPage() {
           {step === 'verify' && pendingSession && (
             <>
               <div className="space-y-1">
-                <h1 className="text-lg sm:text-xl font-bold text-[#0B192C] dark:text-white">{t('auth.chooseMethodTitle')}</h1>
+                <h1 className="text-lg sm:text-xl font-bold text-[#0B192C] dark:text-white">
+                  {t('auth.emailOtpVerifyTitle', { defaultValue: 'Verify Your Email Address' })}
+                </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {t('auth.chooseMethodSubtitle')}
+                  {t('auth.emailOtpVerifySubtitle', { defaultValue: 'Request a 6-digit verification code sent exclusively to your registered email address.' })}
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {channelOptions.map((opt) => {
-                  const Icon = opt.icon;
-                  const isSelected = selectedChannel === opt.key;
-                  const isSent = activeSentChannel === opt.key;
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      disabled={!opt.available}
-                      onClick={() => {
-                        setError('');
-                        setSelectedChannel(opt.key);
-                      }}
-                      className={`text-left p-3 rounded-lg border transition-colors ${
-                        !opt.available
-                          ? 'opacity-55 cursor-not-allowed bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
-                          : isSelected
-                            ? 'border-sky-600 bg-sky-50/70 dark:bg-sky-950/50 dark:border-sky-500'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <Icon className="w-4 h-4 text-[#0B192C] dark:text-sky-400 shrink-0" />
-                        {isSent && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
-                      </div>
-                      <div className="text-xs font-semibold text-slate-900 dark:text-white">{opt.title}</div>
-                      <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300 truncate mt-0.5 tabular-nums">
-                        {opt.target}
-                      </div>
-                      {!opt.available && (
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                          {t('auth.channelUnavailable')}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="p-3.5 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50/70 dark:bg-sky-950/40 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Mail className="w-5 h-5 text-[#0B192C] dark:text-sky-400 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-900 dark:text-white">{t('auth.channelEmailTitle')}</div>
+                    <div className="text-xs font-mono text-slate-600 dark:text-slate-300 truncate tabular-nums">
+                      {pendingSession.masked_email || form.email}
+                    </div>
+                  </div>
+                </div>
+                {otpSent && <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
               </div>
+
+              {!emailChannelAvailable && (
+                <div className="p-3 text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  {t('auth.smtpUnavailableWarning', { defaultValue: 'Email delivery service is not configured yet. Please ask the administrator to configure SMTP credentials.' })}
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button
                   type="button"
-                  disabled={sendingOtp || !pendingSession?.channels?.[selectedChannel]?.available || (activeSentChannel === selectedChannel && resendCooldown > 0)}
-                  onClick={() => sendOtpViaChannel(selectedChannel)}
+                  disabled={sendingOtp || !emailChannelAvailable || (otpSent && resendCooldown > 0)}
+                  onClick={sendEmailOtp}
                   className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-55"
                 >
                   {sendingOtp
                     ? t('auth.sendingOtp')
-                    : isSwitchingChannel
-                      ? t('auth.switchChannelSend', { method: selectedChannel.toUpperCase() })
-                      : activeSentChannel === selectedChannel
-                        ? resendCooldown > 0
-                          ? t('auth.resendInSeconds', { seconds: resendCooldown })
-                          : t('auth.resendCode')
-                        : t('auth.sendCodeVia', { method: selectedChannel.toUpperCase() })}
+                    : otpSent
+                      ? resendCooldown > 0
+                        ? t('auth.resendInSeconds', { seconds: resendCooldown })
+                        : t('auth.resendCode')
+                      : t('auth.sendEmailOtpCode', { defaultValue: 'Send Verification Code' })}
                 </button>
-                {activeSentChannel && expiresAt > 0 && (
+                {otpSent && expiresAt > 0 && (
                   <div className="text-xs text-slate-600 dark:text-slate-300 tabular-nums">
                     {secondsLeft > 0 ? (
                       <>
@@ -600,7 +537,7 @@ export function RegisterPage() {
               {notice && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg">{notice}</div>}
               {error && <div className="p-3 text-xs font-medium text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
 
-              {activeSentChannel && (
+              {otpSent && (
                 <form onSubmit={handleVerifyOtp} className="space-y-3.5 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">

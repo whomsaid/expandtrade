@@ -73,9 +73,20 @@ export function errorHandler(err, req, res, _next) {
 
   if (status >= 500) {
     console.error('[API Error]', err);
+    import('../services/monitoringService.js')
+      .then(({ recordMonitoringEvent }) =>
+        recordMonitoringEvent({
+          severity: 'critical',
+          category: 'error',
+          module: req.path || 'api',
+          message: `Unhandled server error (${status}) on ${req.method} ${req.originalUrl}: ${String(err?.message || '').slice(0, 180)}`,
+          notifySuperAdmins: true,
+        })
+      )
+      .catch(() => {});
   }
   res.status(status).json({
-    error: status >= 500 && status !== 503 ? 'Internal server error' : message,
+    error: status >= 500 && status !== 503 ? 'Something went wrong on our end. Please try again shortly.' : message,
     ...(code ? { code } : {}),
   });
 }

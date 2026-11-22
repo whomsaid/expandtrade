@@ -6,7 +6,6 @@ import { requireBusiness, requirePermission } from '../middleware/tenant.js';
 import { cleanupMulterFiles, upload, verifyFileNonEmpty, verifyReceiptSignature } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { emitToBusiness, logAudit, notifyBusinessManagers } from '../services/auditService.js';
-import { isWhatsAppConfigured, sendWhatsAppText } from '../services/whatsappService.js';
 import { normalizePhoneE164 } from '../utils/phone.js';
 
 const router = express.Router();
@@ -23,7 +22,7 @@ router.get('/customers', authenticate, requireBusiness, requirePermission('custo
       params.push(t, t, t);
     }
     const customers = await query(
-      `SELECT c.*, u.avatar_url AS avatar_url,
+      `SELECT c.*, u.avatar_url AS avatar_url, COALESCE(u.whatsapp_available, 0) AS whatsapp_available,
               COALESCE(sc.total_orders, 0) AS total_orders
        FROM customers c
        LEFT JOIN users u ON u.id = c.user_id
@@ -54,15 +53,14 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
-      const { full_name, phone, email = '', address = '', customer_type = 'retail', notes = '', whatsapp_opt_in } = req.body;
+      const { full_name, phone, email = '', address = '', customer_type = 'retail', notes = '' } = req.body;
       const phoneCheck = normalizePhoneE164(phone);
       const safePhone = phoneCheck.valid ? phoneCheck.e164 : phone.trim();
-      const optIn = whatsapp_opt_in === true || whatsapp_opt_in === 1 || whatsapp_opt_in === 'true' ? 1 : 0;
 
       const r = await execute(
-        `INSERT INTO customers (business_id, full_name, phone, email, address, customer_type, notes, whatsapp_opt_in)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [req.businessId, full_name.trim(), safePhone, email, address, customer_type, notes, optIn]
+        `INSERT INTO customers (business_id, full_name, phone, email, address, customer_type, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [req.businessId, full_name.trim(), safePhone, email, address, customer_type, notes]
       );
       const customer = await queryOne('SELECT * FROM customers WHERE id = ?', [r.insertId]);
       res.status(201).json({ customer });
@@ -76,20 +74,17 @@ router.put('/customers/:id', authenticate, requireBusiness, requirePermission('c
   try {
     const existing = await queryOne('SELECT * FROM customers WHERE id = ? AND business_id = ?', [req.params.id, req.businessId]);
     if (!existing) return res.status(404).json({ error: 'Customer not found' });
-    const { full_name, phone, email, address, customer_type, notes, status, whatsapp_opt_in } = req.body;
+    const { full_name, phone, email, address, customer_type, notes, status } = req.body;
     const nextPhone = phone !== undefined && phone !== null
       ? (normalizePhoneE164(phone).valid ? normalizePhoneE164(phone).e164 : String(phone).trim())
       : null;
-    const nextOptIn = whatsapp_opt_in !== undefined ? (whatsapp_opt_in ? 1 : 0) : null;
     await execute(
       `UPDATE customers SET
          full_name = COALESCE(?, full_name), phone = COALESCE(?, phone), email = COALESCE(?, email),
          address = COALESCE(?, address), customer_type = COALESCE(?, customer_type),
-         notes = COALESCE(?, notes), status = COALESCE(?, status),
-         whatsapp_opt_in = COALESCE(?, whatsapp_opt_in),
-         whatsapp_opted_out_at = CASE WHEN ? = 1 THEN NULL WHEN ? = 0 THEN datetime('now') ELSE whatsapp_opted_out_at END
+         notes = COALESCE(?, notes), status = COALESCE(?, status)
        WHERE id = ? AND business_id = ?`,
-      [full_name, nextPhone, email, address, customer_type, notes, status, nextOptIn, nextOptIn, nextOptIn, req.params.id, req.businessId]
+      [full_name, nextPhone, email, address, customer_type, notes, status, req.params.id, req.businessId]
     );
     const customer = await queryOne('SELECT * FROM customers WHERE id = ?', [req.params.id]);
     res.json({ customer });
@@ -345,7 +340,8 @@ router.post('/purchases/:id/receive', authenticate, requireBusiness, requirePerm
 router.get('/orders', authenticate, requireBusiness, requirePermission('orders.view'), async (req, res, next) => {
   try {
     const orders = await query(
-      `SELECT o.*, b.name AS branch_name, u.avatar_url AS customer_avatar
+      `SELECT o.*, b.name AS branch_name, u.avatar_url AS customer_avatar,
+              COALESCE(u.whatsapp_available, 0) AS customer_whatsapp_available
        FROM orders o
        JOIN branches b ON b.id = o.branch_id
        LEFT JOIN users u ON u.id = o.customer_user_id
@@ -459,40 +455,6 @@ router.patch('/orders/:id/status', authenticate, requireBusiness, requirePermiss
         'INSERT INTO order_status_history (order_id, old_status, new_status, changed_by_user_id, note) VALUES (?, ?, ?, ?, ?)',
         [order.id, order.order_status, order_status, req.user.id, note]
       );
-
-      if (isWhatsAppConfigured() && order.customer_phone) {
-        const phoneCheck = normalizePhoneE164(order.customer_phone);
-        if (phoneCheck.valid) {
-          const custConsent = order.customer_id
-            ? await queryOne('SELECT id, whatsapp_opt_in, whatsapp_opted_out_at, has_whatsapp FROM customers WHERE id = ?', [order.customer_id])
-            : await queryOne('SELECT id, whatsapp_opt_in, whatsapp_opted_out_at, has_whatsapp FROM customers WHERE business_id = ? AND phone = ?', [req.businessId, phoneCheck.e164]);
-          if (custConsent?.whatsapp_opt_in && !custConsent?.whatsapp_opted_out_at && custConsent?.has_whatsapp !== 'no') {
-            const label = String(order_status).replaceAll('_', ' ');
-            const text = `${req.business?.name || 'BizTrade Africa'}: Order ${order.order_number} status is now "${label}".`;
-            sendWhatsAppText({ to: phoneCheck.e164, body: text })
-              .then((waRes) =>
-                execute(
-                  `INSERT INTO whatsapp_messages
-                   (business_id, customer_id, entity_type, entity_id, phone_e164, direction, message_type, body, external_message_id, status, error_code, error_message, sent_by_user_id, status_updated_at)
-                   VALUES (?, ?, 'order', ?, ?, 'outbound', 'text', ?, ?, ?, ?, ?, ?, datetime('now'))`,
-                  [
-                    req.businessId,
-                    custConsent.id,
-                    order.id,
-                    phoneCheck.e164,
-                    text,
-                    waRes.messageId || null,
-                    waRes.delivered ? 'sent' : 'failed',
-                    waRes.errorCode || null,
-                    waRes.error || null,
-                    req.user.id,
-                  ]
-                )
-              )
-              .catch(() => {});
-          }
-        }
-      }
     }
 
     emitToBusiness(req.businessId, 'order:updated', { orderId: order.id, order_status });

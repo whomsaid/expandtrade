@@ -23,10 +23,9 @@ import {
   isSmtpConfigured,
   sendMail,
 } from '../services/mailService.js';
-import { getSmsProviderStatus, isSmsConfigured, sendSmsOtp } from '../services/smsService.js';
-import { isWhatsAppConfigured, sendWhatsAppOtp } from '../services/whatsappService.js';
+import { recordMonitoringEvent } from '../services/monitoringService.js';
 import { validatePasswordStrength } from '../utils/passwordPolicy.js';
-import { maskEmail, maskPhone, normalizePhoneE164 } from '../utils/phone.js';
+import { maskEmail, normalizePhoneE164 } from '../utils/phone.js';
 
 const router = express.Router();
 
@@ -104,11 +103,8 @@ function buildPendingRegistrationToken(user) {
 }
 
 function getVerificationChannelsAvailability() {
-  const smsStatus = getSmsProviderStatus();
   return {
     email: { available: isSmtpConfigured(), label: 'Email OTP' },
-    sms: { available: isSmsConfigured(), provider: smsStatus.provider, label: 'SMS OTP' },
-    whatsapp: { available: isWhatsAppConfigured(), label: 'WhatsApp OTP' },
   };
 }
 
@@ -176,9 +172,7 @@ function formatSafeUser(user, memberships = []) {
     }),
     must_change_password: Boolean(user.must_change_password),
     is_email_verified: Boolean(user.is_email_verified),
-    is_phone_verified: Boolean(user.is_phone_verified),
-    whatsapp_opt_in: Boolean(user.whatsapp_opt_in),
-    whatsapp_opted_out_at: user.whatsapp_opted_out_at || null,
+    whatsapp_available: Boolean(user.whatsapp_available),
     is_platform_admin: Boolean(user.is_platform_admin),
     preferred_language: ['en', 'rw', 'fr'].includes(user.preferred_language) ? user.preferred_language : 'en',
     theme_preference: user.theme_preference || 'system',
@@ -194,6 +188,7 @@ async function getUserMemberships(userId, isPlatformAdmin = false) {
             bm.job_title, bm.status, b.name AS business_name, b.business_code, b.slug AS business_slug,
             b.category AS business_category, b.currency_code, b.country, b.logo_url,
             b.tax_enabled, b.default_tax_rate, b.status AS business_status,
+            b.setup_completed, b.phone AS business_phone, b.phone_on_whatsapp AS business_phone_on_whatsapp,
             r.code AS role_code, r.name AS role_name
      FROM business_members bm
      JOIN businesses b ON b.id = bm.business_id
@@ -209,7 +204,8 @@ async function getUserMemberships(userId, isPlatformAdmin = false) {
   const allBusinesses = await query(
     `SELECT id AS business_id, name AS business_name, business_code, slug AS business_slug,
             category AS business_category, currency_code, country, logo_url,
-            tax_enabled, default_tax_rate, status AS business_status
+            tax_enabled, default_tax_rate, status AS business_status,
+            setup_completed, phone AS business_phone, phone_on_whatsapp AS business_phone_on_whatsapp
      FROM businesses
      WHERE status != 'deleted' AND deleted_at IS NULL
      ORDER BY id DESC`
@@ -233,6 +229,9 @@ async function getUserMemberships(userId, isPlatformAdmin = false) {
       tax_enabled: b.tax_enabled,
       default_tax_rate: b.default_tax_rate,
       business_status: b.business_status,
+      setup_completed: b.setup_completed,
+      business_phone: b.business_phone,
+      business_phone_on_whatsapp: b.business_phone_on_whatsapp,
       role_code: 'business_owner',
       role_name: 'Super Admin Control',
     }));
@@ -287,10 +286,14 @@ router.post(
         phone,
         password,
         preferred_language,
-        whatsapp_opt_in,
+        whatsapp_available,
       } = req.body;
       const safeLang = ['en', 'rw', 'fr'].includes(preferred_language) ? preferred_language : 'en';
-      const optIn = whatsapp_opt_in === true || whatsapp_opt_in === 'true' || whatsapp_opt_in === '1' || whatsapp_opt_in === 1;
+      const isWaAvailable =
+        whatsapp_available === true ||
+        whatsapp_available === 'true' ||
+        whatsapp_available === '1' ||
+        whatsapp_available === 1;
 
       const phoneCheck = normalizePhoneE164(phone);
       if (!phoneCheck.valid) {
@@ -300,16 +303,16 @@ router.post(
       const normalizedPhone = phoneCheck.e164;
 
       const existingByEmail = await queryOne(
-        'SELECT id, email, phone, is_email_verified, is_phone_verified FROM users WHERE email = ?',
+        'SELECT id, email, phone, is_email_verified FROM users WHERE email = ?',
         [email]
       );
       if (existingByEmail) {
         if (req.file?.path) removeUploadedFile(req.file.path);
-        const alreadyVerified = Boolean(existingByEmail.is_email_verified || existingByEmail.is_phone_verified);
+        const alreadyVerified = Boolean(existingByEmail.is_email_verified);
         return res.status(409).json({
           error: alreadyVerified
             ? 'An account with this email address already exists. Please sign in instead.'
-            : 'An account with this email address already exists and is waiting for verification. Please sign in to finish verifying.',
+            : 'An account with this email address already exists and is waiting for email verification. Please sign in to finish verifying.',
           code: 'DUPLICATE_EMAIL',
         });
       }
@@ -331,9 +334,9 @@ router.post(
 
       const userId = await transaction(async (tx) => {
         const uRes = await tx.execute(
-          `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, is_phone_verified, whatsapp_opt_in, is_platform_admin, preferred_language)
-           VALUES (?, ?, ?, ?, ?, 0, 0, ?, 0, ?)`,
-          [full_name.trim(), email, normalizedPhone, avatarUrl, passwordHash, optIn ? 1 : 0, safeLang]
+          `INSERT INTO users (full_name, email, phone, avatar_url, password_hash, is_email_verified, whatsapp_available, is_platform_admin, preferred_language)
+           VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?)`,
+          [full_name.trim(), email, normalizedPhone, avatarUrl, passwordHash, isWaAvailable ? 1 : 0, safeLang]
         );
         const newUserId = uRes.insertId;
         await tx.execute('INSERT INTO customer_profiles (user_id) VALUES (?)', [newUserId]);
@@ -356,11 +359,10 @@ router.post(
         requiresVerification: true,
         pending_token: pendingToken,
         masked_email: maskEmail(email),
-        masked_phone: maskPhone(normalizedPhone),
         channels: getVerificationChannelsAvailability(),
         expiresInSeconds: OTP_TTL_MINUTES * 60,
         resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
-        message: 'Account details saved. Choose Email, SMS, or WhatsApp verification to activate your account.',
+        message: 'Account details saved. Request an Email OTP verification code to activate your account.',
       });
     } catch (err) {
       if (req.file?.path) removeUploadedFile(req.file.path);
@@ -369,18 +371,23 @@ router.post(
   }
 );
 
-// Public Customer Registration Step 2: Send or switch verification OTP channel (Email / SMS / WhatsApp)
+// Public Customer Registration Step 2: Send 6-digit Email OTP verification code
 router.post(
   '/registration/send-otp',
   otpSendLimiter,
   [
     body('pending_token').trim().notEmpty().withMessage('Registration session token is required'),
-    body('channel').trim().isIn(['email', 'sms', 'whatsapp']).withMessage('Choose email, sms, or whatsapp verification'),
+    body('channel')
+      .optional()
+      .trim()
+      .isIn(['email'])
+      .withMessage('Only Email OTP verification is supported.'),
   ],
   validateRequest,
   async (req, res, next) => {
     try {
-      const { pending_token, channel } = req.body;
+      const { pending_token } = req.body;
+      const channel = 'email';
       let decoded;
       try {
         decoded = jwt.verify(String(pending_token), env.otpSecret);
@@ -395,14 +402,14 @@ router.post(
       }
 
       const user = await queryOne(
-        `SELECT id, full_name, email, phone, is_active, is_email_verified, is_phone_verified
+        `SELECT id, full_name, email, phone, is_active, is_email_verified
          FROM users WHERE id = ?`,
         [decoded.userId]
       );
       if (!user || !user.is_active) {
         return res.status(404).json({ error: 'Pending registration account was not found.' });
       }
-      if (user.is_email_verified || user.is_phone_verified) {
+      if (user.is_email_verified) {
         return res.status(409).json({
           error: 'Your account is already verified. Please sign in to continue.',
           code: 'ALREADY_VERIFIED',
@@ -412,78 +419,46 @@ router.post(
       const cooldown = await getCooldownRemainingSeconds(user.email, 'registration', channel);
       if (cooldown > 0) {
         return res.status(429).json({
-          error: `Please wait ${cooldown} seconds before requesting another ${channel.toUpperCase()} verification code.`,
+          error: `Please wait ${cooldown} seconds before requesting another email verification code.`,
           retryAfterSeconds: cooldown,
         });
       }
 
-      // Check rapid channel switching abuse (enforce min 10 seconds between sends across different channels)
-      const lastAny = await queryOne(
-        `SELECT created_at, channel FROM otp_tokens WHERE user_id = ? AND purpose = 'registration' ORDER BY id DESC LIMIT 1`,
-        [user.id]
-      );
-      if (lastAny?.created_at && lastAny.channel !== channel) {
-        const lastMs = parseSqlUtcMs(lastAny.created_at);
-        const diffSec = Math.floor((Date.now() - lastMs) / 1000);
-        if (!Number.isNaN(lastMs) && diffSec < 10) {
-          return res.status(429).json({
-            error: `Please wait ${10 - diffSec} seconds before switching verification methods.`,
-            retryAfterSeconds: 10 - diffSec,
-          });
-        }
-      }
-
       const otpCode = generateOtpCode();
-      const otpHash = hashOtpCode(`${user.id}:${channel}:${user.email}`, 'registration', otpCode);
+      const otpHash = hashOtpCode(`${user.id}:email:${user.email}`, 'registration', otpCode);
       const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
-      const destinationMasked = channel === 'email' ? maskEmail(user.email) : maskPhone(user.phone);
+      const destinationMasked = maskEmail(user.email);
 
-      // Invalidate ALL previous unused registration OTPs (critical when switching verification methods)
+      // Invalidate any previous unused registration OTPs
       await execute(
         `UPDATE otp_tokens SET used_at = datetime('now') WHERE user_id = ? AND purpose = 'registration' AND used_at IS NULL`,
         [user.id]
       );
 
       const insertRes = await execute(
-        `INSERT INTO otp_tokens (email, phone, channel, destination_masked, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
-         VALUES (?, ?, ?, ?, ?, 'registration', ?, ?, ?, ?)`,
-        [user.email, user.phone, channel, destinationMasked, user.id, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
+        `INSERT INTO otp_tokens (email, channel, destination_masked, user_id, purpose, otp_hash, max_attempts, ip_address, expires_at)
+         VALUES (?, 'email', ?, ?, 'registration', ?, ?, ?, ?)`,
+        [user.email, destinationMasked, user.id, otpHash, OTP_MAX_ATTEMPTS, req.ip || null, expiresAt]
       );
 
-      let deliveryResult;
-      if (channel === 'email') {
-        const emailPayload = buildOtpVerificationEmail({
-          fullName: user.full_name,
-          otpCode,
-          expiresMinutes: OTP_TTL_MINUTES,
-          purposeLabel: 'account verification',
-        });
-        deliveryResult = await sendMail({
-          to: user.email,
-          subject: emailPayload.subject,
-          text: emailPayload.text,
-          html: emailPayload.html,
-        });
-      } else if (channel === 'sms') {
-        deliveryResult = await sendSmsOtp({
-          to: user.phone,
-          otpCode,
-          expiresMinutes: OTP_TTL_MINUTES,
-        });
-      } else {
-        deliveryResult = await sendWhatsAppOtp({
-          to: user.phone,
-          otpCode,
-          expiresMinutes: OTP_TTL_MINUTES,
-        });
-      }
+      const emailPayload = buildOtpVerificationEmail({
+        fullName: user.full_name,
+        otpCode,
+        expiresMinutes: OTP_TTL_MINUTES,
+        purposeLabel: 'account verification',
+      });
+      const deliveryResult = await sendMail({
+        to: user.email,
+        subject: emailPayload.subject,
+        text: emailPayload.text,
+        html: emailPayload.html,
+      });
 
       if (!deliveryResult.delivered) {
         await execute('DELETE FROM otp_tokens WHERE id = ?', [insertRes.insertId]);
-        const isClientPhoneErr = deliveryResult.reason === 'RECIPIENT_NOT_ON_WHATSAPP' || deliveryResult.reason === 'INVALID_PHONE_NUMBER';
-        return res.status(isClientPhoneErr ? 400 : 503).json({
-          error: deliveryResult.error || `Unable to deliver verification code via ${channel.toUpperCase()}. Please try another method.`,
-          code: deliveryResult.reason || `${channel.toUpperCase()}_DELIVERY_FAILED`,
+        return res.status(503).json({
+          error: deliveryResult.error || 'Unable to deliver verification email via SMTP. Please try again shortly.',
+          code: deliveryResult.reason || 'EMAIL_DELIVERY_FAILED',
         });
       }
 
@@ -496,11 +471,11 @@ router.post(
 
       res.json({
         sent: true,
-        channel,
+        channel: 'email',
         destination_masked: destinationMasked,
         expiresInSeconds: OTP_TTL_MINUTES * 60,
         resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
-        message: `A 6-digit verification code has been sent via ${channel === 'email' ? 'Email' : channel === 'sms' ? 'SMS' : 'WhatsApp'} to ${destinationMasked}.`,
+        message: `A 6-digit verification code has been sent via Email to ${destinationMasked}.`,
       });
     } catch (err) {
       next(err);
@@ -508,19 +483,20 @@ router.post(
   }
 );
 
-// Public Customer Registration Step 3: Verify 6-digit OTP and activate account
+// Public Customer Registration Step 3: Verify 6-digit Email OTP and activate account
 router.post(
   '/registration/verify-otp',
   otpVerifyLimiter,
   [
     body('pending_token').trim().notEmpty().withMessage('Registration session token is required'),
-    body('channel').trim().isIn(['email', 'sms', 'whatsapp']).withMessage('Valid verification channel is required'),
+    body('channel').optional().trim().isIn(['email']).withMessage('Only Email OTP verification is supported.'),
     body('otp_code').trim().matches(/^\d{6}$/).withMessage('Enter a valid 6-digit verification code'),
   ],
   validateRequest,
   async (req, res, next) => {
     try {
-      const { pending_token, channel, otp_code } = req.body;
+      const { pending_token, otp_code } = req.body;
+      const channel = 'email';
       let decoded;
       try {
         decoded = jwt.verify(String(pending_token), env.otpSecret);
@@ -536,7 +512,7 @@ router.post(
 
       const user = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                must_change_password, is_email_verified, whatsapp_available,
                 is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [decoded.userId]
@@ -547,13 +523,13 @@ router.post(
 
       const record = await queryOne(
         `SELECT * FROM otp_tokens
-         WHERE user_id = ? AND purpose = 'registration' AND channel = ? AND used_at IS NULL
+         WHERE user_id = ? AND purpose = 'registration' AND channel = 'email' AND used_at IS NULL
          ORDER BY id DESC LIMIT 1`,
-        [user.id, channel]
+        [user.id]
       );
       if (!record) {
         return res.status(400).json({
-          error: 'No active verification code found for this method. Please request a new code.',
+          error: 'No active email verification code found. Please request a new code.',
         });
       }
 
@@ -571,7 +547,7 @@ router.post(
         });
       }
 
-      const valid = verifyOtpHash(`${user.id}:${channel}:${user.email}`, 'registration', otp_code, record.otp_hash);
+      const valid = verifyOtpHash(`${user.id}:email:${user.email}`, 'registration', otp_code, record.otp_hash);
       if (!valid) {
         const nextAttempts = Number(record.attempts || 0) + 1;
         const maxAttempts = Number(record.max_attempts || OTP_MAX_ATTEMPTS);
@@ -595,29 +571,15 @@ router.post(
           `UPDATE otp_tokens SET used_at = datetime('now') WHERE user_id = ? AND purpose = 'registration' AND used_at IS NULL`,
           [user.id]
         );
-        if (channel === 'email') {
-          await tx.execute(
-            `UPDATE users SET is_email_verified = 1, updated_at = datetime('now') WHERE id = ?`,
-            [user.id]
-          );
-        } else if (channel === 'sms') {
-          await tx.execute(
-            `UPDATE users SET is_phone_verified = 1, updated_at = datetime('now') WHERE id = ?`,
-            [user.id]
-          );
-        } else {
-          await tx.execute(
-            `UPDATE users SET is_phone_verified = 1, whatsapp_opt_in = 1, whatsapp_opted_out_at = NULL, updated_at = datetime('now') WHERE id = ?`,
-            [user.id]
-          );
-        }
+        await tx.execute(
+          `UPDATE users SET is_email_verified = 1, updated_at = datetime('now') WHERE id = ?`,
+          [user.id]
+        );
       });
 
       const refreshedUser = {
         ...user,
-        is_email_verified: channel === 'email' ? 1 : user.is_email_verified,
-        is_phone_verified: channel === 'sms' || channel === 'whatsapp' ? 1 : user.is_phone_verified,
-        whatsapp_opt_in: channel === 'whatsapp' ? 1 : user.whatsapp_opt_in,
+        is_email_verified: 1,
       };
       const memberships = await getUserMemberships(user.id, Boolean(user.is_platform_admin));
       const { token, jti } = signAccessToken(refreshedUser);
@@ -625,7 +587,7 @@ router.post(
 
       await logAudit({
         userId: user.id,
-        action: `customer.verified_${channel}`,
+        action: 'customer.verified_email',
         entityType: 'user',
         entityId: user.id,
         ipAddress: req.ip,
@@ -634,7 +596,7 @@ router.post(
       res.json({
         verified: true,
         channel,
-        message: 'Your account has been verified and activated.',
+        message: 'Your email has been verified and your account is now active.',
         token,
         user: formatSafeUser(refreshedUser, memberships),
         memberships,
@@ -658,7 +620,7 @@ router.post(
       const { email, otp_code } = req.body;
       const user = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_active, is_platform_admin, preferred_language, theme_preference
+                must_change_password, is_email_verified, whatsapp_available, is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE email = ?`,
         [email]
       );
@@ -918,7 +880,7 @@ router.post(
 
         const user = await queryOne(
           `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                  must_change_password, is_email_verified, is_platform_admin, preferred_language, theme_preference
+                  must_change_password, is_email_verified, whatsapp_available, is_platform_admin, preferred_language, theme_preference
            FROM users WHERE id = ?`,
           [bizAdmin.user_id]
         );
@@ -1007,7 +969,7 @@ router.post(
 
       const user = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_platform_admin, preferred_language, theme_preference
+                must_change_password, is_email_verified, whatsapp_available, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [activatedUserId]
       );
@@ -1051,6 +1013,13 @@ router.post(
         [email, lockoutWindow]
       );
       if (Number(recentFailed?.cnt || 0) >= 8) {
+        recordMonitoringEvent({
+          eventType: 'security_alert',
+          severity: 'warning',
+          source: 'auth:login',
+          title: `Brute-force lockout triggered for ${maskEmail(email)}`,
+          details: `Account exceeded 8 failed login attempts within 15 minutes from IP ${req.ip}.`,
+        }).catch(() => {});
         return res.status(429).json({
           error: 'Too many failed sign-in attempts for this account. Please wait 15 minutes or reset your password.',
           code: 'ACCOUNT_LOGIN_LOCKED',
@@ -1072,13 +1041,12 @@ router.post(
       }
 
       const memberships = await getUserMemberships(user.id, Boolean(user.is_platform_admin));
-      if (!user.is_platform_admin && !user.is_email_verified && !user.is_phone_verified && memberships.length === 0) {
+      if (!user.is_platform_admin && !user.is_email_verified && memberships.length === 0) {
         return res.status(403).json({
-          error: 'Your account still needs OTP verification before you can sign in.',
+          error: 'Your account still needs Email OTP verification before you can sign in.',
           code: 'ACCOUNT_VERIFICATION_REQUIRED',
           pending_token: buildPendingRegistrationToken(user),
           masked_email: maskEmail(user.email),
-          masked_phone: maskPhone(user.phone),
           channels: getVerificationChannelsAvailability(),
         });
       }
@@ -1169,7 +1137,7 @@ router.post(
 
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                must_change_password, is_email_verified, whatsapp_available,
                 is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
@@ -1207,7 +1175,7 @@ router.delete('/avatar', authenticate, async (req, res, next) => {
 
     const updated = await queryOne(
       `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-              must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+              must_change_password, is_email_verified, whatsapp_available,
               is_active, is_platform_admin, preferred_language, theme_preference
        FROM users WHERE id = ?`,
       [req.user.id]
@@ -1391,7 +1359,7 @@ router.post(
 
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                must_change_password, is_email_verified, whatsapp_available,
                 is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
@@ -1421,7 +1389,23 @@ router.put(
   validateRequest,
   async (req, res, next) => {
     try {
-      const { full_name, phone, bio, location, privacy_settings, preferred_language } = req.body;
+      const { full_name, phone, bio, location, privacy_settings, preferred_language, whatsapp_available } = req.body;
+      let normalizedPhone = null;
+      if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+        const phoneCheck = normalizePhoneE164(phone);
+        if (!phoneCheck.valid) {
+          return res.status(422).json({ error: phoneCheck.error, code: 'INVALID_PHONE_NUMBER' });
+        }
+        const conflict = await queryOne('SELECT id FROM users WHERE phone = ? AND id != ?', [
+          phoneCheck.e164,
+          req.user.id,
+        ]);
+        if (conflict) {
+          return res.status(409).json({ error: 'This phone number is already used by another account.' });
+        }
+        normalizedPhone = phoneCheck.e164;
+      }
+
       const currentPrivacy = parseJsonSafe(req.user.privacy_settings_json, {
         profile_visibility: 'workspace',
         show_online_status: true,
@@ -1437,6 +1421,8 @@ router.put(
           }
         : currentPrivacy;
 
+      const waFlag = whatsapp_available !== undefined ? (whatsapp_available ? 1 : 0) : null;
+
       await execute(
         `UPDATE users
          SET full_name = COALESCE(?, full_name),
@@ -1445,15 +1431,17 @@ router.put(
              location = ?,
              privacy_settings_json = ?,
              preferred_language = COALESCE(?, preferred_language),
+             whatsapp_available = COALESCE(?, whatsapp_available),
              updated_at = datetime('now')
          WHERE id = ?`,
         [
           full_name?.trim() || null,
-          phone?.trim() ? (normalizePhoneE164(phone).valid ? normalizePhoneE164(phone).e164 : phone.trim()) : null,
+          normalizedPhone,
           bio !== undefined ? String(bio).trim() : req.user.bio || '',
           location !== undefined ? String(location).trim() : req.user.location || '',
           JSON.stringify(nextPrivacy),
           preferred_language && ['en', 'rw', 'fr'].includes(preferred_language) ? preferred_language : null,
+          waFlag,
           req.user.id,
         ]
       );
@@ -1461,7 +1449,7 @@ router.put(
 
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                must_change_password, is_email_verified, whatsapp_available,
                 is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
@@ -1521,7 +1509,7 @@ router.post(
 
       const otpCode = generateOtpCode();
       const otpHash = hashOtpCode(new_email, 'email_change', otpCode);
-      const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
       await execute(
         `UPDATE otp_tokens SET used_at = datetime('now') WHERE email = ? AND purpose = 'email_change' AND used_at IS NULL`,
@@ -1536,7 +1524,7 @@ router.post(
       const emailPayload = buildOtpVerificationEmail({
         fullName: user.full_name,
         otpCode,
-        expiresMinutes: 20,
+        expiresMinutes: OTP_TTL_MINUTES,
         purposeLabel: 'email address update',
       });
       const mailResult = await sendMail({
@@ -1556,7 +1544,7 @@ router.post(
 
       res.json({
         message: `A 6-digit verification OTP has been sent to ${new_email}.`,
-        expiresInSeconds: 20 * 60,
+        expiresInSeconds: OTP_TTL_MINUTES * 60,
         resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
       });
     } catch (err) {
@@ -1625,7 +1613,7 @@ router.post(
 
       const updated = await queryOne(
         `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-                must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+                must_change_password, is_email_verified, whatsapp_available,
                 is_active, is_platform_admin, preferred_language, theme_preference
          FROM users WHERE id = ?`,
         [req.user.id]
@@ -1708,7 +1696,7 @@ router.put('/preferences', authenticate, async (req, res, next) => {
 
     const updated = await queryOne(
       `SELECT id, full_name, email, phone, avatar_url, bio, location, privacy_settings_json, dashboard_preferences_json,
-              must_change_password, is_email_verified, is_phone_verified, whatsapp_opt_in, whatsapp_opted_out_at,
+              must_change_password, is_email_verified, whatsapp_available,
               is_active, is_platform_admin, preferred_language, theme_preference
        FROM users WHERE id = ?`,
       [req.user.id]
@@ -1757,27 +1745,26 @@ router.post('/sessions/revoke-others', authenticate, async (req, res, next) => {
 });
 
 router.patch(
-  '/whatsapp-consent',
+  '/whatsapp-availability',
   authenticate,
-  [body('whatsapp_opt_in').isBoolean().withMessage('Consent flag must be true or false')],
+  [body('whatsapp_available').isBoolean().withMessage('Availability flag must be true or false')],
   validateRequest,
   async (req, res, next) => {
     try {
-      const optIn = Boolean(req.body.whatsapp_opt_in);
+      const available = Boolean(req.body.whatsapp_available);
       await execute(
         `UPDATE users
-         SET whatsapp_opt_in = ?,
-             whatsapp_opted_out_at = CASE WHEN ? = 1 THEN NULL ELSE datetime('now') END,
+         SET whatsapp_available = ?,
              updated_at = datetime('now')
          WHERE id = ?`,
-        [optIn ? 1 : 0, optIn ? 1 : 0, req.user.id]
+        [available ? 1 : 0, req.user.id]
       );
       invalidateUserAuthCache(req.user.id);
       res.json({
-        message: optIn
-          ? 'WhatsApp notifications and order alerts enabled.'
-          : 'You have opted out of WhatsApp notifications.',
-        whatsapp_opt_in: optIn,
+        message: available
+          ? 'Your registered phone number is now marked as available on WhatsApp.'
+          : 'Your registered phone number is marked as not available on WhatsApp.',
+        whatsapp_available: available,
       });
     } catch (err) {
       next(err);

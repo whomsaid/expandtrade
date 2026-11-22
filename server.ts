@@ -9,6 +9,7 @@ import { ensureSuperAdmin, removeLegacySeedAccounts, seedCoreRbacAndPlans } from
 import { createBackendApp } from './backend/app.js';
 import { setSocketIo } from './backend/services/auditService.js';
 import { startPayrollScheduler } from './backend/services/payrollScheduler.js';
+import { startMonitoringScheduler } from './backend/services/monitoringService.js';
 
 async function startServer() {
   await initDatabase();
@@ -66,6 +67,7 @@ async function startServer() {
 
   setSocketIo(io);
   startPayrollScheduler(60_000);
+  startMonitoringScheduler(5 * 60 * 1000);
 
   if (env.nodeEnv !== 'production') {
     const { createServer: createViteServer } = await import('vite');

@@ -10,7 +10,6 @@ export default function NotificationsPage() {
   const [prefs, setPrefs] = useState({
     in_app_enabled: 1,
     email_enabled: 1,
-    sms_enabled: 0,
     low_stock_alerts: 1,
     order_alerts: 1,
     expense_alerts: 1,
@@ -92,7 +91,6 @@ export default function NotificationsPage() {
           {[
             ['in_app_enabled', t('notifications.inApp')],
             ['email_enabled', t('notifications.emailAlerts')],
-            ['sms_enabled', t('notifications.smsAlerts')],
             ['low_stock_alerts', t('notifications.lowStock')],
             ['order_alerts', t('notifications.orderAlerts')],
             ['expense_alerts', t('notifications.expenseAlerts')],

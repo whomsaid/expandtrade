@@ -59,26 +59,6 @@ export const env = {
     pass: cleanEnvString(process.env.SMTP_PASS),
     from: cleanEnvString(process.env.SMTP_FROM, 'BizTrade Africa <noreply@biztrade.africa>'),
   },
-  sms: {
-    provider: cleanEnvString(process.env.SMS_PROVIDER).toLowerCase(),
-    twilioAccountSid: cleanEnvString(process.env.TWILIO_ACCOUNT_SID),
-    twilioAuthToken: cleanEnvString(process.env.TWILIO_AUTH_TOKEN),
-    twilioFromNumber: cleanEnvString(process.env.TWILIO_FROM_NUMBER),
-    atApiKey: cleanEnvString(process.env.AT_API_KEY),
-    atUsername: cleanEnvString(process.env.AT_USERNAME),
-    atSenderId: cleanEnvString(process.env.AT_SENDER_ID),
-    atEnv: cleanEnvString(process.env.AT_ENV, 'production').toLowerCase(),
-  },
-  whatsapp: {
-    accessToken: cleanEnvString(process.env.WHATSAPP_ACCESS_TOKEN),
-    phoneNumberId: cleanEnvString(process.env.WHATSAPP_PHONE_NUMBER_ID),
-    businessAccountId: cleanEnvString(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID),
-    appSecret: cleanEnvString(process.env.WHATSAPP_APP_SECRET),
-    verifyToken: cleanEnvString(process.env.WHATSAPP_VERIFY_TOKEN),
-    authTemplateName: cleanEnvString(process.env.WHATSAPP_AUTH_TEMPLATE_NAME, 'biztrade_otp_verification'),
-    authTemplateLang: cleanEnvString(process.env.WHATSAPP_AUTH_TEMPLATE_LANG, 'en'),
-    apiVersion: cleanEnvString(process.env.WHATSAPP_API_VERSION, 'v21.0'),
-  },
   superAdmin: {
     name: process.env.SUPER_ADMIN_NAME || 'Jean Claude Ndayisaba',
     email: process.env.SUPER_ADMIN_EMAIL || '',
@@ -105,4 +85,3 @@ export const env = {
     webhookSecret: process.env.AIRTEL_MONEY_WEBHOOK_SECRET || '',
   },
 };
-

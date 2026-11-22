@@ -16,7 +16,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  MessageCircle,
   Package,
   Receipt,
   Settings,
@@ -78,17 +77,26 @@ export default function AppLayout() {
     { to: '/app/branches', label: t('nav.branches'), icon: GitBranch, perm: 'branches.view' },
     { to: '/app/ads', label: t('nav.ads'), icon: Video, perm: 'ads.view' },
     { to: '/app/tasks', label: t('nav.tasks'), icon: ClipboardList, perm: 'tasks.view' },
-    { to: '/app/whatsapp', label: t('nav.whatsapp'), icon: MessageCircle, perm: 'customers.view' },
     { to: '/app/reports', label: t('nav.reports'), icon: FileSpreadsheet, perm: 'reports.view' },
     { to: '/app/ai', label: t('nav.ai'), icon: Bot, perm: 'ai.use' },
     { to: '/app/notifications', label: t('nav.notifications'), icon: Bell, perm: null },
     { to: '/app/settings', label: t('nav.settings'), icon: Settings, perm: null },
   ];
 
-  const visibleNav = navItems.filter((item) => {
-    if (item.requiresMember && memberships.length === 0) return false;
-    return !item.perm || hasPermission(item.perm);
-  });
+  const setupIncomplete = Boolean(
+    workspace?.business &&
+      Number(workspace.business.setup_completed) === 0 &&
+      !user?.is_platform_admin &&
+      ['business_admin', 'business_owner'].includes(workspace?.membership?.role_code)
+  );
+
+  const visibleNav = [
+    ...(setupIncomplete ? [{ to: '/app/onboarding', label: t('onboarding.navLabel', { defaultValue: 'Business Setup' }), icon: ClipboardList, perm: null }] : []),
+    ...navItems.filter((item) => {
+      if (item.requiresMember && memberships.length === 0) return false;
+      return !item.perm || hasPermission(item.perm);
+    }),
+  ];
 
   const handleMarkAllRead = async () => {
     try {
@@ -123,7 +131,7 @@ export default function AppLayout() {
       >
         <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
           <Link to="/app/dashboard" className="text-lg font-bold tracking-tight text-white whitespace-nowrap min-w-0">
-            <BrandLogo textClassName="text-lg font-bold tracking-tight text-white truncate" imgClassName="h-7 w-auto max-w-[120px] object-contain shrink-0" />
+            <BrandLogo inverted textClassName="text-lg font-bold tracking-tight text-white truncate" imgClassName="h-7 w-auto max-w-[120px] object-contain shrink-0" />
           </Link>
           <button
             type="button"
@@ -326,6 +334,20 @@ export default function AppLayout() {
 
         {/* Main Viewport */}
         <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1440px] w-full mx-auto min-w-0">
+          {setupIncomplete && (
+            <div className="mb-4 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-amber-900 dark:text-amber-200">
+                <span className="font-semibold">{t('onboarding.bannerTitle', { defaultValue: 'Complete guided business onboarding' })}:</span>{' '}
+                {t('onboarding.bannerDesc', { defaultValue: 'Finish the required setup steps to unlock POS, inventory, sales, and team modules.' })}
+              </div>
+              <Link
+                to="/app/onboarding"
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 whitespace-nowrap shrink-0"
+              >
+                {t('onboarding.continueSetup', { defaultValue: 'Continue Setup' })}
+              </Link>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

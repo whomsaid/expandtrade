@@ -153,15 +153,23 @@ router.post('/announcements', authenticate, requireBusiness, requirePermission('
 router.get('/messages', authenticate, requireBusiness, async (req, res, next) => {
   try {
     const messages = await query(
-      `SELECT m.*, u.full_name AS sender_name, u.avatar_url AS sender_avatar, b.name AS branch_name
+      `SELECT m.*, u.full_name AS sender_name, u.avatar_url AS sender_avatar,
+              r.full_name AS recipient_name, b.name AS branch_name
        FROM messages m
        JOIN users u ON u.id = m.sender_user_id
+       LEFT JOIN users r ON r.id = m.recipient_user_id
        LEFT JOIN branches b ON b.id = m.branch_id
        WHERE m.business_id = ?
-       ORDER BY m.id DESC LIMIT 60`,
-      [req.businessId]
+         AND (m.recipient_user_id IS NULL OR m.recipient_user_id = ? OR m.sender_user_id = ?)
+       ORDER BY m.id DESC LIMIT 80`,
+      [req.businessId, req.user.id, req.user.id]
     );
-    res.json({ messages: messages.reverse() });
+    res.json({
+      messages: messages.reverse().map((m) => ({
+        ...m,
+        is_read: Boolean(m.is_read),
+      })),
+    });
   } catch (err) {
     next(err);
   }
@@ -171,19 +179,67 @@ router.post('/messages', authenticate, requireBusiness, async (req, res, next) =
   try {
     const { body: msgBody, channel_type = 'general', recipient_user_id = null } = req.body;
     if (!msgBody?.trim()) return res.status(400).json({ error: 'Message text required' });
+    const recipientId = recipient_user_id ? Number(recipient_user_id) : null;
+    if (recipientId) {
+      const targetMember = await queryOne(
+        `SELECT id FROM business_members WHERE business_id = ? AND user_id = ? AND status = 'active'`,
+        [req.businessId, recipientId]
+      );
+      if (!targetMember) {
+        return res.status(404).json({ error: 'Recipient colleague was not found in this business.' });
+      }
+    }
+    const resolvedChannel = recipientId ? 'direct' : (channel_type === 'direct' ? 'general' : channel_type);
     const r = await execute(
-      `INSERT INTO messages (business_id, branch_id, sender_user_id, recipient_user_id, channel_type, body)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.businessId, req.branchId, req.user.id, recipient_user_id || null, channel_type, msgBody.trim()]
+      `INSERT INTO messages (business_id, branch_id, sender_user_id, recipient_user_id, channel_type, body, is_read, read_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, NULL)`,
+      [req.businessId, req.branchId, req.user.id, recipientId, resolvedChannel, msgBody.trim()]
     );
     const created = await queryOne(
-      `SELECT m.*, u.full_name AS sender_name, u.avatar_url AS sender_avatar, b.name AS branch_name
-       FROM messages m JOIN users u ON u.id = m.sender_user_id LEFT JOIN branches b ON b.id = m.branch_id
+      `SELECT m.*, u.full_name AS sender_name, u.avatar_url AS sender_avatar,
+              rc.full_name AS recipient_name, b.name AS branch_name
+       FROM messages m
+       JOIN users u ON u.id = m.sender_user_id
+       LEFT JOIN users rc ON rc.id = m.recipient_user_id
+       LEFT JOIN branches b ON b.id = m.branch_id
        WHERE m.id = ?`,
       [r.insertId]
     );
-    emitToBusiness(req.businessId, 'message:new', created);
-    res.status(201).json({ message: created });
+    const payload = { ...created, is_read: false };
+    emitToBusiness(req.businessId, 'message:new', payload);
+    res.status(201).json({ message: payload });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/messages/read', authenticate, requireBusiness, async (req, res, next) => {
+  try {
+    const unread = await query(
+      `SELECT id FROM messages
+       WHERE business_id = ?
+         AND sender_user_id != ?
+         AND is_read = 0
+         AND (recipient_user_id IS NULL OR recipient_user_id = ?)`,
+      [req.businessId, req.user.id, req.user.id]
+    );
+    if (unread.length === 0) {
+      return res.json({ updatedCount: 0, messageIds: [], readAt: null });
+    }
+    const readAt = new Date().toISOString();
+    const messageIds = unread.map((m) => m.id);
+    const placeholders = messageIds.map(() => '?').join(',');
+    await execute(
+      `UPDATE messages SET is_read = 1, read_at = ? WHERE id IN (${placeholders}) AND business_id = ?`,
+      [readAt, ...messageIds, req.businessId]
+    );
+    emitToBusiness(req.businessId, 'message:read', {
+      businessId: req.businessId,
+      readerUserId: req.user.id,
+      messageIds,
+      readAt,
+    });
+    res.json({ updatedCount: messageIds.length, messageIds, readAt });
   } catch (err) {
     next(err);
   }
@@ -217,7 +273,6 @@ router.put('/notifications/preferences', authenticate, requireProfileImage, asyn
     const {
       in_app_enabled = 1,
       email_enabled = 1,
-      sms_enabled = 0,
       low_stock_alerts = 1,
       order_alerts = 1,
       expense_alerts = 1,
@@ -225,13 +280,12 @@ router.put('/notifications/preferences', authenticate, requireProfileImage, asyn
     } = req.body;
     await execute(
       `UPDATE notification_preferences SET
-         in_app_enabled = ?, email_enabled = ?, sms_enabled = ?,
+         in_app_enabled = ?, email_enabled = ?, sms_enabled = 0,
          low_stock_alerts = ?, order_alerts = ?, expense_alerts = ?, payroll_alerts = ?
        WHERE user_id = ?`,
       [
         in_app_enabled ? 1 : 0,
         email_enabled ? 1 : 0,
-        sms_enabled ? 1 : 0,
         low_stock_alerts ? 1 : 0,
         order_alerts ? 1 : 0,
         expense_alerts ? 1 : 0,
@@ -729,7 +783,7 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
       ),
       query(
         `SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
-                b.email, b.phone, b.country, b.province, b.district, b.physical_address,
+                b.email, b.phone, b.phone_on_whatsapp, b.setup_completed, b.country, b.province, b.district, b.physical_address,
                 b.currency_code, b.timezone, b.tax_enabled, b.default_tax_rate,
                 b.tax_identification_number, b.operating_hours, b.is_public_listed,
                 b.status, b.deleted_at, b.created_at,
@@ -935,8 +989,8 @@ router.post(
         const publicFlag = is_public_listed === false || is_public_listed === 'false' || is_public_listed === 0 || is_public_listed === '0' ? 0 : 1;
 
         const bizRes = await tx.execute(
-          `INSERT INTO businesses (business_code, owner_user_id, name, slug, category, logo_url, description, email, phone, country, province, district, physical_address, currency_code, timezone, tax_enabled, default_tax_rate, tax_identification_number, operating_hours, is_public_listed, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO businesses (business_code, owner_user_id, name, slug, category, logo_url, description, email, phone, country, province, district, physical_address, currency_code, timezone, tax_enabled, default_tax_rate, tax_identification_number, operating_hours, is_public_listed, setup_completed, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
           [
             businessCode,
             adminUserId,

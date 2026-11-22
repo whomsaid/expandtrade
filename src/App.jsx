@@ -23,7 +23,7 @@ const ActivateAccountPage = lazy(() => import('./pages/AuthPages.jsx').then((m) 
 const CompleteProfilePage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.CompleteProfilePage })));
 const ForceChangePasswordPage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.ForceChangePasswordPage })));
 const ForgotPasswordPage = lazy(() => import('./pages/AuthPages.jsx').then((m) => ({ default: m.ForgotPasswordPage })));
-const WhatsAppPage = lazy(() => import('./modules/whatsapp/WhatsAppPage.jsx'));
+const BusinessOnboardingPage = lazy(() => import('./modules/onboarding/BusinessOnboardingPage.jsx'));
 
 const CustomerPortalPage = lazy(() => import('./modules/customer/CustomerPortalPage.jsx'));
 const JobApplicationFormPage = lazy(() => import('./modules/customer/JobApplicationFormPage.jsx'));
@@ -115,18 +115,33 @@ function CompleteProfileProtectedRoute() {
   return <Navigate to="/customer" replace />;
 }
 
-// Customers are strictly blocked from /app/* business administration routes
+// Customers are strictly blocked from /app/* business administration routes;
+// Business Admins must complete required guided onboarding before accessing operational tools.
 function BusinessProtectedRoute({ children }) {
-  const { user, memberships, activeBusinessId, loading } = useAuth();
+  const { user, memberships, activeBusinessId, workspace, workspaceLoading, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <AuthLoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.must_change_password) return <Navigate to="/change-temporary-password" replace />;
   if (!user.is_platform_admin && (!memberships || memberships.length === 0)) {
     return <Navigate to="/customer" replace />;
   }
-  if (memberships?.length > 0 && !activeBusinessId) {
+  if (memberships?.length > 0 && (!activeBusinessId || workspaceLoading)) {
     return <AuthLoadingScreen />;
   }
+
+  const isBizAdmin = ['business_admin', 'business_owner'].includes(workspace?.membership?.role_code);
+  const setupRequired = Boolean(
+    workspace?.business &&
+      Number(workspace.business.setup_completed) === 0 &&
+      !user.is_platform_admin &&
+      isBizAdmin
+  );
+  const allowedDuringSetup = ['/app/onboarding', '/app/settings', '/app/notifications'];
+  if (setupRequired && !allowedDuringSetup.some((p) => location.pathname.startsWith(p))) {
+    return <Navigate to="/app/onboarding" replace />;
+  }
+
   return children;
 }
 
@@ -239,8 +254,8 @@ export default function App() {
                   <Route path="recruitment" element={<RecruitmentPage />} />
                   <Route path="branches" element={<BranchesPage />} />
                   <Route path="ads" element={<AdvertisementsPage />} />
+                  <Route path="onboarding" element={<BusinessOnboardingPage />} />
                   <Route path="tasks" element={<TasksPage />} />
-                  <Route path="whatsapp" element={<WhatsAppPage />} />
                   <Route path="reports" element={<ReportsPage />} />
                   <Route path="ai" element={<AiAssistantPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />

@@ -1,4 +1,6 @@
 import express from 'express';
+import multer from 'multer';
+import * as XLSX from 'xlsx';
 import { body } from 'express-validator';
 import { execute, query, queryOne, transaction } from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
@@ -9,6 +11,97 @@ import { emitToBusiness, logAudit, notifyBusinessManagers } from '../services/au
 import { invalidatePrefix } from '../services/cacheService.js';
 
 const router = express.Router();
+
+const spreadsheetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = String(file.originalname || '').toLowerCase();
+    if (name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      return cb(null, true);
+    }
+    const err = new Error('Unsupported file format. Please upload a .csv or .xlsx file.');
+    err.statusCode = 400;
+    return cb(err);
+  },
+});
+
+const productImageFields = imageUpload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'images', maxCount: 8 },
+]);
+
+function collectUploadedProductImages(req) {
+  const files = [];
+  if (req.file) files.push(req.file);
+  if (req.files && !Array.isArray(req.files)) {
+    if (Array.isArray(req.files.image)) files.push(...req.files.image);
+    if (Array.isArray(req.files.images)) files.push(...req.files.images);
+  } else if (Array.isArray(req.files)) {
+    files.push(...req.files);
+  }
+  return files;
+}
+
+async function attachProductImages(productsList) {
+  if (!productsList || productsList.length === 0) return productsList;
+  const ids = productsList.map((p) => p.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const imgs = await query(
+    `SELECT id, product_id, image_url, is_primary, sort_order, created_at
+     FROM product_images
+     WHERE product_id IN (${placeholders})
+     ORDER BY is_primary DESC, sort_order ASC, id ASC`,
+    ids
+  );
+  const byProd = new Map();
+  for (const img of imgs) {
+    if (!byProd.has(img.product_id)) byProd.set(img.product_id, []);
+    byProd.get(img.product_id).push({
+      ...img,
+      is_primary: Boolean(img.is_primary),
+    });
+  }
+  return productsList.map((p) => {
+    const gallery = byProd.get(p.id) || (p.image_url ? [{ id: 0, product_id: p.id, image_url: p.image_url, is_primary: true }] : []);
+    return { ...p, images: gallery };
+  });
+}
+
+function normalizeSpreadsheetHeader(raw) {
+  return String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function parseBulkSpreadsheet(buffer) {
+  const wb = XLSX.read(buffer, { type: 'buffer' });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) return [];
+  const sheet = wb.Sheets[sheetName];
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  return rawRows.map((row, idx) => {
+    const mapped = {};
+    for (const [k, v] of Object.entries(row)) {
+      mapped[normalizeSpreadsheetHeader(k)] = typeof v === 'string' ? v.trim() : v;
+    }
+    return {
+      rowNumber: idx + 2,
+      name: String(mapped.name || mapped.productname || '').trim(),
+      sku: String(mapped.sku || mapped.productcode || '').trim().toUpperCase(),
+      barcode: String(mapped.barcode || '').trim(),
+      category: String(mapped.category || mapped.categoryname || '').trim(),
+      supplier: String(mapped.supplier || mapped.suppliername || '').trim(),
+      unit: String(mapped.unit || 'pcs').trim() || 'pcs',
+      purchase_price: mapped.purchaseprice !== '' && mapped.purchaseprice !== undefined ? Number(mapped.purchaseprice) : 0,
+      selling_price: mapped.sellingprice !== '' && mapped.sellingprice !== undefined ? Number(mapped.sellingprice) : NaN,
+      min_stock: mapped.minstock !== '' && mapped.minstock !== undefined ? parseInt(mapped.minstock, 10) : 5,
+      quantity: mapped.quantity !== '' && mapped.quantity !== undefined ? parseInt(mapped.quantity, 10) : 0,
+      description: String(mapped.description || '').trim(),
+    };
+  });
+}
 
 // Categories
 router.get('/categories', authenticate, requireBusiness, async (req, res, next) => {
@@ -88,8 +181,9 @@ router.get('/products', authenticate, requireBusiness, requirePermission('produc
       params.slice(1)
     );
 
+    const enriched = await attachProductImages(products);
     res.json({
-      products,
+      products: enriched,
       total: Number(countRow?.total || 0),
       page: Number(page),
       limit: Number(limit),
@@ -124,12 +218,259 @@ router.get('/products/export/csv', authenticate, requireBusiness, requirePermiss
   }
 });
 
+// Download CSV or XLSX Bulk Product Import Template
+router.get('/products/import/template', authenticate, requireBusiness, requirePermission('products.create'), async (req, res, next) => {
+  try {
+    const format = String(req.query.format || 'csv').toLowerCase() === 'xlsx' ? 'xlsx' : 'csv';
+    const sampleRows = [
+      {
+        Name: 'Arabica Whole Bean Coffee 1kg',
+        SKU: 'COF-ARB-1000',
+        Barcode: '5901234123457',
+        Category: 'Beverages',
+        Supplier: '',
+        Unit: 'bag',
+        PurchasePrice: 8500,
+        SellingPrice: 12500,
+        MinStock: 10,
+        Quantity: 40,
+        Description: 'Washed single-origin highland Arabica beans',
+      },
+    ];
+    const ws = XLSX.utils.json_to_sheet(sampleRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products');
+    if (format === 'xlsx') {
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="bta-products-import-template.xlsx"');
+      return res.send(buf);
+    }
+    const csvStr = XLSX.utils.sheet_to_csv(ws);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="bta-products-import-template.csv"');
+    return res.send(csvStr);
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function validateBulkRows(rows, businessId) {
+  const existingProducts = await query('SELECT id, sku FROM products WHERE business_id = ?', [businessId]);
+  const existingSkus = new Set(existingProducts.map((p) => String(p.sku || '').trim().toUpperCase()));
+  const seenSkus = new Set();
+
+  const evaluated = rows.map((row) => {
+    const errors = [];
+    if (!row.name) errors.push('Product Name is required');
+    if (!row.sku) {
+      errors.push('SKU is required');
+    } else if (existingSkus.has(row.sku)) {
+      errors.push(`SKU ${row.sku} already exists in catalog`);
+    } else if (seenSkus.has(row.sku)) {
+      errors.push(`Duplicate SKU ${row.sku} inside file`);
+    } else {
+      seenSkus.add(row.sku);
+    }
+
+    if (Number.isNaN(row.selling_price) || row.selling_price < 0) {
+      errors.push('SellingPrice must be a valid number >= 0');
+    }
+    if (Number.isNaN(row.purchase_price) || row.purchase_price < 0) {
+      errors.push('PurchasePrice must be >= 0');
+    }
+    if (Number.isNaN(row.quantity) || row.quantity < 0) {
+      errors.push('Quantity must be an integer >= 0');
+    }
+    if (Number.isNaN(row.min_stock) || row.min_stock < 0) {
+      errors.push('MinStock must be an integer >= 0');
+    }
+
+    return {
+      ...row,
+      purchase_price: Number.isNaN(row.purchase_price) ? 0 : row.purchase_price,
+      selling_price: Number.isNaN(row.selling_price) ? 0 : row.selling_price,
+      min_stock: Number.isNaN(row.min_stock) ? 5 : row.min_stock,
+      quantity: Number.isNaN(row.quantity) ? 0 : row.quantity,
+      valid: errors.length === 0,
+      errors,
+    };
+  });
+
+  const invalidRows = evaluated.filter((r) => !r.valid);
+  let errorCsv = '';
+  if (invalidRows.length > 0) {
+    const header = 'Row,Name,SKU,SellingPrice,Errors';
+    const lines = invalidRows.map((r) =>
+      [r.rowNumber, r.name, r.sku, r.selling_price, r.errors.join('; ')]
+        .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    errorCsv = [header, ...lines].join('\n');
+  }
+
+  return {
+    summary: {
+      total: evaluated.length,
+      valid: evaluated.length - invalidRows.length,
+      invalid: invalidRows.length,
+    },
+    rows: evaluated,
+    errorCsv,
+  };
+}
+
+router.post(
+  '/products/import/preview',
+  authenticate,
+  requireBusiness,
+  requirePermission('products.create'),
+  spreadsheetUpload.single('file'),
+  async (req, res, next) => {
+    try {
+      if (!req.file?.buffer) {
+        return res.status(400).json({ error: 'Please select a CSV or XLSX spreadsheet file to preview.' });
+      }
+      const parsed = parseBulkSpreadsheet(req.file.buffer);
+      if (parsed.length === 0) {
+        return res.status(400).json({ error: 'The uploaded spreadsheet contains no product rows.' });
+      }
+      if (parsed.length > 1000) {
+        return res.status(400).json({ error: 'Maximum 1,000 products per bulk import batch.' });
+      }
+      const report = await validateBulkRows(parsed, req.businessId);
+      res.json(report);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/products/import/commit',
+  authenticate,
+  requireBusiness,
+  requirePermission('products.create'),
+  [body('rows').isArray({ min: 1 }).withMessage('Validated product rows are required')],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const incoming = req.body.rows.slice(0, 1000).map((r, idx) => ({
+        rowNumber: Number(r.rowNumber || idx + 2),
+        name: String(r.name || '').trim(),
+        sku: String(r.sku || '').trim().toUpperCase(),
+        barcode: String(r.barcode || '').trim(),
+        category: String(r.category || '').trim(),
+        supplier: String(r.supplier || '').trim(),
+        unit: String(r.unit || 'pcs').trim() || 'pcs',
+        purchase_price: Number(r.purchase_price || 0),
+        selling_price: r.selling_price !== undefined && r.selling_price !== '' ? Number(r.selling_price) : NaN,
+        min_stock: r.min_stock !== undefined && r.min_stock !== '' ? parseInt(r.min_stock, 10) : 5,
+        quantity: r.quantity !== undefined && r.quantity !== '' ? parseInt(r.quantity, 10) : 0,
+        description: String(r.description || '').trim(),
+      }));
+
+      const checked = await validateBulkRows(incoming, req.businessId);
+      const validRows = checked.rows.filter((r) => r.valid);
+      if (validRows.length === 0) {
+        return res.status(400).json({
+          error: 'No valid product rows to import. Review the validation errors first.',
+          summary: checked.summary,
+          errorCsv: checked.errorCsv,
+        });
+      }
+
+      const importedIds = await transaction(async (tx) => {
+        const categories = await tx.query('SELECT id, name FROM categories WHERE business_id = ?', [req.businessId]);
+        const catMap = new Map(categories.map((c) => [String(c.name).trim().toLowerCase(), c.id]));
+        const suppliers = await tx.query('SELECT id, name FROM suppliers WHERE business_id = ?', [req.businessId]);
+        const supMap = new Map(suppliers.map((s) => [String(s.name).trim().toLowerCase(), s.id]));
+        const branches = await tx.query('SELECT id FROM branches WHERE business_id = ?', [req.businessId]);
+
+        const createdIds = [];
+        for (const r of validRows) {
+          let categoryId = null;
+          if (r.category) {
+            const cKey = r.category.toLowerCase();
+            if (catMap.has(cKey)) {
+              categoryId = catMap.get(cKey);
+            } else {
+              const cRes = await tx.execute(
+                'INSERT INTO categories (business_id, name, description) VALUES (?, ?, ?)',
+                [req.businessId, r.category, 'Created via bulk product import']
+              );
+              categoryId = cRes.insertId;
+              catMap.set(cKey, categoryId);
+            }
+          }
+          const supplierId = r.supplier ? supMap.get(r.supplier.toLowerCase()) || null : null;
+
+          const pRes = await tx.execute(
+            `INSERT INTO products (business_id, category_id, supplier_id, name, sku, barcode, description, unit, purchase_price, selling_price, min_stock, image_url)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+            [
+              req.businessId,
+              categoryId,
+              supplierId,
+              r.name,
+              r.sku,
+              r.barcode || null,
+              r.description || '',
+              r.unit,
+              r.purchase_price,
+              r.selling_price,
+              r.min_stock,
+            ]
+          );
+          const productId = pRes.insertId;
+          createdIds.push(productId);
+
+          for (const b of branches) {
+            const branchQty = b.id === req.branchId ? r.quantity : 0;
+            await tx.execute(
+              'INSERT INTO inventory (business_id, branch_id, product_id, quantity) VALUES (?, ?, ?, ?)',
+              [req.businessId, b.id, productId, branchQty]
+            );
+            if (b.id === req.branchId && r.quantity > 0) {
+              await tx.execute(
+                `INSERT INTO stock_movements (business_id, branch_id, product_id, movement_type, quantity_change, previous_quantity, new_quantity, reason, user_id)
+                 VALUES (?, ?, ?, 'initial', ?, 0, ?, 'Initial bulk import stock', ?)`,
+                [req.businessId, b.id, productId, r.quantity, r.quantity, req.user.id]
+              );
+            }
+          }
+        }
+        return createdIds;
+      });
+
+      await logAudit({
+        businessId: req.businessId,
+        branchId: req.branchId,
+        userId: req.user.id,
+        action: 'products.bulk_imported',
+        entityType: 'product',
+        changes: { imported: importedIds.length, skipped: checked.summary.invalid },
+      });
+      invalidatePrefix('public:businesses:');
+
+      res.status(201).json({
+        message: `${importedIds.length} product(s) imported successfully.`,
+        importedCount: importedIds.length,
+        skippedCount: checked.summary.invalid,
+        errorCsv: checked.errorCsv,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 router.post(
   '/products',
   authenticate,
   requireBusiness,
   requirePermission('products.create'),
-  imageUpload.single('image'),
+  productImageFields,
   [
     body('name').trim().notEmpty().withMessage('Product name is required'),
     body('sku').trim().notEmpty().withMessage('SKU is required'),
@@ -138,9 +479,12 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
-      if (req.file && (!verifyFileNonEmpty(req.file) || !verifyImageSignature(req.file.path))) {
-        cleanupMulterFiles(req);
-        return res.status(400).json({ error: 'Invalid or empty product image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+      const uploadedFiles = collectUploadedProductImages(req);
+      for (const f of uploadedFiles) {
+        if (!verifyFileNonEmpty(f) || !verifyImageSignature(f.path)) {
+          cleanupMulterFiles(req);
+          return res.status(400).json({ error: 'Invalid or empty product image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+        }
       }
       const {
         name,
@@ -156,7 +500,8 @@ router.post(
         min_stock = 5,
       } = req.body;
 
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const uploadedUrls = uploadedFiles.map((f) => `/uploads/${f.filename}`);
+      const primaryUrl = uploadedUrls[0] || null;
 
       const productId = await transaction(async (tx) => {
         const pRes = await tx.execute(
@@ -174,10 +519,18 @@ router.post(
             Number(purchase_price || 0),
             Number(selling_price),
             Number(min_stock || 5),
-            imageUrl,
+            primaryUrl,
           ]
         );
         const newProductId = pRes.insertId;
+        for (let i = 0; i < uploadedUrls.length; i += 1) {
+          await tx.execute(
+            `INSERT INTO product_images (product_id, business_id, image_url, is_primary, sort_order)
+             VALUES (?, ?, ?, ?, ?)`,
+            [newProductId, req.businessId, uploadedUrls[i], i === 0 ? 1 : 0, i]
+          );
+        }
+
         const branches = await tx.query('SELECT id FROM branches WHERE business_id = ?', [req.businessId]);
         const initQty = Math.max(0, parseInt(quantity || 0, 10));
 
@@ -210,7 +563,8 @@ router.post(
 
       invalidatePrefix('public:businesses:');
       const created = await queryOne('SELECT * FROM products WHERE id = ?', [productId]);
-      res.status(201).json({ product: created });
+      const [enriched] = await attachProductImages([created]);
+      res.status(201).json({ product: enriched });
     } catch (err) {
       cleanupMulterFiles(req);
       next(err);
@@ -223,12 +577,15 @@ router.put(
   authenticate,
   requireBusiness,
   requirePermission('products.update'),
-  imageUpload.single('image'),
+  productImageFields,
   async (req, res, next) => {
     try {
-      if (req.file && (!verifyFileNonEmpty(req.file) || !verifyImageSignature(req.file.path))) {
-        cleanupMulterFiles(req);
-        return res.status(400).json({ error: 'Invalid or empty product image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+      const uploadedFiles = collectUploadedProductImages(req);
+      for (const f of uploadedFiles) {
+        if (!verifyFileNonEmpty(f) || !verifyImageSignature(f.path)) {
+          cleanupMulterFiles(req);
+          return res.status(400).json({ error: 'Invalid or empty product image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+        }
       }
       const existing = await queryOne('SELECT * FROM products WHERE id = ? AND business_id = ?', [
         req.params.id,
@@ -252,45 +609,60 @@ router.put(
         min_stock,
         status,
       } = req.body;
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : existing.image_url;
+      const uploadedUrls = uploadedFiles.map((f) => `/uploads/${f.filename}`);
+      const existingGallery = await query('SELECT * FROM product_images WHERE product_id = ? ORDER BY is_primary DESC, id ASC', [
+        existing.id,
+      ]);
+      const nextImageUrl = uploadedUrls[0] && existingGallery.length === 0 && !existing.image_url
+        ? uploadedUrls[0]
+        : (req.files?.image?.[0] ? `/uploads/${req.files.image[0].filename}` : existing.image_url || uploadedUrls[0] || null);
 
-      await execute(
-        `UPDATE products SET
-           name = COALESCE(?, name),
-           sku = COALESCE(?, sku),
-           barcode = ?,
-           category_id = ?,
-           supplier_id = ?,
-           description = COALESCE(?, description),
-           unit = COALESCE(?, unit),
-           purchase_price = COALESCE(?, purchase_price),
-           selling_price = COALESCE(?, selling_price),
-           min_stock = COALESCE(?, min_stock),
-           status = COALESCE(?, status),
-           image_url = ?,
-           updated_at = datetime('now')
-         WHERE id = ? AND business_id = ?`,
-        [
-          name,
-          sku ? sku.toUpperCase() : null,
-          barcode !== undefined ? barcode : existing.barcode,
-          category_id !== undefined ? (category_id ? Number(category_id) : null) : existing.category_id,
-          supplier_id !== undefined ? (supplier_id ? Number(supplier_id) : null) : existing.supplier_id,
-          description,
-          unit,
-          purchase_price !== undefined ? Number(purchase_price) : null,
-          selling_price !== undefined ? Number(selling_price) : null,
-          min_stock !== undefined ? Number(min_stock) : null,
-          status,
-          imageUrl,
-          req.params.id,
-          req.businessId,
-        ]
-      );
+      await transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE products SET
+             name = COALESCE(?, name),
+             sku = COALESCE(?, sku),
+             barcode = ?,
+             category_id = ?,
+             supplier_id = ?,
+             description = COALESCE(?, description),
+             unit = COALESCE(?, unit),
+             purchase_price = COALESCE(?, purchase_price),
+             selling_price = COALESCE(?, selling_price),
+             min_stock = COALESCE(?, min_stock),
+             status = COALESCE(?, status),
+             image_url = ?,
+             updated_at = datetime('now')
+           WHERE id = ? AND business_id = ?`,
+          [
+            name,
+            sku ? sku.toUpperCase() : null,
+            barcode !== undefined ? barcode : existing.barcode,
+            category_id !== undefined ? (category_id ? Number(category_id) : null) : existing.category_id,
+            supplier_id !== undefined ? (supplier_id ? Number(supplier_id) : null) : existing.supplier_id,
+            description,
+            unit,
+            purchase_price !== undefined ? Number(purchase_price) : null,
+            selling_price !== undefined ? Number(selling_price) : null,
+            min_stock !== undefined ? Number(min_stock) : null,
+            status,
+            nextImageUrl,
+            req.params.id,
+            req.businessId,
+          ]
+        );
 
-      if (req.file && existing.image_url && existing.image_url !== imageUrl) {
-        removeUploadedFile(existing.image_url);
-      }
+        let sortOffset = existingGallery.length;
+        for (let i = 0; i < uploadedUrls.length; i += 1) {
+          const isPrimary = existingGallery.length === 0 && i === 0 ? 1 : 0;
+          await tx.execute(
+            `INSERT INTO product_images (product_id, business_id, image_url, is_primary, sort_order)
+             VALUES (?, ?, ?, ?, ?)`,
+            [existing.id, req.businessId, uploadedUrls[i], isPrimary, sortOffset + i]
+          );
+        }
+      });
+
       invalidatePrefix('public:businesses:');
 
       await logAudit({
@@ -302,9 +674,137 @@ router.put(
       });
 
       const updated = await queryOne('SELECT * FROM products WHERE id = ?', [req.params.id]);
-      res.json({ product: updated });
+      const [enriched] = await attachProductImages([updated]);
+      res.json({ product: enriched });
     } catch (err) {
       cleanupMulterFiles(req);
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/products/:id/images',
+  authenticate,
+  requireBusiness,
+  requirePermission('products.update'),
+  imageUpload.array('images', 8),
+  async (req, res, next) => {
+    try {
+      const files = Array.isArray(req.files) ? req.files : [];
+      if (files.length === 0) {
+        return res.status(400).json({ error: 'Select one or more JPG, PNG, or WEBP product images.' });
+      }
+      for (const f of files) {
+        if (!verifyFileNonEmpty(f) || !verifyImageSignature(f.path)) {
+          cleanupMulterFiles(req);
+          return res.status(400).json({ error: 'Invalid or empty product image. Allowed: JPG, JPEG, PNG, or WEBP (max 5MB).' });
+        }
+      }
+      const product = await queryOne('SELECT * FROM products WHERE id = ? AND business_id = ?', [
+        req.params.id,
+        req.businessId,
+      ]);
+      if (!product) {
+        cleanupMulterFiles(req);
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      const existing = await query('SELECT id FROM product_images WHERE product_id = ?', [product.id]);
+      await transaction(async (tx) => {
+        for (let i = 0; i < files.length; i += 1) {
+          const url = `/uploads/${files[i].filename}`;
+          const isPrimary = existing.length === 0 && !product.image_url && i === 0 ? 1 : 0;
+          await tx.execute(
+            `INSERT INTO product_images (product_id, business_id, image_url, is_primary, sort_order)
+             VALUES (?, ?, ?, ?, ?)`,
+            [product.id, req.businessId, url, isPrimary, existing.length + i]
+          );
+          if (isPrimary) {
+            await tx.execute('UPDATE products SET image_url = ? WHERE id = ?', [url, product.id]);
+          }
+        }
+      });
+
+      invalidatePrefix('public:businesses:');
+      const updated = await queryOne('SELECT * FROM products WHERE id = ?', [product.id]);
+      const [enriched] = await attachProductImages([updated]);
+      res.status(201).json({ product: enriched });
+    } catch (err) {
+      cleanupMulterFiles(req);
+      next(err);
+    }
+  }
+);
+
+router.patch(
+  '/products/:id/images/:imageId/primary',
+  authenticate,
+  requireBusiness,
+  requirePermission('products.update'),
+  async (req, res, next) => {
+    try {
+      const img = await queryOne(
+        'SELECT * FROM product_images WHERE id = ? AND product_id = ? AND business_id = ?',
+        [req.params.imageId, req.params.id, req.businessId]
+      );
+      if (!img) return res.status(404).json({ error: 'Product image not found' });
+
+      await transaction(async (tx) => {
+        await tx.execute('UPDATE product_images SET is_primary = 0 WHERE product_id = ?', [req.params.id]);
+        await tx.execute('UPDATE product_images SET is_primary = 1 WHERE id = ?', [img.id]);
+        await tx.execute(`UPDATE products SET image_url = ?, updated_at = datetime('now') WHERE id = ?`, [
+          img.image_url,
+          req.params.id,
+        ]);
+      });
+
+      invalidatePrefix('public:businesses:');
+      const updated = await queryOne('SELECT * FROM products WHERE id = ?', [req.params.id]);
+      const [enriched] = await attachProductImages([updated]);
+      res.json({ product: enriched });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.delete(
+  '/products/:id/images/:imageId',
+  authenticate,
+  requireBusiness,
+  requirePermission('products.update'),
+  async (req, res, next) => {
+    try {
+      const img = await queryOne(
+        'SELECT * FROM product_images WHERE id = ? AND product_id = ? AND business_id = ?',
+        [req.params.imageId, req.params.id, req.businessId]
+      );
+      if (!img) return res.status(404).json({ error: 'Product image not found' });
+
+      await transaction(async (tx) => {
+        await tx.execute('DELETE FROM product_images WHERE id = ?', [img.id]);
+        const remaining = await tx.query(
+          'SELECT * FROM product_images WHERE product_id = ? ORDER BY is_primary DESC, sort_order ASC, id ASC',
+          [req.params.id]
+        );
+        if (img.is_primary) {
+          const nextPrimary = remaining[0] || null;
+          if (nextPrimary) {
+            await tx.execute('UPDATE product_images SET is_primary = 1 WHERE id = ?', [nextPrimary.id]);
+            await tx.execute('UPDATE products SET image_url = ? WHERE id = ?', [nextPrimary.image_url, req.params.id]);
+          } else {
+            await tx.execute('UPDATE products SET image_url = NULL WHERE id = ?', [req.params.id]);
+          }
+        }
+      });
+
+      removeUploadedFile(img.image_url);
+      invalidatePrefix('public:businesses:');
+      const updated = await queryOne('SELECT * FROM products WHERE id = ?', [req.params.id]);
+      const [enriched] = await attachProductImages([updated]);
+      res.json({ product: enriched });
+    } catch (err) {
       next(err);
     }
   }
