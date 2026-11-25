@@ -50,6 +50,7 @@ router.get('/public/platform-config', async (_req, res, next) => {
         config[row.setting_key] = row.setting_value ?? '';
       }
     }
+    res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
     setCached('public:platform-config', config, 30_000);
     res.json({ config });
   } catch (err) {
@@ -63,13 +64,17 @@ router.get('/public/businesses', async (req, res, next) => {
     const q = String(req.query.q || '').trim().toLowerCase();
     const category = String(req.query.category || '').trim();
     const district = String(req.query.district || '').trim();
+    const sort = String(req.query.sort || 'newest').trim().toLowerCase();
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
     const limit = Math.min(60, Math.max(1, parseInt(String(req.query.limit || '24'), 10) || 24));
     const offset = (page - 1) * limit;
 
-    const cacheKey = `public:businesses:${q}:${category}:${district}:${page}:${limit}`;
+    const cacheKey = `public:businesses:${q}:${category}:${district}:${sort}:${page}:${limit}`;
     const cached = getCached(cacheKey);
-    if (cached) return res.json(cached);
+    if (cached) {
+      res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=45');
+      return res.json(cached);
+    }
 
     let whereSql = `WHERE b.status = 'active' AND b.is_public_listed = 1 AND b.deleted_at IS NULL`;
     const params = [];
@@ -83,21 +88,43 @@ router.get('/public/businesses', async (req, res, next) => {
       params.push(district);
     }
     if (q) {
-      whereSql += ` AND (LOWER(b.name) LIKE ? OR LOWER(b.category) LIKE ? OR LOWER(COALESCE(b.description, '')) LIKE ? OR LOWER(b.district) LIKE ?)`;
-      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+      whereSql += ` AND (
+        LOWER(b.name) LIKE ?
+        OR LOWER(b.category) LIKE ?
+        OR LOWER(COALESCE(b.description, '')) LIKE ?
+        OR LOWER(b.district) LIKE ?
+        OR LOWER(COALESCE(b.business_code, '')) LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM products p
+          WHERE p.business_id = b.id AND p.status = 'active'
+            AND (LOWER(p.name) LIKE ? OR LOWER(p.sku) LIKE ?)
+        )
+      )`;
+      const likeQ = `%${q}%`;
+      params.push(likeQ, likeQ, likeQ, likeQ, likeQ, likeQ, likeQ);
     }
+
+    const orderBySql =
+      sort === 'name'
+        ? 'ORDER BY LOWER(b.name) ASC, b.id DESC'
+        : sort === 'products'
+          ? 'ORDER BY (SELECT COUNT(*) FROM products px WHERE px.business_id = b.id AND px.status = \'active\') DESC, b.id DESC'
+          : q
+            ? 'ORDER BY CASE WHEN LOWER(b.name) LIKE ? THEN 0 ELSE 1 END, b.id DESC'
+            : 'ORDER BY b.id DESC';
 
     const listSql = `
       SELECT b.id, b.business_code, b.name, b.slug, b.category, b.logo_url, b.description,
              b.country, b.province, b.district, b.physical_address, b.currency_code, b.operating_hours
       FROM businesses b
       ${whereSql}
-      ORDER BY b.id DESC
+      ${orderBySql}
       LIMIT ? OFFSET ?
     `;
+    const listParams = q && sort !== 'name' && sort !== 'products' ? [...params, `${q}%`, limit, offset] : [...params, limit, offset];
 
     const [baseBusinesses, countRow, categories, districts] = await Promise.all([
-      query(listSql, [...params, limit, offset]),
+      query(listSql, listParams),
       queryOne(`SELECT COUNT(*) AS total FROM businesses b ${whereSql}`, params),
       query(
         `SELECT DISTINCT category FROM businesses WHERE status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL ORDER BY category ASC`
@@ -153,6 +180,7 @@ router.get('/public/businesses', async (req, res, next) => {
       totalPages,
     };
     setCached(cacheKey, payload, 15_000);
+    res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=45');
     res.json(payload);
   } catch (err) {
     next(err);

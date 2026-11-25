@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CreditCard, Plus } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { CreditCard, Plus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -7,8 +8,10 @@ import { formatMoney, getPaymentMethodLabel } from '../../utils/format.js';
 
 export default function SuppliersPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { activeBusinessId, workspace, hasPermission } = useAuth();
   const [suppliers, setSuppliers] = useState([]);
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [showCreate, setShowCreate] = useState(false);
   const [payModal, setPayModal] = useState(null);
   const [payForm, setPayForm] = useState({ amount: '', payment_method: 'bank_transfer', reference_number: '' });
@@ -30,8 +33,25 @@ export default function SuppliersPage() {
   }, [activeBusinessId]);
 
   useEffect(() => {
+    const q = searchParams.get('q');
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
+
+  useEffect(() => {
     loadSuppliers();
   }, [loadSuppliers]);
+
+  const filteredSuppliers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return suppliers;
+    return suppliers.filter(
+      (s) =>
+        s.name?.toLowerCase().includes(q) ||
+        s.contact_person?.toLowerCase().includes(q) ||
+        s.phone?.toLowerCase().includes(q) ||
+        s.email?.toLowerCase().includes(q)
+    );
+  }, [suppliers, search]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -83,6 +103,27 @@ export default function SuppliersPage() {
 
       {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
 
+      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('common.search')}
+            className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+          />
+        </div>
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline"
+          >
+            {t('common.clearFilters')}
+          </button>
+        )}
+      </div>
+
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
@@ -96,7 +137,7 @@ export default function SuppliersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {suppliers.map((s) => (
+            {filteredSuppliers.map((s) => (
               <tr key={s.id}>
                 <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">{s.name}</td>
                 <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{s.contact_person || '—'}</td>

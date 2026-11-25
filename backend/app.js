@@ -4,8 +4,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './config/env.js';
-import { getDialect, queryOne } from './config/db.js';
+import { getDialect, query, queryOne } from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { httpCompressionMiddleware } from './middleware/compression.js';
+import { getCached, setCached } from './services/cacheService.js';
 import authRoutes from './routes/authRoutes.js';
 import businessRoutes from './routes/businessRoutes.js';
 import catalogRoutes from './routes/catalogRoutes.js';
@@ -18,12 +20,23 @@ import recruitmentRoutes from './routes/recruitmentRoutes.js';
 import payrollRoutes from './routes/payrollRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import monitoringRoutes from './routes/monitoringRoutes.js';
+import searchRoutes from './routes/searchRoutes.js';
 import { recordMonitoringEvent } from './services/monitoringService.js';
+
+function escapeXml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
 
 export function createBackendApp() {
   const app = express();
 
   app.set('trust proxy', 1);
+  app.use(httpCompressionMiddleware);
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -50,6 +63,90 @@ export function createBackendApp() {
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '5mb' }));
   app.use(express.urlencoded({ extended: true }));
+
+  // Search Engine Optimization: robots.txt & dynamic sitemap.xml
+  app.get('/robots.txt', (req, res) => {
+    const origin = env.appUrl || `${req.protocol}://${req.get('host')}`;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(
+      [
+        'User-agent: *',
+        'Allow: /',
+        'Allow: /businesses',
+        'Allow: /jobs',
+        'Allow: /features',
+        'Allow: /pricing',
+        'Allow: /about',
+        'Allow: /contact',
+        'Disallow: /app/',
+        'Disallow: /api/',
+        'Disallow: /customer',
+        `Sitemap: ${origin.replace(/\/$/, '')}/sitemap.xml`,
+      ].join('\n')
+    );
+  });
+
+  app.get('/sitemap.xml', async (req, res) => {
+    try {
+      const origin = (env.appUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const cacheKey = `seo:sitemap:${origin}`;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=120');
+        return res.send(cached);
+      }
+
+      const [businesses, jobs] = await Promise.all([
+        query(
+          `SELECT slug, updated_at FROM businesses
+           WHERE status = 'active' AND is_public_listed = 1 AND deleted_at IS NULL
+           ORDER BY id DESC LIMIT 500`
+        ),
+        query(
+          `SELECT v.id, v.updated_at FROM job_vacancies v
+           JOIN businesses b ON b.id = v.business_id
+           WHERE v.status = 'published' AND b.status = 'active' AND b.is_public_listed = 1 AND b.deleted_at IS NULL
+           ORDER BY v.id DESC LIMIT 500`
+        ),
+      ]);
+
+      const staticPaths = [
+        { loc: '/', changefreq: 'daily', priority: '1.0' },
+        { loc: '/businesses', changefreq: 'daily', priority: '0.9' },
+        { loc: '/jobs', changefreq: 'daily', priority: '0.9' },
+        { loc: '/features', changefreq: 'weekly', priority: '0.8' },
+        { loc: '/pricing', changefreq: 'weekly', priority: '0.8' },
+        { loc: '/about', changefreq: 'monthly', priority: '0.7' },
+        { loc: '/contact', changefreq: 'monthly', priority: '0.7' },
+        { loc: '/track-order', changefreq: 'weekly', priority: '0.6' },
+      ];
+
+      const urls = [
+        ...staticPaths.map(
+          (item) =>
+            `  <url><loc>${escapeXml(`${origin}${item.loc}`)}</loc><changefreq>${item.changefreq}</changefreq><priority>${item.priority}</priority></url>`
+        ),
+        ...businesses.map((b) => {
+          const lastmod = b.updated_at ? `<lastmod>${escapeXml(String(b.updated_at).slice(0, 10))}</lastmod>` : '';
+          return `  <url><loc>${escapeXml(`${origin}/businesses/${b.slug}`)}</loc>${lastmod}<changefreq>daily</changefreq><priority>0.8</priority></url>`;
+        }),
+        ...jobs.map((j) => {
+          const lastmod = j.updated_at ? `<lastmod>${escapeXml(String(j.updated_at).slice(0, 10))}</lastmod>` : '';
+          return `  <url><loc>${escapeXml(`${origin}/jobs/${j.id}`)}</loc>${lastmod}<changefreq>daily</changefreq><priority>0.7</priority></url>`;
+        }),
+      ];
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`;
+      setCached(cacheKey, xml, 60_000);
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=120');
+      res.send(xml);
+    } catch {
+      res.status(500).type('text/plain').send('Unable to generate sitemap');
+    }
+  });
 
   app.use('/api', (req, res, next) => {
     const start = performance.now();
@@ -116,6 +213,7 @@ export function createBackendApp() {
 
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api', apiLimiter);
+  app.use('/api', searchRoutes);
   app.use('/api', jobRoutes);
   app.use('/api', payrollRoutes);
   app.use('/api', businessRoutes);

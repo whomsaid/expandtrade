@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   Bell,
@@ -10,6 +11,7 @@ import {
   Building2,
   Check,
   CheckCircle2,
+  ChevronRight,
   ClipboardList,
   Clock,
   Code2,
@@ -42,10 +44,12 @@ import StatusBadge from '../components/StatusBadge.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 import VideoAdPlayer from '../components/VideoAdPlayer.jsx';
 import WhatsAppContactButton from '../components/WhatsAppContactButton.jsx';
+import { setDynamicSeo } from '../components/RouteSeoManager.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { usePlatformConfig } from '../context/PlatformConfigContext.jsx';
 import { api } from '../services/api.js';
 import { formatDate, formatDateTime, formatMoney } from '../utils/format.js';
+import { prefetchRoute } from '../utils/routePrefetch.js';
 import heroKigaliImg from '../assets/images/hero_kigali_commerce_1794724575172.jpg';
 import featurePosImg from '../assets/images/feature_pos_inventory_1794724576072.jpg';
 import featureRetailPosImg from '../assets/images/feature_retail_pos_1795098957916.jpg';
@@ -115,6 +119,7 @@ function FeatureCardMedia({ src, alt, icon: Icon }) {
         src={src}
         alt={alt}
         loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
@@ -227,15 +232,19 @@ export function HomePage() {
               </a>
               <Link
                 to="/register"
+                onMouseEnter={() => prefetchRoute('/register')}
+                onFocus={() => prefetchRoute('/register')}
                 className="inline-flex items-center px-5 py-3 text-sm font-semibold text-[#0B192C] dark:text-white bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors whitespace-nowrap shrink-0"
               >
                 {t('public.getStarted')}
               </Link>
               <Link
-                to="/login"
+                to="/businesses"
+                onMouseEnter={() => prefetchRoute('/businesses')}
+                onFocus={() => prefetchRoute('/businesses')}
                 className="inline-flex items-center px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0"
               >
-                {t('public.login')}
+                {t('nav.businesses')}
               </Link>
             </div>
             <div className="pt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
@@ -252,6 +261,8 @@ export function HomePage() {
               <img
                 src={heroKigaliImg}
                 alt={t('public.heroImgAlt')}
+                fetchPriority="high"
+                decoding="async"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />
@@ -281,6 +292,8 @@ export function HomePage() {
             <img
               src={featurePosImg}
               alt={t('public.aboutImgAlt')}
+              loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />
@@ -619,26 +632,62 @@ export function HomePage() {
 
 export function PublicBusinessesPage() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [businesses, setBusinesses] = useState([]);
   const [videos, setVideos] = useState([]);
   const [categories, setCategories] = useState([]);
   const [districts, setDistricts] = useState([]);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [category, setCategory] = useState('');
-  const [district, setDistrict] = useState('');
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get('q') || '');
+  const [category, setCategory] = useState(() => searchParams.get('category') || '');
+  const [district, setDistrict] = useState(() => searchParams.get('district') || '');
+  const [sort, setSort] = useState(() => searchParams.get('sort') || 'newest');
+  const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page') || 1)));
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Keep local state in sync when URL query changes (e.g. from QuickSearchModal or browser Back/Forward)
+  useEffect(() => {
+    const urlQ = searchParams.get('q') || '';
+    const urlCat = searchParams.get('category') || '';
+    const urlDist = searchParams.get('district') || '';
+    const urlSort = searchParams.get('sort') || 'newest';
+    const urlPage = Math.max(1, Number(searchParams.get('page') || 1));
+    setSearch(urlQ);
+    setDebouncedSearch(urlQ);
+    setCategory(urlCat);
+    setDistrict(urlDist);
+    setSort(urlSort);
+    setPage(urlPage);
+  }, [searchParams]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 260);
+      if (debouncedSearch !== search) {
+        setDebouncedSearch(search);
+        setPage(1);
+      }
+    }, 240);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, debouncedSearch]);
+
+  const syncUrlParams = useCallback(
+    (next) => {
+      const params = new URLSearchParams();
+      if (next.q?.trim()) params.set('q', next.q.trim());
+      if (next.category) params.set('category', next.category);
+      if (next.district) params.set('district', next.district);
+      if (next.sort && next.sort !== 'newest') params.set('sort', next.sort);
+      if (next.page && next.page > 1) params.set('page', String(next.page));
+      setSearchParams(params, { replace: true });
+    },
+    [setSearchParams]
+  );
+
+  useEffect(() => {
+    syncUrlParams({ q: debouncedSearch, category, district, sort, page });
+  }, [debouncedSearch, category, district, sort, page, syncUrlParams]);
 
   const loadDirectory = useCallback(async (signal) => {
     setLoading(true);
@@ -648,6 +697,7 @@ export function PublicBusinessesPage() {
         q: debouncedSearch.trim() || undefined,
         category: category || undefined,
         district: district || undefined,
+        sort: sort || 'newest',
         page,
         limit: 24,
       };
@@ -669,7 +719,7 @@ export function PublicBusinessesPage() {
         setLoading(false);
       }
     }
-  }, [debouncedSearch, category, district, page]);
+  }, [debouncedSearch, category, district, sort, page]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -682,13 +732,28 @@ export function PublicBusinessesPage() {
     setDebouncedSearch('');
     setCategory('');
     setDistrict('');
+    setSort('newest');
     setPage(1);
+    setSearchParams({}, { replace: true });
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full space-y-8 animate-fade-up">
+      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8 animate-fade-up">
+        <nav aria-label="Breadcrumb" className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">
+              {t('nav.home')}
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="font-semibold text-slate-900 dark:text-white">{t('nav.businesses')}</span>
+          </div>
+          <Link to="/jobs" onMouseEnter={() => prefetchRoute('/jobs')} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">
+            {t('search.quickJobs')} →
+          </Link>
+        </nav>
+
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div className="space-y-1.5">
             <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.directoryTitle')}</h1>
@@ -734,6 +799,19 @@ export function PublicBusinessesPage() {
                 ))}
               </select>
             )}
+            <select
+              aria-label={t('search.sortNewest')}
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setPage(1);
+              }}
+              className="px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+            >
+              <option value="newest">{t('search.sortNewest')}</option>
+              <option value="name">{t('search.sortName')}</option>
+              <option value="products">{t('search.sortProducts')}</option>
+            </select>
           </div>
         </div>
 
@@ -763,7 +841,7 @@ export function PublicBusinessesPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
               {t('public.noBusinessesMatchDesc')}
             </p>
-            {(search || category || district) && (
+            {(search || category || district || sort !== 'newest') && (
               <button
                 type="button"
                 onClick={handleClearFilters}
@@ -777,11 +855,15 @@ export function PublicBusinessesPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {businesses.map((b) => (
-                <div key={b.id} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-5">
+                <div
+                  key={b.id}
+                  onMouseEnter={() => prefetchRoute(`/businesses/${b.slug}`)}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-5 hover:border-sky-500/40 transition-colors"
+                >
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
                       {b.logo_url ? (
-                        <img src={b.logo_url} alt={b.name} loading="lazy" referrerPolicy="no-referrer" className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
+                        <img src={b.logo_url} alt={b.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
                       ) : (
                         <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm font-bold text-[#0B192C] dark:text-sky-300 shrink-0">
                           {b.name?.slice(0, 2).toUpperCase()}
@@ -815,6 +897,7 @@ export function PublicBusinessesPage() {
                     </div>
                     <Link
                       to={`/businesses/${b.slug}`}
+                      onFocus={() => prefetchRoute(`/businesses/${b.slug}`)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 whitespace-nowrap"
                     >
                       {t('public.viewCatalog')}
@@ -875,10 +958,12 @@ export function PublicBusinessesPage() {
 export function PublicBusinessDetailPage() {
   const { t } = useTranslation();
   const { slug } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
+  const [catalogQuery, setCatalogQuery] = useState(() => searchParams.get('q') || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -891,12 +976,23 @@ export function PublicBusinessDetailPage() {
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '', product_id: '' });
   const [contactMsg, setContactMsg] = useState('');
 
+  useEffect(() => {
+    setCatalogQuery(searchParams.get('q') || '');
+  }, [searchParams]);
+
   const loadDetail = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const res = await api.get(`/public/businesses/${slug}`);
       setData(res.data);
+      if (res.data?.business?.name) {
+        const b = res.data.business;
+        setDynamicSeo({
+          title: `${b.name} — ${b.category} (${b.district}) | BizTrade Africa`,
+          description: b.description || `${b.name} storefront, product catalog, and branches in ${b.district}, ${b.country} on BizTrade Africa.`,
+        });
+      }
       if (res.data.branches?.length) {
         setBranchId((prev) => prev || String(res.data.branches[0].id));
       }
@@ -910,6 +1006,19 @@ export function PublicBusinessDetailPage() {
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+
+  const filteredProducts = useMemo(() => {
+    const items = data?.products || [];
+    const q = catalogQuery.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (p) =>
+        p.name?.toLowerCase().includes(q) ||
+        p.sku?.toLowerCase().includes(q) ||
+        p.category_name?.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q)
+    );
+  }, [data?.products, catalogQuery]);
 
   const adjustQty = (productId, delta) => {
     setCart((prev) => {
@@ -998,9 +1107,31 @@ export function PublicBusinessDetailPage() {
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
       <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8">
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          <Link to="/businesses" className="hover:text-slate-900 dark:hover:text-white">← {t('public.backToDirectory')}</Link>
-        </div>
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">
+              {t('nav.home')}
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+            <Link to="/businesses" onMouseEnter={() => prefetchRoute('/businesses')} className="hover:text-slate-900 dark:hover:text-white">
+              {t('nav.businesses')}
+            </Link>
+            {data?.business?.name && (
+              <>
+                <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                <span className="font-semibold text-slate-900 dark:text-white truncate">{data.business.name}</span>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/businesses')}
+            className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white shrink-0"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>{t('public.backToDirectory')}</span>
+          </button>
+        </nav>
 
         {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-lg">{error}</div>}
         {notice && (
@@ -1122,14 +1253,36 @@ export function PublicBusinessDetailPage() {
             {/* Catalog + Customer Order Builder */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               <div className="lg:col-span-8 space-y-4">
-                <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.publishedProducts')}</h2>
-                {data.products.length === 0 ? (
-                  <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-                    {t('public.noCatalogItems')}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.publishedProducts')}</h2>
+                  {data.products.length > 0 && (
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        value={catalogQuery}
+                        onChange={(e) => setCatalogQuery(e.target.value)}
+                        placeholder={t('search.filterCatalogPlaceholder')}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  )}
+                </div>
+                {filteredProducts.length === 0 ? (
+                  <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between gap-3">
+                    <span>{catalogQuery ? t('search.noMatches') : t('public.noCatalogItems')}</span>
+                    {catalogQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setCatalogQuery('')}
+                        className="px-3 py-1 text-xs font-semibold text-sky-700 dark:text-sky-400 border border-slate-200 dark:border-slate-700 rounded-lg"
+                      >
+                        {t('common.clearFilters')}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {data.products.map((p) => (
+                    {filteredProducts.map((p) => (
                       <div key={p.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3">
                         <div className="space-y-1">
                           <div className="flex items-start justify-between gap-2">
@@ -1523,6 +1676,8 @@ function ProjectPreviewMedia({ project }) {
       <img
         src={project.image}
         alt={`${project.name}`}
+        loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
@@ -1645,6 +1800,8 @@ export function AboutPage() {
                       <img
                         src={developerXavineImg}
                         alt={`${developerName} — ${developerRole}`}
+                        loading="lazy"
+                        decoding="async"
                         referrerPolicy="no-referrer"
                         onError={() => setPortraitFailed(true)}
                         className="w-full h-full object-cover"

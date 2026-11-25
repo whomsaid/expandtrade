@@ -36,10 +36,11 @@ export function errorHandler(err, req, res, _next) {
   } else if (
     err.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
     err.code === 'ER_DUP_ENTRY' ||
+    err.code === '23505' ||
     err.errcode === 2067 ||
     err.errcode === 1555 ||
     err.errcode === 2579 ||
-    (err.message && /UNIQUE constraint failed/i.test(err.message))
+    (err.message && /UNIQUE constraint failed|duplicate key value violates unique constraint/i.test(err.message))
   ) {
     status = 409;
     message = 'A record with this unique value already exists.';
@@ -47,20 +48,31 @@ export function errorHandler(err, req, res, _next) {
   } else if (
     err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' ||
     err.code === 'ER_NO_REFERENCED_ROW_2' ||
+    err.code === '23503' ||
     err.errcode === 787 ||
     err.errcode === 1811 ||
-    (err.message && /FOREIGN KEY constraint failed/i.test(err.message))
+    (err.message && /FOREIGN KEY constraint failed|violates foreign key constraint/i.test(err.message))
   ) {
     status = 400;
     message = 'Referenced record does not exist or cannot be linked.';
     code = 'INVALID_REFERENCE';
+  } else if (err.code === '22P02' || err.code === '23502') {
+    status = 400;
+    message = 'One or more fields have an invalid format or missing required value.';
+    code = 'INVALID_INPUT';
   } else if (
     err.code === 'SQLITE_BUSY' ||
     err.errcode === 5 ||
     err.errcode === 6 ||
     err.code === 'ECONNREFUSED' ||
     err.code === 'PROTOCOL_CONNECTION_LOST' ||
-    err.code === 'ETIMEDOUT'
+    err.code === 'ETIMEDOUT' ||
+    err.code === '57P03' ||
+    err.code === '08001' ||
+    err.code === '08006' ||
+    err.code === '40001' ||
+    err.code === '40P01' ||
+    err.code === '55P03'
   ) {
     status = 503;
     message = 'Database service is temporarily busy. Please try again.';

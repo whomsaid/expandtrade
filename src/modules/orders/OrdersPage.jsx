@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
@@ -20,8 +21,10 @@ const ORDER_STATUSES = [
 
 export default function OrdersPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { activeBusinessId, workspace, hasPermission } = useAuth();
   const [orders, setOrders] = useState([]);
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [products, setProducts] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ customer_name: '', customer_phone: '+250', delivery_address: '', product_id: '', quantity: '1', notes: '' });
@@ -43,8 +46,25 @@ export default function OrdersPage() {
   }, [activeBusinessId]);
 
   useEffect(() => {
+    const q = searchParams.get('q');
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
+
+  useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  const filteredOrders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter(
+      (o) =>
+        o.order_number?.toLowerCase().includes(q) ||
+        o.customer_name?.toLowerCase().includes(q) ||
+        o.customer_phone?.toLowerCase().includes(q) ||
+        o.delivery_address?.toLowerCase().includes(q)
+    );
+  }, [orders, search]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -113,6 +133,27 @@ export default function OrdersPage() {
         </div>
       )}
 
+      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('common.search')}
+            className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+          />
+        </div>
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline"
+          >
+            {t('common.clearFilters')}
+          </button>
+        )}
+      </div>
+
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
@@ -127,10 +168,10 @@ export default function OrdersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {orders.length === 0 ? (
+            {filteredOrders.length === 0 ? (
               <tr><td colSpan={7} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('orders.empty')}</td></tr>
             ) : (
-              orders.map((o) => (
+              filteredOrders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
                   <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{o.order_number}</td>
                   <td className="py-3 px-4 tabular-nums text-slate-500 dark:text-slate-400">{formatDateTime(o.created_at)}</td>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Download, FileSpreadsheet, Image as ImageIcon, Package, Plus, Search, Star, Trash2, Upload } from 'lucide-react';
 import { api } from '../../services/api.js';
@@ -8,11 +9,12 @@ import { formatMoney } from '../../utils/format.js';
 
 export default function ProductsPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { activeBusinessId, activeBranchId, workspace, hasPermission } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -71,6 +73,11 @@ export default function ProductsPage() {
       setLoading(false);
     }
   }, [activeBusinessId, activeBranchId, search, categoryFilter]);
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
 
   useEffect(() => {
     loadData();

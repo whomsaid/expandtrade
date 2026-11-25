@@ -152,8 +152,32 @@ export function AuthProvider({ children }) {
     }
     localStorage.setItem('biztrade_token', activeToken);
     setApiWorkspaceContext({ token: activeToken });
+
+    const savedBiz = Number(
+      localStorage.getItem('biztrade_business_id') || localStorage.getItem('bizflow_business_id') || 0
+    );
+    const savedBranch = Number(
+      localStorage.getItem('biztrade_branch_id') || localStorage.getItem('bizflow_branch_id') || 0
+    );
+
+    // Speculatively pre-fetch workspace + notifications alongside /auth/me when a saved business exists
+    const speculativeWorkspacePromise = savedBiz
+      ? api
+          .get('/businesses/current', {
+            headers: {
+              'x-business-id': String(savedBiz),
+              ...(savedBranch ? { 'x-branch-id': String(savedBranch) } : {}),
+            },
+          })
+          .then((r) => r.data)
+          .catch(() => null)
+      : Promise.resolve(null);
+
     try {
-      const { data } = await api.get('/auth/me');
+      const [{ data }, speculativeWorkspace] = await Promise.all([
+        api.get('/auth/me'),
+        speculativeWorkspacePromise,
+      ]);
       const membershipsList = data.memberships || [];
       setUser(data.user);
       setSessions(data.sessions || []);
@@ -168,7 +192,17 @@ export function AuthProvider({ children }) {
           syncWorkspaceIds(targetBiz, undefined);
         }
         setLoading(false);
-        await Promise.all([loadWorkspace(targetBiz), refreshNotifications()]);
+
+        if (targetBiz && speculativeWorkspace && Number(speculativeWorkspace?.business?.id) === Number(targetBiz)) {
+          setWorkspace(speculativeWorkspace);
+          const resolvedBranch =
+            Number(speculativeWorkspace?.activeBranchId || speculativeWorkspace?.branches?.[0]?.id || savedBranch || 0) ||
+            null;
+          syncWorkspaceIds(targetBiz, resolvedBranch);
+          refreshNotifications();
+        } else {
+          await Promise.all([loadWorkspace(targetBiz), refreshNotifications()]);
+        }
       } else {
         syncWorkspaceIds(null, null);
         setWorkspace(null);

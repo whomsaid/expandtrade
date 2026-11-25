@@ -1,10 +1,12 @@
-import { Component, Suspense, lazy } from 'react';
+import { Component, Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { PlatformConfigProvider } from './context/PlatformConfigContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import GlobalWatermark from './components/GlobalWatermark.jsx';
+import RouteSeoManager from './components/RouteSeoManager.jsx';
+import QuickSearchModal from './components/QuickSearchModal.jsx';
 import AppLayout from './layouts/AppLayout.jsx';
 const HomePage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.HomePage })));
 const AboutPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.AboutPage })));
@@ -87,8 +89,19 @@ class AppErrorBoundary extends Component {
 function AuthLoadingScreen() {
   const { t } = useTranslation();
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-sm text-slate-500 dark:text-slate-400">
-      {t('common.loading')}
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950" aria-busy="true" aria-label={t('common.loading')}>
+      <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex items-center justify-between">
+        <div className="h-5 w-32 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        <div className="h-7 w-24 rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+      </div>
+      <div className="max-w-7xl w-full mx-auto px-6 py-10 space-y-6">
+        <div className="h-8 w-64 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="h-44 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 animate-pulse" />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -167,11 +180,31 @@ function CustomerProtectedRoute({ children }) {
 }
 
 export default function App() {
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    const onOpenEvent = () => setSearchOpen(true);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('biztrade:open-search', onOpenEvent);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('biztrade:open-search', onOpenEvent);
+    };
+  }, []);
+
   return (
     <AuthProvider>
       <ThemeProvider>
         <PlatformConfigProvider>
           <BrowserRouter>
+            <RouteSeoManager />
+            <QuickSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
             <GlobalWatermark />
             <AppErrorBoundary>
               <Suspense fallback={<AuthLoadingScreen />}>

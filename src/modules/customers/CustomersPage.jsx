@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
@@ -9,9 +10,10 @@ import WhatsAppContactButton from '../../components/WhatsAppContactButton.jsx';
 
 export default function CustomersPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { activeBusinessId, workspace, hasPermission } = useAuth();
   const [customers, setCustomers] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState({ sales: [], notes: [] });
@@ -51,6 +53,11 @@ export default function CustomersPage() {
       setError(err.message);
     }
   }, [activeBusinessId, search]);
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
 
   useEffect(() => {
     loadCustomers();

@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Suspense, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
+  ArrowLeft,
   Banknote,
   BarChart3,
   Bell,
@@ -9,6 +10,7 @@ import {
   Boxes,
   Briefcase,
   Building2,
+  ChevronRight,
   ClipboardList,
   CreditCard,
   FileSpreadsheet,
@@ -18,6 +20,7 @@ import {
   Menu,
   Package,
   Receipt,
+  Search,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -35,6 +38,21 @@ import LogoutConfirmModal from '../components/LogoutConfirmModal.jsx';
 import ThemeSelector from '../components/ThemeSelector.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 import { api } from '../services/api.js';
+import { prefetchRoute } from '../utils/routePrefetch.js';
+
+function WorkspaceContentSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse" aria-busy="true">
+      <div className="h-7 w-48 rounded-lg bg-slate-200 dark:bg-slate-800" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((n) => (
+          <div key={n} className="h-24 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800" />
+        ))}
+      </div>
+      <div className="h-64 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800" />
+    </div>
+  );
+}
 
 export default function AppLayout() {
   const { t } = useTranslation();
@@ -53,6 +71,7 @@ export default function AppLayout() {
   } = useAuth();
 
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -150,6 +169,8 @@ export default function AppLayout() {
               <NavLink
                 key={item.to}
                 to={item.to}
+                onMouseEnter={() => prefetchRoute(item.to)}
+                onFocus={() => prefetchRoute(item.to)}
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
@@ -169,6 +190,8 @@ export default function AppLayout() {
             <div className="pt-3 mt-3 border-t border-slate-800">
               <NavLink
                 to="/app/admin"
+                onMouseEnter={() => prefetchRoute('/app/admin')}
+                onFocus={() => prefetchRoute('/app/admin')}
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
@@ -254,7 +277,19 @@ export default function AppLayout() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('biztrade:open-search'))}
+              aria-label={t('search.modalTitle')}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-nowrap shrink-0"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">{t('search.quickSearchBtn')}</span>
+              <kbd className="hidden xl:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">
+                Ctrl+K
+              </kbd>
+            </button>
             <div className="hidden sm:flex items-center gap-2">
               <LanguageSelector compact />
               <ThemeSelector compact />
@@ -333,7 +368,66 @@ export default function AppLayout() {
         </header>
 
         {/* Main Viewport */}
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1440px] w-full mx-auto min-w-0">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 pb-16 lg:pb-6 max-w-[1440px] w-full mx-auto min-w-0">
+          {/* Breadcrumb + Quick Cross-Navigation Strip */}
+          {(() => {
+            const activeItem =
+              visibleNav.find((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)) ||
+              (location.pathname.startsWith('/app/admin') ? { label: t('nav.admin'), to: '/app/admin' } : null);
+            const isDashboard = location.pathname === '/app/dashboard';
+            return (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400 no-print">
+                <div className="flex items-center gap-2 min-w-0">
+                  {!isDashboard && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(-1)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap shrink-0"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>{t('search.goBack')}</span>
+                    </button>
+                  )}
+                  <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 min-w-0 truncate">
+                    <Link
+                      to="/app/dashboard"
+                      onMouseEnter={() => prefetchRoute('/app/dashboard')}
+                      className="hover:text-slate-900 dark:hover:text-white truncate"
+                    >
+                      {workspace?.business?.name || t('common.appName')}
+                    </Link>
+                    {activeItem && (
+                      <>
+                        <ChevronRight className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {activeItem.label}
+                        </span>
+                      </>
+                    )}
+                  </nav>
+                </div>
+
+                <div className="hidden sm:flex items-center gap-3 shrink-0">
+                  <Link
+                    to="/businesses"
+                    onMouseEnter={() => prefetchRoute('/businesses')}
+                    className="hover:text-sky-700 dark:hover:text-sky-400 whitespace-nowrap"
+                  >
+                    {t('search.quickDirectory')}
+                  </Link>
+                  <span aria-hidden="true">·</span>
+                  <Link
+                    to="/jobs"
+                    onMouseEnter={() => prefetchRoute('/jobs')}
+                    className="hover:text-sky-700 dark:hover:text-sky-400 whitespace-nowrap"
+                  >
+                    {t('search.quickJobs')}
+                  </Link>
+                </div>
+              </div>
+            );
+          })()}
+
           {setupIncomplete && (
             <div className="mb-4 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs text-amber-900 dark:text-amber-200">
@@ -348,9 +442,39 @@ export default function AppLayout() {
               </Link>
             </div>
           )}
-          <Outlet />
+          <Suspense fallback={<WorkspaceContentSkeleton />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
+
+      {/* Compact Mobile Bottom Quick-Nav Bar (<= 52px height) */}
+      <nav
+        aria-label={t('nav.mobileNav')}
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 h-13 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-1 no-print"
+      >
+        {visibleNav
+          .filter((item) => ['/app/dashboard', '/app/pos', '/app/products', '/app/orders', '/app/settings'].includes(item.to))
+          .slice(0, 5)
+          .map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onFocus={() => prefetchRoute(item.to)}
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-[10px] font-medium min-w-0 truncate ${
+                    isActive ? 'text-sky-700 dark:text-sky-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+                  }`
+                }
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="truncate max-w-[64px]">{item.label}</span>
+              </NavLink>
+            );
+          })}
+      </nav>
 
       <LogoutConfirmModal
         open={logoutConfirmOpen}

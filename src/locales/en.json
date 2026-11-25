@@ -2333,5 +2333,25 @@
     "contactButton": "WhatsApp",
     "notAvailable": "Not on WhatsApp",
     "openChatTitle": "Open WhatsApp conversation using registered phone number"
+  },
+  "search": {
+    "modalTitle": "Quick Search & Navigation",
+    "quickSearchBtn": "Quick Search",
+    "publicPlaceholder": "Search businesses, products, jobs, or pages...",
+    "workspacePlaceholder": "Search pages, products, customers, sales, or orders...",
+    "pagesGroup": "Pages",
+    "workspaceGroup": "Workspace",
+    "noMatches": "No matching pages or records found.",
+    "searchDirectoryFor": "Search directory for \"{{query}}\"",
+    "viewAllResults": "View all in directory",
+    "navigateHint": "Navigate",
+    "openHint": "Open",
+    "sortNewest": "Sort: Newest",
+    "sortName": "Sort: Name (A–Z)",
+    "sortProducts": "Sort: Most Products",
+    "filterCatalogPlaceholder": "Search products in this catalog...",
+    "goBack": "Go Back",
+    "quickDirectory": "Directory",
+    "quickJobs": "Jobs"
   }
 }

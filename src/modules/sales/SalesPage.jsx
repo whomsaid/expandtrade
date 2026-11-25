@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CreditCard, Printer, RotateCcw, Search } from 'lucide-react';
 import { api } from '../../services/api.js';
@@ -9,9 +10,10 @@ import { formatDateTime, formatMoney, getPaymentMethodLabel, PAYMENT_METHOD_LABE
 
 export default function SalesPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { activeBusinessId, activeBranchId, workspace, hasPermission } = useAuth();
   const [sales, setSales] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [receipt, setReceipt] = useState(null);
   const [paymentModalSale, setPaymentModalSale] = useState(null);
@@ -36,6 +38,11 @@ export default function SalesPage() {
       setError(err.message);
     }
   }, [activeBusinessId, activeBranchId, search, paymentFilter]);
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
 
   useEffect(() => {
     loadSales();

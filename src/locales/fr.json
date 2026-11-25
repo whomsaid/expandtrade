@@ -2333,5 +2333,25 @@
     "contactButton": "WhatsApp",
     "notAvailable": "Absent de WhatsApp",
     "openChatTitle": "Ouvrir la discussion WhatsApp avec le numéro enregistré"
+  },
+  "search": {
+    "modalTitle": "Recherche rapide & Navigation",
+    "quickSearchBtn": "Recherche",
+    "publicPlaceholder": "Rechercher entreprises, produits, emplois ou pages...",
+    "workspacePlaceholder": "Rechercher pages, produits, clients, ventes ou commandes...",
+    "pagesGroup": "Pages",
+    "workspaceGroup": "Espace de travail",
+    "noMatches": "Aucune page ni donnée correspondante.",
+    "searchDirectoryFor": "Rechercher dans l’annuaire « {{query}} »",
+    "viewAllResults": "Voir tout dans l’annuaire",
+    "navigateHint": "Naviguer",
+    "openHint": "Ouvrir",
+    "sortNewest": "Tri : Plus récents",
+    "sortName": "Tri : Nom (A–Z)",
+    "sortProducts": "Tri : Plus de produits",
+    "filterCatalogPlaceholder": "Rechercher des produits dans ce catalogue...",
+    "goBack": "Retour",
+    "quickDirectory": "Annuaire",
+    "quickJobs": "Emplois"
   }
 }

@@ -2,12 +2,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import mysql from 'mysql2/promise';
+import pg from 'pg';
 import { env } from './env.js';
+
+const { Pool: PgPool, types: pgTypes } = pg;
+// Parse PostgreSQL INT8 (COUNT(*)) and NUMERIC into JS numbers for parity with SQLite & MySQL
+pgTypes.setTypeParser(20, (val) => (val === null ? null : parseInt(val, 10)));
+pgTypes.setTypeParser(1700, (val) => (val === null ? null : parseFloat(val)));
 
 let activeDialect = 'sqlite';
 let sqliteDb = null;
 let mysqlPool = null;
+let pgPool = null;
 let sqliteTxChain = Promise.resolve();
+
+const TABLES_WITHOUT_SERIAL_ID = new Set([
+  'role_permissions',
+  'member_permissions',
+  'notification_preferences',
+  'video_upload_sessions',
+  'background_jobs',
+]);
 
 const SQLITE_SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -1460,7 +1475,133 @@ async function ensureMySqlSchemaAndIndexes(pool) {
   }
 }
 
+const SHARED_INDEXES_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_businesses_public ON businesses(status, is_public_listed, deleted_at, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_businesses_pub_cat_dist ON businesses(status, is_public_listed, deleted_at, category, district, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_businesses_category ON businesses(category);
+  CREATE INDEX IF NOT EXISTS idx_businesses_district ON businesses(district);
+  CREATE INDEX IF NOT EXISTS idx_products_biz_status ON products(business_id, status);
+  CREATE INDEX IF NOT EXISTS idx_prod_images_prod ON product_images(product_id, is_primary DESC, id ASC);
+  CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory(product_id);
+  CREATE INDEX IF NOT EXISTS idx_inventory_biz_branch ON inventory(business_id, branch_id);
+  CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_sales_biz_branch_status_date ON sales(business_id, branch_id, sale_status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+  CREATE INDEX IF NOT EXISTS idx_sale_items_prod ON sale_items(product_id);
+  CREATE INDEX IF NOT EXISTS idx_videos_pub ON business_videos(is_published, business_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_branches_biz_active ON branches(business_id, is_active);
+  CREATE INDEX IF NOT EXISTS idx_reviews_biz ON product_reviews(business_id);
+  CREATE INDEX IF NOT EXISTS idx_reviews_user ON product_reviews(user_id);
+  CREATE INDEX IF NOT EXISTS idx_inquiries_user ON contact_inquiries(user_id);
+  CREATE INDEX IF NOT EXISTS idx_sales_biz_status_date ON sales(business_id, sale_status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_sessions_jti ON user_sessions(token_jti, user_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user_revoked ON user_sessions(user_id, is_revoked);
+  CREATE INDEX IF NOT EXISTS idx_bm_biz_status ON business_members(business_id, status);
+  CREATE INDEX IF NOT EXISTS idx_bm_user_status ON business_members(user_id, status);
+  CREATE INDEX IF NOT EXISTS idx_ba_biz_primary ON business_admins(business_id, is_primary, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_ba_user ON business_admins(user_id);
+  CREATE INDEX IF NOT EXISTS idx_subs_biz ON subscriptions(business_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_orders_biz_created ON orders(business_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_orders_cust_user ON orders(customer_user_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_idempotency ON orders(business_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_expenses_biz_status ON expenses(business_id, approval_status);
+  CREATE INDEX IF NOT EXISTS idx_expenses_biz_status_branch ON expenses(business_id, approval_status, branch_id);
+  CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_messages_biz_id ON messages(business_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_activity_biz ON activity_logs(business_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_biz_activity_biz ON business_activity_logs(business_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_email_ver_user ON email_verifications(user_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_vacancies_biz_status ON job_vacancies(business_id, status);
+  CREATE INDEX IF NOT EXISTS idx_job_apps_user ON job_applications(applicant_user_id);
+  CREATE INDEX IF NOT EXISTS idx_payroll_cfg_biz_due ON employee_payroll_configs(business_id, payroll_status, next_payment_date);
+  CREATE INDEX IF NOT EXISTS idx_payroll_cfg_user ON employee_payroll_configs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_payroll_tx_biz_status ON payroll_transactions(business_id, status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_payroll_tx_emp ON payroll_transactions(employee_user_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_payroll_alerts_biz ON payroll_due_alerts(business_id, status);
+  CREATE INDEX IF NOT EXISTS idx_vus_biz_user ON video_upload_sessions(business_id, user_id, status);
+  CREATE INDEX IF NOT EXISTS idx_bg_jobs_user ON background_jobs(user_id, status);
+  CREATE INDEX IF NOT EXISTS idx_otp_email_purpose ON otp_tokens(email, purpose, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+  CREATE INDEX IF NOT EXISTS idx_customers_biz_phone ON customers(business_id, phone);
+  CREATE INDEX IF NOT EXISTS idx_mon_events_created ON monitoring_events(severity, category, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_mon_runs_created ON monitoring_runs(id DESC);
+`;
+
+export function buildPostgresSchemaSql() {
+  const base = SQLITE_SCHEMA_SQL
+    .replace(/^\s*PRAGMA\s+foreign_keys\s*=\s*ON;\s*/im, '')
+    .replace(/\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b/gi, 'SERIAL PRIMARY KEY')
+    .replace(/DEFAULT\s*\(\s*datetime\(\s*'now'\s*\)\s*\)/gi, "DEFAULT (TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))")
+    .replace(/\bREAL\b/g, 'DOUBLE PRECISION');
+
+  const extraAlterStatements = `
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language TEXT NOT NULL DEFAULT 'en';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference TEXT NOT NULL DEFAULT 'system';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_available INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT NULL;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS location TEXT NULL;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_settings_json TEXT NULL;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS dashboard_preferences_json TEXT NULL;
+    ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS payroll_alerts INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE businesses ADD COLUMN IF NOT EXISTS business_code TEXT NULL;
+    ALTER TABLE businesses ADD COLUMN IF NOT EXISTS phone_on_whatsapp INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE businesses ADD COLUMN IF NOT EXISTS is_public_listed INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE businesses ADD COLUMN IF NOT EXISTS setup_completed INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE businesses ADD COLUMN IF NOT EXISTS setup_steps_json TEXT NULL;
+    ALTER TABLE businesses ADD COLUMN IF NOT EXISTS deleted_at TEXT NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_user_id INTEGER NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS idempotency_key TEXT NULL;
+    ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS business_id INTEGER NULL;
+    ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS user_id INTEGER NULL;
+    ALTER TABLE otp_tokens ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'email';
+    ALTER TABLE otp_tokens ADD COLUMN IF NOT EXISTS destination_masked TEXT NULL;
+    ALTER TABLE otp_tokens ADD COLUMN IF NOT EXISTS provider_message_id TEXT NULL;
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TEXT NULL;
+  `;
+
+  return `${base}\n${extraAlterStatements}\n${SHARED_INDEXES_SQL}`;
+}
+
+async function ensurePostgresSchemaAndIndexes(pool) {
+  const ddl = buildPostgresSchemaSql();
+  await pool.query(ddl);
+}
+
 export async function initDatabase() {
+  if (env.dbClient === 'postgres' && env.databaseUrl) {
+    if (env.databaseUrl.includes('[YOUR-DATABASE-PASSWORD]')) {
+      console.warn(
+        '[DB] DATABASE_URL still contains [YOUR-DATABASE-PASSWORD] placeholder; falling back to local persistent SQLite until a real password is provided.'
+      );
+    } else {
+      try {
+        pgPool = new PgPool({
+          connectionString: env.databaseUrl,
+          max: 20,
+          idleTimeoutMillis: 30_000,
+          connectionTimeoutMillis: 10_000,
+          ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
+        });
+        pgPool.on('error', (poolErr) => {
+          console.error('[DB] Unexpected PostgreSQL pool error:', poolErr.message);
+        });
+        await pgPool.query('SELECT 1');
+        await ensurePostgresSchemaAndIndexes(pgPool);
+        activeDialect = 'postgres';
+        console.log('[DB] Connected to PostgreSQL (Supabase) database');
+        return { dialect: activeDialect };
+      } catch (err) {
+        console.warn('[DB] PostgreSQL unavailable, falling back to persistent SQLite:', err.message);
+        if (pgPool) {
+          await pgPool.end().catch(() => {});
+          pgPool = null;
+        }
+      }
+    }
+  }
+
   if (env.dbClient === 'mysql' && env.mysql.host) {
     try {
       mysqlPool = mysql.createPool({
@@ -1536,58 +1677,7 @@ export async function initDatabase() {
   ensureColumn('otp_tokens', 'destination_masked', 'destination_masked TEXT NULL');
   ensureColumn('otp_tokens', 'provider_message_id', 'provider_message_id TEXT NULL');
   ensureColumn('messages', 'read_at', 'read_at TEXT NULL');
-  sqliteDb.exec(`
-    CREATE INDEX IF NOT EXISTS idx_businesses_public ON businesses(status, is_public_listed, deleted_at, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_businesses_pub_cat_dist ON businesses(status, is_public_listed, deleted_at, category, district, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_businesses_category ON businesses(category);
-    CREATE INDEX IF NOT EXISTS idx_businesses_district ON businesses(district);
-    CREATE INDEX IF NOT EXISTS idx_products_biz_status ON products(business_id, status);
-    CREATE INDEX IF NOT EXISTS idx_prod_images_prod ON product_images(product_id, is_primary DESC, id ASC);
-    CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory(product_id);
-    CREATE INDEX IF NOT EXISTS idx_inventory_biz_branch ON inventory(business_id, branch_id);
-    CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
-    CREATE INDEX IF NOT EXISTS idx_sales_biz_branch_status_date ON sales(business_id, branch_id, sale_status, created_at);
-    CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
-    CREATE INDEX IF NOT EXISTS idx_sale_items_prod ON sale_items(product_id);
-    CREATE INDEX IF NOT EXISTS idx_videos_pub ON business_videos(is_published, business_id, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_branches_biz_active ON branches(business_id, is_active);
-    CREATE INDEX IF NOT EXISTS idx_reviews_biz ON product_reviews(business_id);
-    CREATE INDEX IF NOT EXISTS idx_reviews_user ON product_reviews(user_id);
-    CREATE INDEX IF NOT EXISTS idx_inquiries_user ON contact_inquiries(user_id);
-    CREATE INDEX IF NOT EXISTS idx_sales_biz_status_date ON sales(business_id, sale_status, created_at);
-    CREATE INDEX IF NOT EXISTS idx_sessions_jti ON user_sessions(token_jti, user_id);
-    CREATE INDEX IF NOT EXISTS idx_sessions_user_revoked ON user_sessions(user_id, is_revoked);
-    CREATE INDEX IF NOT EXISTS idx_bm_biz_status ON business_members(business_id, status);
-    CREATE INDEX IF NOT EXISTS idx_bm_user_status ON business_members(user_id, status);
-    CREATE INDEX IF NOT EXISTS idx_ba_biz_primary ON business_admins(business_id, is_primary, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_ba_user ON business_admins(user_id);
-    CREATE INDEX IF NOT EXISTS idx_subs_biz ON subscriptions(business_id, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_orders_biz_created ON orders(business_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_orders_cust_user ON orders(customer_user_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_idempotency ON orders(business_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
-    CREATE INDEX IF NOT EXISTS idx_expenses_biz_status ON expenses(business_id, approval_status);
-    CREATE INDEX IF NOT EXISTS idx_expenses_biz_status_branch ON expenses(business_id, approval_status, branch_id);
-    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_messages_biz_id ON messages(business_id, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_activity_biz ON activity_logs(business_id, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_biz_activity_biz ON business_activity_logs(business_id, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_email_ver_user ON email_verifications(user_id, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_vacancies_biz_status ON job_vacancies(business_id, status);
-    CREATE INDEX IF NOT EXISTS idx_job_apps_user ON job_applications(applicant_user_id);
-    CREATE INDEX IF NOT EXISTS idx_payroll_cfg_biz_due ON employee_payroll_configs(business_id, payroll_status, next_payment_date);
-    CREATE INDEX IF NOT EXISTS idx_payroll_cfg_user ON employee_payroll_configs(user_id);
-    CREATE INDEX IF NOT EXISTS idx_payroll_tx_biz_status ON payroll_transactions(business_id, status, created_at);
-    CREATE INDEX IF NOT EXISTS idx_payroll_tx_emp ON payroll_transactions(employee_user_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_payroll_alerts_biz ON payroll_due_alerts(business_id, status);
-    CREATE INDEX IF NOT EXISTS idx_vus_biz_user ON video_upload_sessions(business_id, user_id, status);
-    CREATE INDEX IF NOT EXISTS idx_bg_jobs_user ON background_jobs(user_id, status);
-    CREATE INDEX IF NOT EXISTS idx_otp_email_purpose ON otp_tokens(email, purpose, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
-    CREATE INDEX IF NOT EXISTS idx_customers_biz_phone ON customers(business_id, phone);
-    CREATE INDEX IF NOT EXISTS idx_mon_events_created ON monitoring_events(severity, category, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_mon_runs_created ON monitoring_runs(id DESC);
-  `);
+  sqliteDb.exec(SHARED_INDEXES_SQL);
   activeDialect = 'sqlite';
   console.log('[DB] Connected to persistent SQLite database at', dbPath);
   return { dialect: activeDialect };
@@ -1597,7 +1687,92 @@ export function getDialect() {
   return activeDialect;
 }
 
-function adaptSqlForDialect(sql) {
+function replaceOutsideSqlLiterals(sql, transformNonLiteral) {
+  let result = '';
+  let i = 0;
+  let buf = '';
+
+  const flush = () => {
+    if (buf) {
+      result += transformNonLiteral(buf);
+      buf = '';
+    }
+  };
+
+  while (i < sql.length) {
+    if (sql[i] === "'") {
+      flush();
+      let lit = "'";
+      i += 1;
+      while (i < sql.length) {
+        lit += sql[i];
+        if (sql[i] === "'") {
+          if (sql[i + 1] === "'") {
+            lit += "'";
+            i += 2;
+            continue;
+          }
+          i += 1;
+          break;
+        }
+        i += 1;
+      }
+      result += lit;
+    } else {
+      buf += sql[i];
+      i += 1;
+    }
+  }
+  flush();
+  return result;
+}
+
+export function adaptSqlForPostgres(sql, forExecute = false) {
+  let out = sql
+    .replace(
+      /datetime\(\s*'now'\s*,\s*'\+(\d+)\s+days'\s*\)/gi,
+      "TO_CHAR((NOW() + INTERVAL '$1 days') AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"
+    )
+    .replace(
+      /datetime\(\s*'now'\s*,\s*'-(\d+)\s+days'\s*\)/gi,
+      "TO_CHAR((NOW() - INTERVAL '$1 days') AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"
+    )
+    .replace(
+      /datetime\(\s*'now'\s*\)/gi,
+      "TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"
+    )
+    .replace(/date\(\s*'now'\s*\)/gi, "TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD')")
+    .replace(/date\(\s*([a-zA-Z0-9_.]+)\s*\)/gi, 'SUBSTRING(($1)::text, 1, 10)')
+    .replace(/strftime\(\s*'%Y-%m'\s*,\s*'now'\s*\)/gi, "TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM')")
+    .replace(/strftime\(\s*'%Y'\s*,\s*'now'\s*\)/gi, "TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY')")
+    .replace(/strftime\(\s*'%Y-%m'\s*,\s*([^)]+)\)/gi, 'SUBSTRING(($1)::text, 1, 7)')
+    .replace(/strftime\(\s*'%Y'\s*,\s*([^)]+)\)/gi, 'SUBSTRING(($1)::text, 1, 4)')
+    .replace(/MAX\(\s*0\s*,/gi, 'GREATEST(0,');
+
+  let paramIdx = 0;
+  out = replaceOutsideSqlLiterals(out, (segment) =>
+    segment
+      .replace(/\bLIKE\b/gi, 'ILIKE')
+      .replace(/\?/g, () => `$${++paramIdx}`)
+  );
+
+  if (forExecute) {
+    const insertMatch = out.match(/^\s*INSERT\s+INTO\s+([a-zA-Z0-9_"]+)/i);
+    if (insertMatch && !/\bRETURNING\b/i.test(out)) {
+      const tableName = insertMatch[1].replace(/"/g, '').toLowerCase();
+      if (!TABLES_WITHOUT_SERIAL_ID.has(tableName)) {
+        out = `${out.replace(/;\s*$/, '')} RETURNING id`;
+      }
+    }
+  }
+
+  return out;
+}
+
+function adaptSqlForDialect(sql, forExecute = false) {
+  if (activeDialect === 'postgres') {
+    return adaptSqlForPostgres(sql, forExecute);
+  }
   if (activeDialect !== 'mysql') return sql;
   return sql
     .replace(/datetime\(\s*'now'\s*,\s*'\+(\d+)\s+days'\s*\)/gi, 'DATE_ADD(NOW(), INTERVAL $1 DAY)')
@@ -1619,7 +1794,11 @@ function normalizeParams(params = []) {
 
 export async function query(sql, params = []) {
   const safeParams = normalizeParams(params);
-  const adapted = adaptSqlForDialect(sql);
+  const adapted = adaptSqlForDialect(sql, false);
+  if (activeDialect === 'postgres') {
+    const res = await pgPool.query(adapted, safeParams);
+    return res.rows;
+  }
   if (activeDialect === 'mysql') {
     const [rows] = await mysqlPool.execute(adapted, safeParams);
     return rows;
@@ -1635,7 +1814,14 @@ export async function queryOne(sql, params = []) {
 
 export async function execute(sql, params = []) {
   const safeParams = normalizeParams(params);
-  const adapted = adaptSqlForDialect(sql);
+  const adapted = adaptSqlForDialect(sql, true);
+  if (activeDialect === 'postgres') {
+    const res = await pgPool.query(adapted, safeParams);
+    return {
+      insertId: Number(res.rows?.[0]?.id || 0),
+      affectedRows: Number(res.rowCount || 0),
+    };
+  }
   if (activeDialect === 'mysql') {
     const [res] = await mysqlPool.execute(adapted, safeParams);
     return {
@@ -1652,21 +1838,53 @@ export async function execute(sql, params = []) {
 }
 
 export async function transaction(callback) {
+  if (activeDialect === 'postgres') {
+    const client = await pgPool.connect();
+    await client.query('BEGIN');
+    try {
+      const tx = {
+        query: async (sql, params = []) => {
+          const res = await client.query(adaptSqlForPostgres(sql, false), normalizeParams(params));
+          return res.rows;
+        },
+        queryOne: async (sql, params = []) => {
+          const res = await client.query(adaptSqlForPostgres(sql, false), normalizeParams(params));
+          return res.rows[0] || null;
+        },
+        execute: async (sql, params = []) => {
+          const res = await client.query(adaptSqlForPostgres(sql, true), normalizeParams(params));
+          return {
+            insertId: Number(res.rows?.[0]?.id || 0),
+            affectedRows: Number(res.rowCount || 0),
+          };
+        },
+      };
+      const result = await callback(tx);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   if (activeDialect === 'mysql') {
     const conn = await mysqlPool.getConnection();
     await conn.beginTransaction();
     try {
       const tx = {
         query: async (sql, params = []) => {
-          const [rows] = await conn.execute(adaptSqlForDialect(sql), normalizeParams(params));
+          const [rows] = await conn.execute(adaptSqlForDialect(sql, false), normalizeParams(params));
           return rows;
         },
         queryOne: async (sql, params = []) => {
-          const [rows] = await conn.execute(adaptSqlForDialect(sql), normalizeParams(params));
+          const [rows] = await conn.execute(adaptSqlForDialect(sql, false), normalizeParams(params));
           return rows[0] || null;
         },
         execute: async (sql, params = []) => {
-          const [res] = await conn.execute(adaptSqlForDialect(sql), normalizeParams(params));
+          const [res] = await conn.execute(adaptSqlForDialect(sql, true), normalizeParams(params));
           return {
             insertId: Number(res.insertId || 0),
             affectedRows: Number(res.affectedRows || 0),
@@ -1688,10 +1906,10 @@ export async function transaction(callback) {
     sqliteDb.exec('BEGIN IMMEDIATE');
     try {
       const tx = {
-        query: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).all(...normalizeParams(params)),
-        queryOne: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql)).get(...normalizeParams(params)) || null,
+        query: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql, false)).all(...normalizeParams(params)),
+        queryOne: async (sql, params = []) => sqliteDb.prepare(adaptSqlForDialect(sql, false)).get(...normalizeParams(params)) || null,
         execute: async (sql, params = []) => {
-          const res = sqliteDb.prepare(adaptSqlForDialect(sql)).run(...normalizeParams(params));
+          const res = sqliteDb.prepare(adaptSqlForDialect(sql, true)).run(...normalizeParams(params));
           return {
             insertId: Number(res.lastInsertRowid || 0),
             affectedRows: Number(res.changes || 0),

@@ -2333,5 +2333,25 @@
     "contactButton": "WhatsApp",
     "notAvailable": "Ntiri kuri WhatsApp",
     "openChatTitle": "Fungura ikiganiro cya WhatsApp ukoresheje nimero yiyandikishije"
+  },
+  "search": {
+    "modalTitle": "Ishakisha Ryihuse & Kujya ku Paji",
+    "quickSearchBtn": "Shakisha",
+    "publicPlaceholder": "Shakisha ubucuruzi, ibicuruzwa, imyanya y’akazi cyangwa paji...",
+    "workspacePlaceholder": "Shakisha paji, ibicuruzwa, abakiriya, ibyagurishijwe cyangwa komande...",
+    "pagesGroup": "Amapaji",
+    "workspaceGroup": "Ubucuruzi",
+    "noMatches": "Nta paji cyangwa amakuru ahura yabonetse.",
+    "searchDirectoryFor": "Shakisha mu rutonde \"{{query}}\"",
+    "viewAllResults": "Reba byose ku rutonde",
+    "navigateHint": "Hitamo",
+    "openHint": "Fungura",
+    "sortNewest": "Kuranga: Ibishya",
+    "sortName": "Kuranga: Izina (A–Z)",
+    "sortProducts": "Kuranga: Ibicuruzwa byinshi",
+    "filterCatalogPlaceholder": "Shakisha ibicuruzwa muri iri soko...",
+    "goBack": "Subira inyuma",
+    "quickDirectory": "Ubucuruzi",
+    "quickJobs": "Akazi"
   }
 }

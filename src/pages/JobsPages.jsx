@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
+  ChevronRight,
   Clock,
   FileCheck2,
   GraduationCap,
@@ -18,18 +19,22 @@ import {
 import PublicHeader from '../components/PublicHeader.jsx';
 import PublicFooter from '../components/PublicFooter.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { setDynamicSeo } from '../components/RouteSeoManager.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { formatDate, formatMoney } from '../utils/format.js';
+import { prefetchRoute } from '../utils/routePrefetch.js';
 
 export function PublicJobsPage() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [vacancies, setVacancies] = useState([]);
   const [businesses, setBusinesses] = useState([]);
-  const [search, setSearch] = useState('');
-  const [businessId, setBusinessId] = useState('');
-  const [employmentType, setEmploymentType] = useState('');
-  const [workMode, setWorkMode] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get('q') || '');
+  const [businessId, setBusinessId] = useState(() => searchParams.get('business_id') || '');
+  const [employmentType, setEmploymentType] = useState(() => searchParams.get('employment_type') || '');
+  const [workMode, setWorkMode] = useState(() => searchParams.get('work_mode') || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -39,36 +44,68 @@ export function PublicJobsPage() {
   const formatWorkMode = (val) =>
     t(`workModes.${val}`, { defaultValue: String(val || 'on_site').replace(/_/g, ' ') });
 
-  const loadJobs = useCallback(async () => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (debouncedSearch !== search) setDebouncedSearch(search);
+    }, 240);
+    return () => clearTimeout(timer);
+  }, [search, debouncedSearch]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim());
+    if (businessId) params.set('business_id', businessId);
+    if (employmentType) params.set('employment_type', employmentType);
+    if (workMode) params.set('work_mode', workMode);
+    setSearchParams(params, { replace: true });
+  }, [debouncedSearch, businessId, employmentType, workMode, setSearchParams]);
+
+  const loadJobs = useCallback(async (signal) => {
     setLoading(true);
     setError('');
     try {
       const { data } = await api.get('/public/jobs', {
         params: {
-          q: search.trim() || undefined,
+          q: debouncedSearch.trim() || undefined,
           business_id: businessId || undefined,
           employment_type: employmentType || undefined,
           work_mode: workMode || undefined,
         },
+        signal,
       });
       setVacancies(data.vacancies || []);
       setBusinesses(data.businesses || []);
     } catch (err) {
-      setError(err.message);
+      if (!err.isCanceled) setError(err.message);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }, [search, businessId, employmentType, workMode]);
+  }, [debouncedSearch, businessId, employmentType, workMode]);
 
   useEffect(() => {
-    loadJobs();
+    const controller = new AbortController();
+    loadJobs(controller.signal);
+    return () => controller.abort();
   }, [loadJobs]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
 
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full space-y-8 animate-fade-up">
+      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8 animate-fade-up">
+        <nav aria-label="Breadcrumb" className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">
+              {t('nav.home')}
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="font-semibold text-slate-900 dark:text-white">{t('nav.jobs')}</span>
+          </div>
+          <Link to="/businesses" onMouseEnter={() => prefetchRoute('/businesses')} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline">
+            {t('search.quickDirectory')} →
+          </Link>
+        </nav>
+
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div className="space-y-2 max-w-2xl">
             <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">
@@ -269,6 +306,13 @@ export function PublicJobDetailPage() {
       .then(({ data }) => {
         setVacancy(data.vacancy || null);
         setExistingApp(data.existing_application || null);
+        if (data.vacancy?.title) {
+          const v = data.vacancy;
+          setDynamicSeo({
+            title: `${v.title} — ${v.business_name} | BizTrade Africa Jobs`,
+            description: v.summary || `${v.title} role at ${v.business_name} (${v.location}). Apply online on BizTrade Africa.`,
+          });
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -298,12 +342,27 @@ export function PublicJobDetailPage() {
       <PublicHeader />
 
       <main className="flex-1 max-w-6xl mx-auto px-6 py-10 w-full space-y-6 animate-fade-up">
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          <Link to="/jobs" className="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white">
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">
+              {t('nav.home')}
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+            <Link to="/jobs" onMouseEnter={() => prefetchRoute('/jobs')} className="hover:text-slate-900 dark:hover:text-white">
+              {t('nav.jobs')}
+            </Link>
+            {vacancy?.title && (
+              <>
+                <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                <span className="font-semibold text-slate-900 dark:text-white truncate">{vacancy.title}</span>
+              </>
+            )}
+          </div>
+          <Link to="/jobs" className="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white shrink-0">
             <ArrowLeft className="w-3.5 h-3.5" />
             {t('jobs.backToJobs')}
           </Link>
-        </div>
+        </nav>
 
         {error && (
           <div className="p-4 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-xl">

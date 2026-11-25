@@ -40,7 +40,19 @@ export const env = {
     .filter(Boolean),
   jwtSecret: process.env.JWT_SECRET || 'biztrade_africa_dev_jwt_secret_change_in_prod_2026',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  dbClient: process.env.DB_CLIENT || (process.env.MYSQL_HOST ? 'mysql' : 'sqlite'),
+  dbClient:
+    process.env.DB_CLIENT ||
+    (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL
+      ? 'postgres'
+      : process.env.MYSQL_HOST
+        ? 'mysql'
+        : 'sqlite'),
+  databaseUrl: cleanEnvString(process.env.DATABASE_URL || process.env.SUPABASE_DB_URL),
+  databaseSsl: process.env.DATABASE_SSL !== 'false',
+  supabase: {
+    url: cleanEnvString(process.env.SUPABASE_URL),
+    anonKey: cleanEnvString(process.env.SUPABASE_ANON_KEY),
+  },
   mysql: {
     host: process.env.MYSQL_HOST || '127.0.0.1',
     port: Number(process.env.MYSQL_PORT || 3306),
