@@ -26,8 +26,10 @@ export function httpCompressionMiddleware(req, res, next) {
   let compressor = null;
   let buffered = [];
   let bufferedBytes = 0;
+  let pendingWriteHeadArgs = null;
 
   const ensureVary = () => {
+    if (res.headersSent) return;
     const existingVary = res.getHeader('Vary');
     if (!existingVary) {
       res.setHeader('Vary', 'Accept-Encoding');
@@ -36,7 +38,25 @@ export function httpCompressionMiddleware(req, res, next) {
     }
   };
 
+  const commitHead = () => {
+    res.writeHead = origWriteHead;
+    if (res.headersSent) {
+      pendingWriteHeadArgs = null;
+      return;
+    }
+    if (pendingWriteHeadArgs) {
+      const { statusCode, statusMessage } = pendingWriteHeadArgs;
+      pendingWriteHeadArgs = null;
+      if (typeof statusMessage === 'string') {
+        origWriteHead(statusCode, statusMessage);
+      } else {
+        origWriteHead(statusCode);
+      }
+    }
+  };
+
   const shouldCompress = () => {
+    if (res.headersSent) return false;
     if (res.statusCode === 204 || res.statusCode === 304) return false;
     if (res.getHeader('Content-Encoding')) return false;
     const ctype = String(res.getHeader('Content-Type') || '');
@@ -50,6 +70,9 @@ export function httpCompressionMiddleware(req, res, next) {
     ensureVary();
 
     if (!shouldCompress()) {
+      res.write = origWrite;
+      res.end = origEnd;
+      commitHead();
       for (const chunk of buffered) {
         origWrite(chunk);
       }
@@ -57,8 +80,11 @@ export function httpCompressionMiddleware(req, res, next) {
       return;
     }
 
-    res.removeHeader('Content-Length');
-    res.setHeader('Content-Encoding', encoding);
+    if (!res.headersSent) {
+      res.removeHeader('Content-Length');
+      res.setHeader('Content-Encoding', encoding);
+    }
+    commitHead();
 
     if (encoding === 'br') {
       compressor = zlib.createBrotliCompress({
@@ -91,23 +117,35 @@ export function httpCompressionMiddleware(req, res, next) {
   res.writeHead = (statusCode, statusMessage, headers) => {
     res.statusCode = statusCode;
     let hdrs = headers;
+    let msg = undefined;
     if (typeof statusMessage === 'object' && statusMessage !== null) {
       hdrs = statusMessage;
     } else if (typeof statusMessage === 'string') {
+      msg = statusMessage;
       res.statusMessage = statusMessage;
     }
-    if (hdrs) {
+    if (hdrs && !res.headersSent) {
       for (const [k, v] of Object.entries(hdrs)) {
         res.setHeader(k, v);
       }
     }
-    if (!res.headersSent) {
-      res.removeHeader('Content-Length');
+    const ctype = String(res.getHeader('Content-Type') || '');
+    if (ctype.includes('text/event-stream')) {
+      decided = true;
+      res.writeHead = origWriteHead;
+      res.write = origWrite;
+      res.end = origEnd;
+      return typeof msg === 'string' ? origWriteHead(res.statusCode, msg) : origWriteHead(res.statusCode);
     }
-    return origWriteHead(res.statusCode, res.statusMessage);
+    pendingWriteHeadArgs = { statusCode: res.statusCode, statusMessage: msg };
+    return res;
   };
 
   res.write = (chunk, enc, cb) => {
+    if (typeof enc === 'function') {
+      cb = enc;
+      enc = undefined;
+    }
     if (chunk === undefined || chunk === null) {
       if (typeof cb === 'function') cb();
       return true;
@@ -132,6 +170,10 @@ export function httpCompressionMiddleware(req, res, next) {
     if (typeof chunk === 'function') {
       cb = chunk;
       chunk = undefined;
+      enc = undefined;
+    } else if (typeof enc === 'function') {
+      cb = enc;
+      enc = undefined;
     }
     if (chunk !== undefined && chunk !== null) {
       const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), typeof enc === 'string' ? enc : 'utf8');
@@ -146,13 +188,16 @@ export function httpCompressionMiddleware(req, res, next) {
     }
 
     if (!decided) {
-      // Skip compression for tiny responses under 512 bytes
-      if (bufferedBytes < 512) {
+      // Skip compression for tiny responses under 512 bytes or 204/304
+      if (bufferedBytes < 512 || res.statusCode === 204 || res.statusCode === 304) {
         decided = true;
+        res.write = origWrite;
+        res.end = origEnd;
         ensureVary();
-        for (const b of buffered) origWrite(b);
+        commitHead();
+        const payload = buffered.length === 1 ? buffered[0] : buffered.length > 1 ? Buffer.concat(buffered) : undefined;
         buffered = [];
-        return origEnd(cb);
+        return payload !== undefined ? origEnd(payload, cb) : origEnd(cb);
       }
       initCompressor();
     }

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
@@ -10,6 +11,7 @@ import { createBackendApp } from './backend/app.js';
 import { setSocketIo } from './backend/services/auditService.js';
 import { startPayrollScheduler } from './backend/services/payrollScheduler.js';
 import { startMonitoringScheduler } from './backend/services/monitoringService.js';
+import { injectServerSideSeo } from './backend/services/seoService.js';
 
 async function startServer() {
   await initDatabase();
@@ -102,6 +104,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
+    const distHtml = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
     app.use(
       '/assets',
       express.static(path.join(distPath, 'assets'), {
@@ -111,6 +114,7 @@ async function startServer() {
     );
     app.use(
       express.static(distPath, {
+        index: false,
         maxAge: '1h',
         setHeaders(res, filePath) {
           if (filePath.endsWith('.html')) {
@@ -119,9 +123,10 @@ async function startServer() {
         },
       })
     );
-    app.get('*', (_req, res) => {
+    app.get('*', async (req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
-      res.sendFile(path.join(distPath, 'index.html'));
+      const renderedHtml = await injectServerSideSeo(req, distHtml);
+      res.type('text/html; charset=utf-8').send(renderedHtml);
     });
   }
 

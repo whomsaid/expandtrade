@@ -134,7 +134,16 @@
     "noNotifications": "No notifications yet.",
     "viewAllNotifications": "View all notifications",
     "member": "Member",
-    "superAdminRole": "Platform Super Admin"
+    "superAdminRole": "Platform Super Admin",
+    "skipToContent": "Skip to main content",
+    "filterMenu": "Jump to module...",
+    "clearFilter": "Clear menu filter",
+    "menuBtn": "Menu",
+    "publicSite": "Public Site",
+    "groupOperations": "Operations",
+    "groupPartnersFinance": "Partners & Finance",
+    "groupTeamGrowth": "Team & Growth",
+    "groupSystem": "System"
   },
   "footer": {
     "tagline": "Expand Your Business. Manage Everything. An all-in-one business-management platform designed to help African businesses manage, grow, and expand their operations.",
@@ -2380,6 +2389,8 @@
     "filterCatalogPlaceholder": "Search products in this catalog...",
     "goBack": "Go Back",
     "quickDirectory": "Directory",
-    "quickJobs": "Jobs"
+    "quickJobs": "Jobs",
+    "recentGroup": "Recent",
+    "shortcutHint": "Ctrl+K or /"
   }
 }

@@ -30,6 +30,15 @@ export default function PublicHeader() {
   }, [location.pathname, location.hash]);
 
   useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [menuOpen]);
+
+  useEffect(() => {
     if (!isHome) return undefined;
 
     const hashId = location.hash ? location.hash.replace('#', '') : '';
@@ -145,6 +154,12 @@ export default function PublicHeader() {
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:bg-[#0B192C] focus:text-white focus:rounded-lg"
+      >
+        {t('nav.skipToContent')}
+      </a>
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3">
         <Link
           to="/"
@@ -236,6 +251,8 @@ export default function PublicHeader() {
                 <Link
                   key={item.key}
                   to={item.to}
+                  onMouseEnter={() => prefetchRoute(item.to)}
+                  onTouchStart={() => prefetchRoute(item.to)}
                   onClick={(e) => handleNavClick(e, item)}
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-3 py-2 text-sm rounded-lg transition-colors ${
@@ -250,6 +267,8 @@ export default function PublicHeader() {
             })}
             <Link
               to="/track-order"
+              onMouseEnter={() => prefetchRoute('/track-order')}
+              onTouchStart={() => prefetchRoute('/track-order')}
               onClick={() => setMenuOpen(false)}
               aria-current={activeKey === 'track-order' ? 'page' : undefined}
               className={`px-3 py-2 text-sm rounded-lg transition-colors ${
@@ -260,6 +279,16 @@ export default function PublicHeader() {
             >
               {t('nav.trackOrder')}
             </Link>
+            {user && (memberships?.length > 0 || user?.is_platform_admin) && (
+              <Link
+                to="/customer"
+                onMouseEnter={() => prefetchRoute('/customer')}
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-sm rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors"
+              >
+                {t('nav.customerPortal')}
+              </Link>
+            )}
           </nav>
           <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">

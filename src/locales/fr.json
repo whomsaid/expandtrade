@@ -134,7 +134,16 @@
     "noNotifications": "Aucune notification pour le moment.",
     "viewAllNotifications": "Voir toutes les notifications",
     "member": "Membre",
-    "superAdminRole": "Super Administrateur"
+    "superAdminRole": "Super Administrateur",
+    "skipToContent": "Aller au contenu principal",
+    "filterMenu": "Aller au module...",
+    "clearFilter": "Effacer le filtre",
+    "menuBtn": "Menu",
+    "publicSite": "Site public",
+    "groupOperations": "Opérations",
+    "groupPartnersFinance": "Partenaires & Finance",
+    "groupTeamGrowth": "Équipe & Croissance",
+    "groupSystem": "Système"
   },
   "footer": {
     "tagline": "Développez votre entreprise. Gérez tout. Une plateforme tout-en-un conçue pour aider les entreprises africaines à gérer, développer et étendre leurs opérations.",
@@ -2380,6 +2389,8 @@
     "filterCatalogPlaceholder": "Rechercher des produits dans ce catalogue...",
     "goBack": "Retour",
     "quickDirectory": "Annuaire",
-    "quickJobs": "Emplois"
+    "quickJobs": "Emplois",
+    "recentGroup": "Récent",
+    "shortcutHint": "Ctrl+K ou /"
   }
 }

@@ -187,6 +187,18 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
+        return;
+      }
+      if (
+        e.key === '/' &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) &&
+        !document.activeElement?.isContentEditable
+      ) {
+        e.preventDefault();
+        setSearchOpen(true);
       }
     };
     const onOpenEvent = () => setSearchOpen(true);

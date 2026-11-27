@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -35,6 +35,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import BrandLogo from '../components/BrandLogo.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
 import LogoutConfirmModal from '../components/LogoutConfirmModal.jsx';
+import { useSmartBack } from '../components/PageBreadcrumb.jsx';
 import ThemeSelector from '../components/ThemeSelector.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 import { api } from '../services/api.js';
@@ -72,35 +73,71 @@ export default function AppLayout() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const handleSmartBack = useSmartBack('/app/dashboard');
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarFilter, setSidebarFilter] = useState('');
   const [notifOpen, setNotifOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const notifContainerRef = useRef(null);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  const navItems = [
-    { to: '/app/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, perm: 'dashboard.view' },
-    { to: '/app/pos', label: t('nav.pos'), icon: ShoppingCart, perm: 'pos.sell' },
-    { to: '/app/products', label: t('nav.products'), icon: Package, perm: 'products.view' },
-    { to: '/app/inventory', label: t('nav.inventory'), icon: Boxes, perm: 'inventory.view' },
-    { to: '/app/sales', label: t('nav.sales'), icon: Receipt, perm: 'sales.view' },
-    { to: '/app/orders', label: t('nav.orders'), icon: ShoppingBag, perm: 'orders.view' },
-    { to: '/app/customers', label: t('nav.customers'), icon: Users, perm: 'customers.view' },
-    { to: '/app/suppliers', label: t('nav.suppliers'), icon: Truck, perm: 'suppliers.view' },
-    { to: '/app/purchases', label: t('nav.purchases'), icon: CreditCard, perm: 'purchases.view' },
-    { to: '/app/finance', label: t('nav.finance'), icon: Wallet, perm: 'finance.view' },
-    { to: '/app/payroll', label: t('nav.payroll'), icon: Banknote, perm: 'payroll.view' },
-    { to: '/app/my-payroll', label: t('nav.myPayroll'), icon: BarChart3, perm: null, requiresMember: true },
-    { to: '/app/employees', label: t('nav.employees'), icon: Users, perm: 'employees.view' },
-    { to: '/app/recruitment', label: t('nav.recruitment'), icon: Briefcase, perm: 'recruitment.view' },
-    { to: '/app/branches', label: t('nav.branches'), icon: GitBranch, perm: 'branches.view' },
-    { to: '/app/ads', label: t('nav.ads'), icon: Video, perm: 'ads.view' },
-    { to: '/app/tasks', label: t('nav.tasks'), icon: ClipboardList, perm: 'tasks.view' },
-    { to: '/app/reports', label: t('nav.reports'), icon: FileSpreadsheet, perm: 'reports.view' },
-    { to: '/app/ai', label: t('nav.ai'), icon: Bot, perm: 'ai.use' },
-    { to: '/app/notifications', label: t('nav.notifications'), icon: Bell, perm: null },
-    { to: '/app/settings', label: t('nav.settings'), icon: Settings, perm: null },
-  ];
+  useEffect(() => {
+    setSidebarOpen(false);
+    setNotifOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!notifOpen && !sidebarOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setNotifOpen(false);
+        setSidebarOpen(false);
+      }
+    };
+    const onClickOutside = (e) => {
+      if (notifOpen && notifContainerRef.current && !notifContainerRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('mousedown', onClickOutside);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('mousedown', onClickOutside);
+    };
+  }, [notifOpen, sidebarOpen]);
+
+  const navItems = useMemo(
+    () => [
+      { to: '/app/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, perm: 'dashboard.view', group: 'operations' },
+      { to: '/app/pos', label: t('nav.pos'), icon: ShoppingCart, perm: 'pos.sell', group: 'operations' },
+      { to: '/app/products', label: t('nav.products'), icon: Package, perm: 'products.view', group: 'operations' },
+      { to: '/app/inventory', label: t('nav.inventory'), icon: Boxes, perm: 'inventory.view', group: 'operations' },
+      { to: '/app/sales', label: t('nav.sales'), icon: Receipt, perm: 'sales.view', group: 'operations' },
+      { to: '/app/orders', label: t('nav.orders'), icon: ShoppingBag, perm: 'orders.view', group: 'operations' },
+
+      { to: '/app/customers', label: t('nav.customers'), icon: Users, perm: 'customers.view', group: 'finance' },
+      { to: '/app/suppliers', label: t('nav.suppliers'), icon: Truck, perm: 'suppliers.view', group: 'finance' },
+      { to: '/app/purchases', label: t('nav.purchases'), icon: CreditCard, perm: 'purchases.view', group: 'finance' },
+      { to: '/app/finance', label: t('nav.finance'), icon: Wallet, perm: 'finance.view', group: 'finance' },
+      { to: '/app/payroll', label: t('nav.payroll'), icon: Banknote, perm: 'payroll.view', group: 'finance' },
+      { to: '/app/my-payroll', label: t('nav.myPayroll'), icon: BarChart3, perm: null, requiresMember: true, group: 'finance' },
+
+      { to: '/app/employees', label: t('nav.employees'), icon: Users, perm: 'employees.view', group: 'growth' },
+      { to: '/app/recruitment', label: t('nav.recruitment'), icon: Briefcase, perm: 'recruitment.view', group: 'growth' },
+      { to: '/app/branches', label: t('nav.branches'), icon: GitBranch, perm: 'branches.view', group: 'growth' },
+      { to: '/app/ads', label: t('nav.ads'), icon: Video, perm: 'ads.view', group: 'growth' },
+      { to: '/app/tasks', label: t('nav.tasks'), icon: ClipboardList, perm: 'tasks.view', group: 'growth' },
+      { to: '/app/reports', label: t('nav.reports'), icon: FileSpreadsheet, perm: 'reports.view', group: 'growth' },
+      { to: '/app/ai', label: t('nav.ai'), icon: Bot, perm: 'ai.use', group: 'growth' },
+
+      { to: '/app/notifications', label: t('nav.notifications'), icon: Bell, perm: null, group: 'system' },
+      { to: '/app/settings', label: t('nav.settings'), icon: Settings, perm: null, group: 'system' },
+    ],
+    [t]
+  );
 
   const setupIncomplete = Boolean(
     workspace?.business &&
@@ -109,13 +146,53 @@ export default function AppLayout() {
       ['business_admin', 'business_owner'].includes(workspace?.membership?.role_code)
   );
 
-  const visibleNav = [
-    ...(setupIncomplete ? [{ to: '/app/onboarding', label: t('onboarding.navLabel', { defaultValue: 'Business Setup' }), icon: ClipboardList, perm: null }] : []),
-    ...navItems.filter((item) => {
-      if (item.requiresMember && memberships.length === 0) return false;
-      return !item.perm || hasPermission(item.perm);
-    }),
-  ];
+  const visibleNav = useMemo(
+    () => [
+      ...(setupIncomplete
+        ? [{ to: '/app/onboarding', label: t('onboarding.navLabel', { defaultValue: 'Business Setup' }), icon: ClipboardList, perm: null, group: 'operations' }]
+        : []),
+      ...navItems.filter((item) => {
+        if (item.requiresMember && memberships.length === 0) return false;
+        return !item.perm || hasPermission(item.perm);
+      }),
+    ],
+    [setupIncomplete, navItems, memberships.length, hasPermission, t]
+  );
+
+  const filteredSidebarNav = useMemo(() => {
+    const q = sidebarFilter.trim().toLowerCase();
+    if (!q) return visibleNav;
+    return visibleNav.filter(
+      (item) => item.label.toLowerCase().includes(q) || item.to.toLowerCase().includes(q)
+    );
+  }, [visibleNav, sidebarFilter]);
+
+  const groupedSidebarNav = useMemo(() => {
+    const groupDefs = [
+      { id: 'operations', label: t('nav.groupOperations') },
+      { id: 'finance', label: t('nav.groupPartnersFinance') },
+      { id: 'growth', label: t('nav.groupTeamGrowth') },
+      { id: 'system', label: t('nav.groupSystem') },
+    ];
+    return groupDefs
+      .map((g) => ({
+        ...g,
+        items: filteredSidebarNav.filter((item) => item.group === g.id),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [filteredSidebarNav, t]);
+
+  const handleFilterKeyDown = (e) => {
+    if (e.key === 'Enter' && filteredSidebarNav.length > 0) {
+      e.preventDefault();
+      navigate(filteredSidebarNav[0].to);
+      setSidebarFilter('');
+      setSidebarOpen(false);
+    } else if (e.key === 'Escape' && sidebarFilter) {
+      e.preventDefault();
+      setSidebarFilter('');
+    }
+  };
 
   const handleMarkAllRead = async () => {
     try {
@@ -132,8 +209,23 @@ export default function AppLayout() {
     navigate('/login');
   };
 
+  const mobileQuickLinks = useMemo(
+    () =>
+      visibleNav
+        .filter((item) => ['/app/dashboard', '/app/pos', '/app/products', '/app/orders'].includes(item.to))
+        .slice(0, 4),
+    [visibleNav]
+  );
+
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <a
+        href="#workspace-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:bg-[#0B192C] focus:text-white focus:rounded-lg"
+      >
+        {t('nav.skipToContent')}
+      </a>
+
       {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
         <div
@@ -149,7 +241,11 @@ export default function AppLayout() {
         }`}
       >
         <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
-          <Link to="/app/dashboard" className="text-lg font-bold tracking-tight text-white whitespace-nowrap min-w-0">
+          <Link
+            to="/app/dashboard"
+            onMouseEnter={() => prefetchRoute('/app/dashboard')}
+            className="text-lg font-bold tracking-tight text-white whitespace-nowrap min-w-0"
+          >
             <BrandLogo inverted textClassName="text-lg font-bold tracking-tight text-white truncate" imgClassName="h-7 w-auto max-w-[120px] object-contain shrink-0" />
           </Link>
           <button
@@ -162,32 +258,75 @@ export default function AppLayout() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          {visibleNav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onMouseEnter={() => prefetchRoute(item.to)}
-                onFocus={() => prefetchRoute(item.to)}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
-                    isActive
-                      ? 'bg-sky-600 text-white shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-                  }`
-                }
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </NavLink>
-            );
-          })}
+        {/* Quick Sidebar Filter */}
+        {visibleNav.length > 6 && (
+          <div className="px-3 pt-3 pb-1">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+              <input
+                type="text"
+                value={sidebarFilter}
+                onChange={(e) => setSidebarFilter(e.target.value)}
+                onKeyDown={handleFilterKeyDown}
+                placeholder={t('nav.filterMenu')}
+                aria-label={t('nav.filterMenu')}
+                className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg bg-slate-800/80 border border-slate-700/80 text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-sky-500"
+              />
+              {sidebarFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSidebarFilter('')}
+                  aria-label={t('nav.clearFilter')}
+                  className="absolute right-2 top-2 text-slate-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+          {groupedSidebarNav.map((group) => (
+            <div key={group.id} className="space-y-0.5">
+              <div className="px-3 pb-1 text-[11px] font-semibold tracking-wide text-slate-400">
+                {group.label}
+              </div>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isNotif = item.to === '/app/notifications';
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onMouseEnter={() => prefetchRoute(item.to)}
+                    onFocus={() => prefetchRoute(item.to)}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                        isActive
+                          ? 'bg-sky-600 text-white shadow-sm'
+                          : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+                      }`
+                    }
+                  >
+                    <span className="flex items-center gap-3 min-w-0">
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    {isNotif && unreadCount > 0 && (
+                      <span className="text-[11px] font-semibold tabular-nums px-1.5 py-0.5 rounded bg-slate-800 text-sky-300">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
 
           {Boolean(user?.is_platform_admin) && (
-            <div className="pt-3 mt-3 border-t border-slate-800">
+            <div className="pt-3 mt-2 border-t border-slate-800">
               <NavLink
                 to="/app/admin"
                 onMouseEnter={() => prefetchRoute('/app/admin')}
@@ -213,6 +352,15 @@ export default function AppLayout() {
             <LanguageSelector compact />
             <ThemeSelector compact />
           </div>
+          <Link
+            to="/"
+            onMouseEnter={() => prefetchRoute('/')}
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>{t('nav.publicSite')}</span>
+          </Link>
           <button
             type="button"
             onClick={() => setLogoutConfirmOpen(true)}
@@ -296,10 +444,11 @@ export default function AppLayout() {
             </div>
 
             {/* Notifications */}
-            <div className="relative">
+            <div className="relative" ref={notifContainerRef}>
               <button
                 type="button"
                 onClick={() => setNotifOpen((prev) => !prev)}
+                aria-expanded={notifOpen}
                 className="relative p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-700"
                 aria-label={t('nav.notifications')}
               >
@@ -355,7 +504,11 @@ export default function AppLayout() {
               )}
             </div>
 
-            <Link to="/app/settings" className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200 dark:border-slate-700 hover:opacity-85">
+            <Link
+              to="/app/settings"
+              onMouseEnter={() => prefetchRoute('/app/settings')}
+              className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200 dark:border-slate-700 hover:opacity-85"
+            >
               <div className="text-right">
                 <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">{user?.full_name}</div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
@@ -368,7 +521,7 @@ export default function AppLayout() {
         </header>
 
         {/* Main Viewport */}
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 pb-16 lg:pb-6 max-w-[1440px] w-full mx-auto min-w-0">
+        <main id="workspace-main" className="flex-1 p-3 sm:p-4 lg:p-6 pb-16 lg:pb-6 max-w-[1440px] w-full mx-auto min-w-0">
           {/* Breadcrumb + Quick Cross-Navigation Strip */}
           {(() => {
             const activeItem =
@@ -381,7 +534,7 @@ export default function AppLayout() {
                   {!isDashboard && (
                     <button
                       type="button"
-                      onClick={() => navigate(-1)}
+                      onClick={handleSmartBack}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap shrink-0"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
@@ -407,7 +560,15 @@ export default function AppLayout() {
                   </nav>
                 </div>
 
-                <div className="hidden sm:flex items-center gap-3 shrink-0">
+                <div className="hidden sm:flex items-center gap-2.5 shrink-0">
+                  <Link
+                    to="/"
+                    onMouseEnter={() => prefetchRoute('/')}
+                    className="hover:text-sky-700 dark:hover:text-sky-400 whitespace-nowrap"
+                  >
+                    {t('nav.home')}
+                  </Link>
+                  <span aria-hidden="true">·</span>
                   <Link
                     to="/businesses"
                     onMouseEnter={() => prefetchRoute('/businesses')}
@@ -422,6 +583,14 @@ export default function AppLayout() {
                     className="hover:text-sky-700 dark:hover:text-sky-400 whitespace-nowrap"
                   >
                     {t('search.quickJobs')}
+                  </Link>
+                  <span aria-hidden="true">·</span>
+                  <Link
+                    to="/customer"
+                    onMouseEnter={() => prefetchRoute('/customer')}
+                    className="hover:text-sky-700 dark:hover:text-sky-400 whitespace-nowrap"
+                  >
+                    {t('nav.customerPortal')}
                   </Link>
                 </div>
               </div>
@@ -453,27 +622,33 @@ export default function AppLayout() {
         aria-label={t('nav.mobileNav')}
         className="lg:hidden fixed bottom-0 left-0 right-0 z-30 h-13 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-1 no-print"
       >
-        {visibleNav
-          .filter((item) => ['/app/dashboard', '/app/pos', '/app/products', '/app/orders', '/app/settings'].includes(item.to))
-          .slice(0, 5)
-          .map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onFocus={() => prefetchRoute(item.to)}
-                className={({ isActive }) =>
-                  `flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-[10px] font-medium min-w-0 truncate ${
-                    isActive ? 'text-sky-700 dark:text-sky-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
-                  }`
-                }
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="truncate max-w-[64px]">{item.label}</span>
-              </NavLink>
-            );
-          })}
+        {mobileQuickLinks.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onFocus={() => prefetchRoute(item.to)}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-[10px] font-medium min-w-0 truncate ${
+                  isActive ? 'text-sky-700 dark:text-sky-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+                }`
+              }
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="truncate max-w-[64px]">{item.label}</span>
+            </NavLink>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white min-w-0"
+          aria-label={t('nav.openMenu')}
+        >
+          <Menu className="w-4 h-4 shrink-0" />
+          <span className="truncate max-w-[64px]">{t('nav.menuBtn')}</span>
+        </button>
       </nav>
 
       <LogoutConfirmModal

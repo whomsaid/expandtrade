@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { usePlatformConfig } from '../context/PlatformConfigContext.jsx';
 import BrandLogo from './BrandLogo.jsx';
 
+import { prefetchRoute } from '../utils/routePrefetch.js';
+
 export default function PublicFooter() {
   const { t } = useTranslation();
   const { config } = usePlatformConfig();
@@ -19,7 +21,7 @@ export default function PublicFooter() {
     <footer className="bg-[#0B192C] text-slate-300 border-t border-slate-800">
       <div className="max-w-7xl mx-auto px-6 py-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-4 space-y-3.5">
-          <Link to="/" className="inline-block text-lg font-bold text-white tracking-tight">
+          <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="inline-block text-lg font-bold text-white tracking-tight">
             <BrandLogo
               textClassName="text-lg font-bold text-white tracking-tight"
               imgClassName="h-8 w-auto max-w-[140px] object-contain shrink-0"
@@ -68,34 +70,34 @@ export default function PublicFooter() {
         <div className="lg:col-span-2 space-y-3">
           <div className="text-xs font-semibold text-white">{t('footer.navigation')}</div>
           <ul className="space-y-2 text-sm text-slate-400">
-            <li><Link to="/" className="hover:text-white transition-colors">{t('nav.home')}</Link></li>
-            <li><Link to="/about" className="hover:text-white transition-colors">{t('nav.about')}</Link></li>
-            <li><a href="/#features" className="hover:text-white transition-colors">{t('nav.features')}</a></li>
-            <li><a href="/#how-it-works" className="hover:text-white transition-colors">{t('footer.howItWorks')}</a></li>
-            <li><a href="/#contact" className="hover:text-white transition-colors">{t('nav.contact')}</a></li>
+            <li><Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-white transition-colors">{t('nav.home')}</Link></li>
+            <li><Link to="/about" onMouseEnter={() => prefetchRoute('/about')} className="hover:text-white transition-colors">{t('nav.about')}</Link></li>
+            <li><Link to="/#features" onMouseEnter={() => prefetchRoute('/')} className="hover:text-white transition-colors">{t('nav.features')}</Link></li>
+            <li><Link to="/#how-it-works" onMouseEnter={() => prefetchRoute('/')} className="hover:text-white transition-colors">{t('footer.howItWorks')}</Link></li>
+            <li><Link to="/#contact" onMouseEnter={() => prefetchRoute('/')} className="hover:text-white transition-colors">{t('nav.contact')}</Link></li>
           </ul>
         </div>
 
         <div className="lg:col-span-3 space-y-3">
           <div className="text-xs font-semibold text-white">{t('footer.platformModules')}</div>
           <ul className="space-y-2 text-sm text-slate-400">
-            <li><Link to="/businesses" className="hover:text-white transition-colors">{t('footer.businessesDirectory')}</Link></li>
-            <li><Link to="/jobs" className="hover:text-white transition-colors">{t('footer.jobsCareers')}</Link></li>
-            <li><Link to="/features" className="hover:text-white transition-colors">{t('footer.posInventory')}</Link></li>
-            <li><Link to="/pricing" className="hover:text-white transition-colors">{t('footer.subscriptionPlans')}</Link></li>
-            <li><Link to="/track-order" className="hover:text-white transition-colors">{t('footer.orderTracking')}</Link></li>
-            <li><Link to="/register" className="hover:text-white transition-colors">{t('footer.customerRegistration')}</Link></li>
+            <li><Link to="/businesses" onMouseEnter={() => prefetchRoute('/businesses')} className="hover:text-white transition-colors">{t('footer.businessesDirectory')}</Link></li>
+            <li><Link to="/jobs" onMouseEnter={() => prefetchRoute('/jobs')} className="hover:text-white transition-colors">{t('footer.jobsCareers')}</Link></li>
+            <li><Link to="/features" onMouseEnter={() => prefetchRoute('/features')} className="hover:text-white transition-colors">{t('footer.posInventory')}</Link></li>
+            <li><Link to="/pricing" onMouseEnter={() => prefetchRoute('/pricing')} className="hover:text-white transition-colors">{t('footer.subscriptionPlans')}</Link></li>
+            <li><Link to="/track-order" onMouseEnter={() => prefetchRoute('/track-order')} className="hover:text-white transition-colors">{t('footer.orderTracking')}</Link></li>
+            <li><Link to="/register" onMouseEnter={() => prefetchRoute('/register')} className="hover:text-white transition-colors">{t('footer.customerRegistration')}</Link></li>
           </ul>
         </div>
 
         <div className="lg:col-span-3 space-y-3">
           <div className="text-xs font-semibold text-white">{t('footer.governanceLegal')}</div>
           <ul className="space-y-2 text-sm text-slate-400">
-            <li><Link to="/about" className="hover:text-white transition-colors">{t('footer.aboutPlatform')}</Link></li>
-            <li><Link to="/contact" className="hover:text-white transition-colors">{t('footer.onboardingInquiry')}</Link></li>
-            <li><Link to="/login" className="hover:text-white transition-colors">{t('footer.signInAccount')}</Link></li>
-            <li><Link to="/privacy" className="hover:text-white transition-colors">{t('footer.privacyPolicy')}</Link></li>
-            <li><Link to="/terms" className="hover:text-white transition-colors">{t('footer.termsOfService')}</Link></li>
+            <li><Link to="/about" onMouseEnter={() => prefetchRoute('/about')} className="hover:text-white transition-colors">{t('footer.aboutPlatform')}</Link></li>
+            <li><Link to="/contact" onMouseEnter={() => prefetchRoute('/contact')} className="hover:text-white transition-colors">{t('footer.onboardingInquiry')}</Link></li>
+            <li><Link to="/login" onMouseEnter={() => prefetchRoute('/login')} className="hover:text-white transition-colors">{t('footer.signInAccount')}</Link></li>
+            <li><Link to="/privacy" onMouseEnter={() => prefetchRoute('/privacy')} className="hover:text-white transition-colors">{t('footer.privacyPolicy')}</Link></li>
+            <li><Link to="/terms" onMouseEnter={() => prefetchRoute('/terms')} className="hover:text-white transition-colors">{t('footer.termsOfService')}</Link></li>
           </ul>
         </div>
       </div>

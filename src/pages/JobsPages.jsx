@@ -19,7 +19,7 @@ import {
 import PublicHeader from '../components/PublicHeader.jsx';
 import PublicFooter from '../components/PublicFooter.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
-import { setDynamicSeo } from '../components/RouteSeoManager.jsx';
+import { buildBreadcrumbJsonLd, setDynamicSeo } from '../components/RouteSeoManager.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { formatDate, formatMoney } from '../utils/format.js';
@@ -92,7 +92,7 @@ export function PublicJobsPage() {
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
 
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8 animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8 animate-fade-up">
         <nav aria-label="Breadcrumb" className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-1.5">
             <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">
@@ -308,9 +308,73 @@ export function PublicJobDetailPage() {
         setExistingApp(data.existing_application || null);
         if (data.vacancy?.title) {
           const v = data.vacancy;
+          const origin = window.location.origin;
+          const empMap = {
+            full_time: 'FULL_TIME',
+            part_time: 'PART_TIME',
+            contract: 'CONTRACTOR',
+            internship: 'INTERN',
+            temporary: 'TEMPORARY',
+          };
+          const bizLogo = v.business_logo
+            ? (v.business_logo.startsWith('http') ? v.business_logo : `${origin}${v.business_logo}`)
+            : `${origin}/og-share.jpg`;
+          const jobNode = {
+            '@type': 'JobPosting',
+            title: v.title,
+            description: v.description || v.summary || v.title,
+            datePosted: String(v.published_at || v.created_at || new Date().toISOString()).slice(0, 10),
+            validThrough: v.application_deadline ? String(v.application_deadline).slice(0, 10) : undefined,
+            employmentType: empMap[v.employment_type] || 'FULL_TIME',
+            hiringOrganization: {
+              '@type': 'Organization',
+              name: v.business_name,
+              sameAs: `${origin}/businesses/${v.business_slug}`,
+              logo: bizLogo,
+            },
+            ...(v.work_mode === 'remote' ? { jobLocationType: 'TELECOMMUTE' } : {}),
+            jobLocation: {
+              '@type': 'Place',
+              address: {
+                '@type': 'PostalAddress',
+                addressLocality: v.location || v.business_district || undefined,
+                addressRegion: v.business_province || undefined,
+                addressCountry: v.business_country || 'RW',
+              },
+            },
+            ...(v.show_salary && (v.salary_min || v.salary_max)
+              ? {
+                  baseSalary: {
+                    '@type': 'MonetaryAmount',
+                    currency: v.currency_code || 'RWF',
+                    value: {
+                      '@type': 'QuantitativeValue',
+                      minValue: v.salary_min || undefined,
+                      maxValue: v.salary_max || undefined,
+                      unitText: 'MONTH',
+                    },
+                  },
+                }
+              : {}),
+          };
+          const breadcrumb = buildBreadcrumbJsonLd([
+            { name: 'Home', path: '/' },
+            { name: 'Jobs', path: '/jobs' },
+            { name: v.title, path: `/jobs/${v.id}` },
+          ]);
+
           setDynamicSeo({
-            title: `${v.title} — ${v.business_name} | BizTrade Africa Jobs`,
-            description: v.summary || `${v.title} role at ${v.business_name} (${v.location}). Apply online on BizTrade Africa.`,
+            title: `${v.title} — ${v.business_name} | BizTrade Africa`.slice(0, 60),
+            description: (
+              v.summary ||
+              `Apply for ${v.title} at ${v.business_name} in ${v.location}. Submit your CV and diploma online on BizTrade Africa.`
+            ).slice(0, 160),
+            image: bizLogo,
+            imageAlt: `${v.title} at ${v.business_name}`,
+            structuredData: {
+              '@context': 'https://schema.org',
+              '@graph': [jobNode, ...(breadcrumb ? [breadcrumb] : [])],
+            },
           });
         }
       })
@@ -341,7 +405,7 @@ export function PublicJobDetailPage() {
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
 
-      <main className="flex-1 max-w-6xl mx-auto px-6 py-10 w-full space-y-6 animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-6xl mx-auto px-6 py-10 w-full space-y-6 animate-fade-up">
         <nav aria-label="Breadcrumb" className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-1.5 min-w-0">
             <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">

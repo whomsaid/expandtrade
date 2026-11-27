@@ -49,10 +49,15 @@ router.get('/public/search', async (req, res, next) => {
              OR LOWER(COALESCE(b.business_code, '')) LIKE ?
            )
          ORDER BY
-           CASE WHEN LOWER(b.name) LIKE ? THEN 0 ELSE 1 END,
+           CASE
+             WHEN LOWER(b.name) = ? THEN 0
+             WHEN LOWER(b.name) LIKE ? THEN 1
+             WHEN LOWER(b.category) LIKE ? THEN 2
+             ELSE 3
+           END,
            b.id DESC
          LIMIT ?`,
-        [contains, contains, contains, contains, contains, prefix, limit]
+        [contains, contains, contains, contains, contains, q, prefix, prefix, limit]
       ),
       query(
         `SELECT p.id, p.name, p.sku, p.selling_price, p.unit, p.image_url,
@@ -72,10 +77,14 @@ router.get('/public/search', async (req, res, next) => {
              OR LOWER(COALESCE(c.name, '')) LIKE ?
            )
          ORDER BY
-           CASE WHEN LOWER(p.name) LIKE ? THEN 0 ELSE 1 END,
+           CASE
+             WHEN LOWER(p.name) = ? OR LOWER(p.sku) = ? THEN 0
+             WHEN LOWER(p.name) LIKE ? THEN 1
+             ELSE 2
+           END,
            p.id DESC
          LIMIT ?`,
-        [contains, contains, contains, contains, prefix, limit]
+        [contains, contains, contains, contains, q, q, prefix, limit]
       ),
       query(
         `SELECT v.id, v.title, v.slug, v.department, v.employment_type, v.work_mode, v.location,
@@ -93,10 +102,14 @@ router.get('/public/search', async (req, res, next) => {
              OR LOWER(b.name) LIKE ?
            )
          ORDER BY
-           CASE WHEN LOWER(v.title) LIKE ? THEN 0 ELSE 1 END,
+           CASE
+             WHEN LOWER(v.title) = ? THEN 0
+             WHEN LOWER(v.title) LIKE ? THEN 1
+             ELSE 2
+           END,
            v.id DESC
          LIMIT ?`,
-        [contains, contains, contains, contains, prefix, limit]
+        [contains, contains, contains, contains, q, prefix, limit]
       ),
       query(
         `SELECT bv.id, bv.title, bv.thumbnail_url,

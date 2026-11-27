@@ -39,12 +39,13 @@ import {
 } from 'lucide-react';
 import PublicHeader from '../components/PublicHeader.jsx';
 import PublicFooter from '../components/PublicFooter.jsx';
+import PageBreadcrumb from '../components/PageBreadcrumb.jsx';
 import { RevealBlock } from '../hooks/useRevealOnScroll.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 import VideoAdPlayer from '../components/VideoAdPlayer.jsx';
 import WhatsAppContactButton from '../components/WhatsAppContactButton.jsx';
-import { setDynamicSeo } from '../components/RouteSeoManager.jsx';
+import { buildBreadcrumbJsonLd, setDynamicSeo } from '../components/RouteSeoManager.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { usePlatformConfig } from '../context/PlatformConfigContext.jsx';
 import { api } from '../services/api.js';
@@ -210,7 +211,7 @@ export function HomePage() {
       <PublicHeader />
 
       {/* 1. Hero Section */}
-      <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+      <section id="main-content" className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 lg:py-24 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-center space-y-6 animate-fade-up min-w-0">
             <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
@@ -740,7 +741,7 @@ export function PublicBusinessesPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8 animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8 animate-fade-up">
         <nav aria-label="Breadcrumb" className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-1.5">
             <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">
@@ -988,9 +989,76 @@ export function PublicBusinessDetailPage() {
       setData(res.data);
       if (res.data?.business?.name) {
         const b = res.data.business;
+        const origin = window.location.origin;
+        const pageUrl = `${origin}/businesses/${b.slug}`;
+        const bizImage = b.logo_url
+          ? (b.logo_url.startsWith('http') ? b.logo_url : `${origin}${b.logo_url}`)
+          : `${origin}/og-share.jpg`;
+        const reviewList = res.data.reviews || [];
+        const avgRating = reviewList.length
+          ? Number((reviewList.reduce((acc, r) => acc + Number(r.rating || 0), 0) / reviewList.length).toFixed(1))
+          : null;
+        const productOffers = (res.data.products || []).slice(0, 15).map((p) => ({
+          '@type': 'Product',
+          name: p.name,
+          sku: p.sku || undefined,
+          description: p.description || p.name,
+          image: p.image_url ? (p.image_url.startsWith('http') ? p.image_url : `${origin}${p.image_url}`) : undefined,
+          offers: {
+            '@type': 'Offer',
+            priceCurrency: b.currency_code || 'RWF',
+            price: String(p.selling_price || 0),
+            availability: p.in_stock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            url: pageUrl,
+          },
+        }));
+
+        const localBusinessNode = {
+          '@type': 'LocalBusiness',
+          name: b.name,
+          description: b.description || `${b.name} storefront and verified product catalog in ${b.district}, ${b.country}.`,
+          url: pageUrl,
+          image: bizImage,
+          telephone: b.phone || undefined,
+          email: b.email || undefined,
+          openingHours: b.operating_hours || undefined,
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: b.physical_address || undefined,
+            addressLocality: b.district || undefined,
+            addressRegion: b.province || undefined,
+            addressCountry: b.country || 'RW',
+          },
+          ...(avgRating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: avgRating, reviewCount: reviewList.length } } : {}),
+          ...(productOffers.length
+            ? {
+                hasOfferCatalog: {
+                  '@type': 'OfferCatalog',
+                  name: `${b.name} Catalog`,
+                  itemListElement: productOffers,
+                },
+              }
+            : {}),
+        };
+
+        const breadcrumb = buildBreadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Businesses', path: '/businesses' },
+          { name: b.name, path: `/businesses/${b.slug}` },
+        ]);
+
         setDynamicSeo({
-          title: `${b.name} — ${b.category} (${b.district}) | BizTrade Africa`,
-          description: b.description || `${b.name} storefront, product catalog, and branches in ${b.district}, ${b.country} on BizTrade Africa.`,
+          title: `${b.name} — ${b.category} | BizTrade Africa`.slice(0, 60),
+          description: (
+            b.description ||
+            `Shop verified products, explore branches, and contact ${b.name} in ${b.district}, ${b.country} on BizTrade Africa.`
+          ).slice(0, 160),
+          image: bizImage,
+          imageAlt: `${b.name} storefront on BizTrade Africa`,
+          structuredData: {
+            '@context': 'https://schema.org',
+            '@graph': [localBusinessNode, ...(breadcrumb ? [breadcrumb] : [])],
+          },
         });
       }
       if (res.data.branches?.length) {
@@ -1106,7 +1174,7 @@ export function PublicBusinessDetailPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8">
         <nav aria-label="Breadcrumb" className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-1.5 min-w-0">
             <Link to="/" onMouseEnter={() => prefetchRoute('/')} className="hover:text-slate-900 dark:hover:text-white">
@@ -1516,7 +1584,15 @@ export function FeaturesPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full space-y-10 sm:space-y-12 animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14 w-full space-y-10 sm:space-y-12 animate-fade-up">
+        <PageBreadcrumb
+          fallbackTo="/"
+          items={[
+            { label: t('nav.home'), to: '/' },
+            { label: t('nav.features') },
+          ]}
+          rightLink={{ label: t('nav.pricing'), to: '/pricing' }}
+        />
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-3 max-w-2xl">
             <p className="text-xs font-semibold text-sky-700 dark:text-sky-400">{t('public.featuresEyebrow')}</p>
@@ -1578,7 +1654,15 @@ export function PricingPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-16 space-y-10 w-full animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-6 py-12 space-y-10 w-full animate-fade-up">
+        <PageBreadcrumb
+          fallbackTo="/"
+          items={[
+            { label: t('nav.home'), to: '/' },
+            { label: t('nav.pricing') },
+          ]}
+          rightLink={{ label: t('nav.features'), to: '/features' }}
+        />
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.pricingTitle')}</h1>
@@ -1736,9 +1820,17 @@ export function AboutPage() {
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* About BizTrade Africa Overview */}
-        <section className="max-w-6xl mx-auto px-6 py-16 space-y-8 animate-fade-up">
+        <section className="max-w-6xl mx-auto px-6 py-12 space-y-8 animate-fade-up">
+          <PageBreadcrumb
+            fallbackTo="/"
+            items={[
+              { label: t('nav.home'), to: '/' },
+              { label: t('nav.about') },
+            ]}
+            rightLink={{ label: t('search.quickDirectory'), to: '/businesses' }}
+          />
           <div className="max-w-3xl space-y-4">
             <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
               {t('public.aboutEyebrow')}
@@ -2013,7 +2105,15 @@ export function ContactPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-3xl mx-auto px-6 py-16 w-full space-y-8 animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-3xl mx-auto px-6 py-12 w-full space-y-8 animate-fade-up">
+        <PageBreadcrumb
+          fallbackTo="/"
+          items={[
+            { label: t('nav.home'), to: '/' },
+            { label: t('nav.contact') },
+          ]}
+          rightLink={{ label: t('nav.pricing'), to: '/pricing' }}
+        />
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.contactPageTitle')}</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -2117,7 +2217,15 @@ export function TrackOrderPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-2xl mx-auto px-6 py-16 w-full space-y-6 animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-2xl mx-auto px-6 py-12 w-full space-y-6 animate-fade-up">
+        <PageBreadcrumb
+          fallbackTo="/"
+          items={[
+            { label: t('nav.home'), to: '/' },
+            { label: t('nav.trackOrder') },
+          ]}
+          rightLink={{ label: t('search.quickDirectory'), to: '/businesses' }}
+        />
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.trackOrderTitle')}</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -2197,7 +2305,14 @@ export function LegalPage({ type = 'terms', title }) {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main className="flex-1 max-w-3xl mx-auto px-6 py-16 space-y-6">
+      <main id="main-content" className="flex-1 max-w-3xl mx-auto px-6 py-12 space-y-6">
+        <PageBreadcrumb
+          fallbackTo="/"
+          items={[
+            { label: t('nav.home'), to: '/' },
+            { label: heading },
+          ]}
+        />
         <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{heading}</h1>
         <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
           <p>{t('public.legalP1')}</p>

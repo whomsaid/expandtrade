@@ -64,9 +64,19 @@ export function createBackendApp() {
   app.use(express.json({ limit: '5mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  function resolvePublicOrigin(req) {
+    const configured = String(process.env.APP_URL || '').trim();
+    if (configured && !configured.includes('localhost')) {
+      return configured.replace(/\/$/, '');
+    }
+    const proto = String(req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+    const host = String(req.get('x-forwarded-host') || req.get('host') || 'localhost:3000').split(',')[0].trim();
+    return `${proto}://${host}`.replace(/\/$/, '');
+  }
+
   // Search Engine Optimization: robots.txt & dynamic sitemap.xml
   app.get('/robots.txt', (req, res) => {
-    const origin = env.appUrl || `${req.protocol}://${req.get('host')}`;
+    const origin = resolvePublicOrigin(req);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.send(
@@ -79,17 +89,47 @@ export function createBackendApp() {
         'Allow: /pricing',
         'Allow: /about',
         'Allow: /contact',
+        'Allow: /track-order',
+        'Allow: /terms',
+        'Allow: /privacy',
         'Disallow: /app/',
         'Disallow: /api/',
         'Disallow: /customer',
-        `Sitemap: ${origin.replace(/\/$/, '')}/sitemap.xml`,
+        'Disallow: /login',
+        'Disallow: /register',
+        'Disallow: /activate-account',
+        'Disallow: /forgot-password',
+        'Disallow: /change-temporary-password',
+        'Disallow: /complete-profile',
+        `Sitemap: ${origin}/sitemap.xml`,
+      ].join('\n')
+    );
+  });
+
+  app.get('/opensearch.xml', (req, res) => {
+    const origin = resolvePublicOrigin(req);
+    res.setHeader('Content-Type', 'application/opensearchdescription+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">',
+        '  <ShortName>BizTrade</ShortName>',
+        '  <LongName>BizTrade Africa — Business POS, Inventory &amp; Marketplace</LongName>',
+        '  <Description>Search verified businesses, products, jobs, and storefronts on BizTrade Africa.</Description>',
+        '  <Tags>biztrade biztrade-africa bta pos inventory erp marketplace storefronts jobs</Tags>',
+        `  <Image height="64" width="64" type="image/svg+xml">${escapeXml(`${origin}/favicon.svg`)}</Image>`,
+        `  <Url type="text/html" method="get" template="${escapeXml(`${origin}/businesses?q={searchTerms}`)}" />`,
+        '  <InputEncoding>UTF-8</InputEncoding>',
+        '  <OutputEncoding>UTF-8</OutputEncoding>',
+        '</OpenSearchDescription>',
       ].join('\n')
     );
   });
 
   app.get('/sitemap.xml', async (req, res) => {
     try {
-      const origin = (env.appUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const origin = resolvePublicOrigin(req);
       const cacheKey = `seo:sitemap:${origin}`;
       const cached = getCached(cacheKey);
       if (cached) {
@@ -112,21 +152,24 @@ export function createBackendApp() {
         ),
       ]);
 
+      const today = new Date().toISOString().slice(0, 10);
       const staticPaths = [
-        { loc: '/', changefreq: 'daily', priority: '1.0' },
-        { loc: '/businesses', changefreq: 'daily', priority: '0.9' },
-        { loc: '/jobs', changefreq: 'daily', priority: '0.9' },
-        { loc: '/features', changefreq: 'weekly', priority: '0.8' },
-        { loc: '/pricing', changefreq: 'weekly', priority: '0.8' },
-        { loc: '/about', changefreq: 'monthly', priority: '0.7' },
-        { loc: '/contact', changefreq: 'monthly', priority: '0.7' },
-        { loc: '/track-order', changefreq: 'weekly', priority: '0.6' },
+        { loc: '/', changefreq: 'daily', priority: '1.0', lastmod: today },
+        { loc: '/businesses', changefreq: 'daily', priority: '0.9', lastmod: today },
+        { loc: '/jobs', changefreq: 'daily', priority: '0.9', lastmod: today },
+        { loc: '/features', changefreq: 'weekly', priority: '0.8', lastmod: today },
+        { loc: '/pricing', changefreq: 'weekly', priority: '0.8', lastmod: today },
+        { loc: '/about', changefreq: 'monthly', priority: '0.7', lastmod: today },
+        { loc: '/contact', changefreq: 'monthly', priority: '0.7', lastmod: today },
+        { loc: '/track-order', changefreq: 'weekly', priority: '0.6', lastmod: today },
+        { loc: '/privacy', changefreq: 'yearly', priority: '0.4', lastmod: today },
+        { loc: '/terms', changefreq: 'yearly', priority: '0.4', lastmod: today },
       ];
 
       const urls = [
         ...staticPaths.map(
           (item) =>
-            `  <url><loc>${escapeXml(`${origin}${item.loc}`)}</loc><changefreq>${item.changefreq}</changefreq><priority>${item.priority}</priority></url>`
+            `  <url><loc>${escapeXml(`${origin}${item.loc}`)}</loc><lastmod>${item.lastmod}</lastmod><changefreq>${item.changefreq}</changefreq><priority>${item.priority}</priority></url>`
         ),
         ...businesses.map((b) => {
           const lastmod = b.updated_at ? `<lastmod>${escapeXml(String(b.updated_at).slice(0, 10))}</lastmod>` : '';

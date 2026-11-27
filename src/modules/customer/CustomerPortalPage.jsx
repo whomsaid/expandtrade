@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   LogOut,
+  Menu,
   Package,
   Receipt,
   Search,
@@ -20,6 +21,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import BrandLogo from '../../components/BrandLogo.jsx';
 import LanguageSelector from '../../components/LanguageSelector.jsx';
 import LogoutConfirmModal from '../../components/LogoutConfirmModal.jsx';
+import PageBreadcrumb from '../../components/PageBreadcrumb.jsx';
 import PrivateDocumentPreviewModal, { downloadPrivateDocument } from '../../components/PrivateDocumentPreviewModal.jsx';
 import ProfilePhotoUploader from '../../components/ProfilePhotoUploader.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
@@ -28,6 +30,7 @@ import UserAvatar from '../../components/UserAvatar.jsx';
 import VideoAdPlayer from '../../components/VideoAdPlayer.jsx';
 import { api } from '../../services/api.js';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
+import { prefetchRoute } from '../../utils/routePrefetch.js';
 
 const TABS = [
   { id: 'businesses', labelKey: 'customerPortal.tabBusinesses', icon: Store },
@@ -40,10 +43,11 @@ const TABS = [
 
 export default function CustomerPortalPage() {
   const { t } = useTranslation();
-  const { user, sessions, notifications, logout, refreshMe, refreshNotifications, savePreferences } = useAuth();
+  const { user, memberships, sessions, notifications, logout, refreshMe, refreshNotifications, savePreferences } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'businesses');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [businesses, setBusinesses] = useState([]);
   const [videos, setVideos] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -359,25 +363,54 @@ export default function CustomerPortalPage() {
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const activeTabItem = TABS.find((item) => item.id === tab);
+  const canOpenWorkspace = Boolean(user?.is_platform_admin || memberships?.length > 0);
+  const workspaceTo = user?.is_platform_admin ? '/app/admin' : '/app/dashboard';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:bg-[#0B192C] focus:text-white focus:rounded-lg"
+      >
+        {t('nav.skipToContent')}
+      </a>
       <header className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4 sm:gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 sm:gap-6">
           <div className="flex items-center gap-6">
-            <Link to="/" className="text-lg font-bold tracking-tight text-[#0B192C] dark:text-white whitespace-nowrap">
+            <Link
+              to="/"
+              onMouseEnter={() => prefetchRoute('/')}
+              className="text-lg font-bold tracking-tight text-[#0B192C] dark:text-white whitespace-nowrap"
+            >
               <BrandLogo textClassName="text-lg font-bold tracking-tight text-[#0B192C] dark:text-white" imgClassName="h-7 w-auto max-w-[120px] object-contain shrink-0" />
             </Link>
-            <nav className="hidden md:flex items-center gap-5 text-xs font-medium text-slate-600 dark:text-slate-300">
-              <Link to="/businesses" className="hover:text-slate-900 dark:hover:text-white">{t('customerPortal.publicDirectory')}</Link>
-              <Link to="/jobs" className="hover:text-slate-900 dark:hover:text-white">{t('customerPortal.jobVacancies')}</Link>
-              <Link to="/track-order" className="hover:text-slate-900 dark:hover:text-white">{t('customerPortal.orderLookup')}</Link>
+            <nav aria-label={t('nav.primaryNav')} className="hidden md:flex items-center gap-5 text-xs font-medium text-slate-600 dark:text-slate-300">
+              <Link to="/businesses" onMouseEnter={() => prefetchRoute('/businesses')} className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap">{t('customerPortal.publicDirectory')}</Link>
+              <Link to="/jobs" onMouseEnter={() => prefetchRoute('/jobs')} className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap">{t('customerPortal.jobVacancies')}</Link>
+              <Link to="/track-order" onMouseEnter={() => prefetchRoute('/track-order')} className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap">{t('customerPortal.orderLookup')}</Link>
+              {canOpenWorkspace && (
+                <Link to={workspaceTo} onMouseEnter={() => prefetchRoute(workspaceTo)} className="text-sky-700 dark:text-sky-400 font-semibold hover:underline whitespace-nowrap">
+                  {user?.is_platform_admin ? t('nav.platformAdmin') : t('nav.openWorkspace')}
+                </Link>
+              )}
             </nav>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <LanguageSelector compact />
-            <ThemeSelector compact />
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('biztrade:open-search'))}
+              aria-label={t('search.modalTitle')}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors whitespace-nowrap shrink-0"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{t('search.quickSearchBtn')}</span>
+            </button>
+            <div className="hidden sm:flex items-center gap-2">
+              <LanguageSelector compact />
+              <ThemeSelector compact />
+            </div>
             <button
               type="button"
               onClick={() => selectTab('profile')}
@@ -392,16 +425,63 @@ export default function CustomerPortalPage() {
             <button
               type="button"
               onClick={() => setLogoutConfirmOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
             >
               <LogOut className="w-3.5 h-3.5" />
-              {t('customerPortal.signOut')}
+              <span className="hidden sm:inline">{t('customerPortal.signOut')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-label={mobileMenuOpen ? t('nav.closeNav') : t('nav.openNav')}
+              aria-expanded={mobileMenuOpen}
+              className="md:hidden p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
           </div>
         </div>
+
+        {mobileMenuOpen && (
+          <div className="md:hidden animate-slide-down border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 space-y-2">
+            <nav aria-label={t('nav.mobileNav')} className="flex flex-col space-y-1 text-sm">
+              <Link to="/" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                {t('nav.home')}
+              </Link>
+              <Link to="/businesses" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                {t('customerPortal.publicDirectory')}
+              </Link>
+              <Link to="/jobs" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                {t('customerPortal.jobVacancies')}
+              </Link>
+              <Link to="/track-order" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                {t('customerPortal.orderLookup')}
+              </Link>
+              {canOpenWorkspace && (
+                <Link to={workspaceTo} onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-lg text-sky-700 dark:text-sky-400 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800">
+                  {user?.is_platform_admin ? t('nav.platformAdmin') : t('nav.openWorkspace')}
+                </Link>
+              )}
+            </nav>
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <LanguageSelector compact />
+              <ThemeSelector compact />
+            </div>
+          </div>
+        )}
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full space-y-6">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full space-y-6">
+        <PageBreadcrumb
+          fallbackTo="/"
+          items={[
+            { label: t('nav.home'), to: '/' },
+            { label: t('nav.customerPortal'), to: '/customer' },
+            ...(activeTabItem ? [{ label: t(activeTabItem.labelKey) }] : []),
+          ]}
+          rightLink={{ label: t('search.quickDirectory'), to: '/businesses' }}
+        />
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('customerPortal.title')}</h1>
@@ -410,22 +490,46 @@ export default function CustomerPortalPage() {
             </p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => selectTab('orders')}
+              className={`text-left bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border transition-colors ${
+                tab === 'orders' ? 'border-sky-600 dark:border-sky-500' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
               <div className="text-slate-500 dark:text-slate-400">{t('customerPortal.kpiOrders')}</div>
               <div className="text-base font-bold tabular-nums">{orders.length}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            </button>
+            <button
+              type="button"
+              onClick={() => selectTab('applications')}
+              className={`text-left bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border transition-colors ${
+                tab === 'applications' ? 'border-sky-600 dark:border-sky-500' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
               <div className="text-slate-500 dark:text-slate-400">{t('customerPortal.kpiApplications')}</div>
               <div className="text-base font-bold tabular-nums">{applications.length}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            </button>
+            <button
+              type="button"
+              onClick={() => selectTab('receipts')}
+              className={`text-left bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border transition-colors ${
+                tab === 'receipts' ? 'border-sky-600 dark:border-sky-500' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
               <div className="text-slate-500 dark:text-slate-400">{t('customerPortal.kpiReceipts')}</div>
               <div className="text-base font-bold tabular-nums">{receipts.length}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            </button>
+            <button
+              type="button"
+              onClick={() => selectTab('notifications')}
+              className={`text-left bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border transition-colors ${
+                tab === 'notifications' ? 'border-sky-600 dark:border-sky-500' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
               <div className="text-slate-500 dark:text-slate-400">{t('customerPortal.kpiUnreadAlerts')}</div>
               <div className="text-base font-bold tabular-nums">{unreadCount}</div>
-            </div>
+            </button>
           </div>
         </div>
 

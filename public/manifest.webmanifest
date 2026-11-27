@@ -1,0 +1,19 @@
+{
+  "name": "BizTrade Africa — Business POS, Inventory & Commerce",
+  "short_name": "BizTrade",
+  "description": "All-in-one POS, multi-branch inventory, sales, orders, payroll, finance, and verified business directory across Africa.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0B192C",
+  "theme_color": "#0B192C",
+  "categories": ["business", "finance", "productivity", "shopping"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

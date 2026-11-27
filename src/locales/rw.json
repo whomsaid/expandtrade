@@ -134,7 +134,16 @@
     "noNotifications": "Nta menyesha ahari ubu.",
     "viewAllNotifications": "Reba amenyesha yose",
     "member": "Umunyamuryango",
-    "superAdminRole": "Umuyobozi Mukuru w’Urubuga"
+    "superAdminRole": "Umuyobozi Mukuru w’Urubuga",
+    "skipToContent": "Jya ku birimo nyamukuru",
+    "filterMenu": "Shaka igice...",
+    "clearFilter": "Siba ishakisha",
+    "menuBtn": "Ibikubiyemo",
+    "publicSite": "Urubuga rusange",
+    "groupOperations": "Ibikorwa by'ibanze",
+    "groupPartnersFinance": "Abafatanyabikorwa n'Imari",
+    "groupTeamGrowth": "Abakozi n'Iterambere",
+    "groupSystem": "Sisitemu"
   },
   "footer": {
     "tagline": "Wagure Ubucuruzi Bwawe. Genzura Byose. Urubuga ruhuriweho rwo gucunga ibigo by’ubucuruzi muri Afurika kugira ngo bikore neza, bikure kandi bigure ibikorwa byabyo.",
@@ -2380,6 +2389,8 @@
     "filterCatalogPlaceholder": "Shakisha ibicuruzwa muri iri soko...",
     "goBack": "Subira inyuma",
     "quickDirectory": "Ubucuruzi",
-    "quickJobs": "Akazi"
+    "quickJobs": "Akazi",
+    "recentGroup": "Ibyaherukaga",
+    "shortcutHint": "Ctrl+K cyangwa /"
   }
 }
