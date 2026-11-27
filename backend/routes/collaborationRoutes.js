@@ -8,7 +8,11 @@ import { invalidateBusinessTenantCache, requireBusiness, requirePermission } fro
 import { cleanupMulterFiles, imageUpload, platformLogoUpload, removeUploadedFile, verifyFileNonEmpty, verifyImageSignature, verifyPlatformLogoFile } from '../middleware/upload.js';
 import { validateRequest } from '../middleware/errorHandler.js';
 import { createNotification, emitToBusiness, logAudit } from '../services/auditService.js';
-import { queryBusinessAssistant } from '../services/aiService.js';
+import {
+  chatWithBusinessAssistant,
+  queryBusinessAssistant,
+  searchGroundedQuery,
+} from '../services/aiService.js';
 import {
   buildInvitationEmail,
   buildNotificationEmail,
@@ -656,7 +660,7 @@ router.get('/reports/audit-logs', authenticate, requireBusiness, requirePermissi
   }
 });
 
-// ================= AI BUSINESS ASSISTANT =================
+// ================= AI BUSINESS ASSISTANT & GEMINI CHATBOT =================
 router.post(
   '/ai/ask',
   authenticate,
@@ -673,13 +677,91 @@ router.post(
         userPrompt: req.body.prompt,
         businessName: req.business.name,
         currencyCode: req.business.currency_code,
+        useSearch: Boolean(req.body.useSearch),
       });
       await logAudit({
         businessId: req.businessId,
         userId: req.user.id,
         action: 'ai.queried',
         entityType: 'ai_assistant',
-        changes: { prompt: req.body.prompt.slice(0, 120) },
+        changes: { prompt: req.body.prompt.slice(0, 120), useSearch: Boolean(req.body.useSearch) },
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/ai/chat',
+  authenticate,
+  requireBusiness,
+  requirePermission('ai.use'),
+  [
+    body('message').trim().notEmpty().withMessage('Please enter a message'),
+    body('model').optional().isString(),
+    body('rolePreset').optional().isString(),
+    body('customSystemInstruction').optional().isString(),
+    body('history').optional().isArray(),
+    body('useSearch').optional().isBoolean(),
+  ],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const result = await chatWithBusinessAssistant({
+        businessId: req.businessId,
+        branchId: req.branchId,
+        allBranchesAccess: Boolean(req.membership.all_branches_access),
+        businessName: req.business.name,
+        currencyCode: req.business.currency_code,
+        message: req.body.message,
+        history: req.body.history,
+        rolePreset: req.body.rolePreset || 'business_advisor',
+        customSystemInstruction: req.body.customSystemInstruction || '',
+        model: req.body.model || 'gemini-4-hydrogen',
+        useSearch: Boolean(req.body.useSearch),
+      });
+      await logAudit({
+        businessId: req.businessId,
+        userId: req.user.id,
+        action: 'ai.chat_turn',
+        entityType: 'ai_assistant',
+        changes: {
+          model: result.model,
+          rolePreset: result.rolePreset,
+          useSearch: result.searchGrounded,
+          message: req.body.message.slice(0, 120),
+        },
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/ai/search',
+  authenticate,
+  requireBusiness,
+  requirePermission('ai.use'),
+  [body('query').trim().notEmpty().withMessage('Please enter a search query')],
+  validateRequest,
+  async (req, res, next) => {
+    try {
+      const result = await searchGroundedQuery({
+        queryText: req.body.query,
+        businessName: req.business.name,
+        country: req.business.country || 'Rwanda',
+        currencyCode: req.business.currency_code || 'RWF',
+      });
+      await logAudit({
+        businessId: req.businessId,
+        userId: req.user.id,
+        action: 'ai.web_search',
+        entityType: 'ai_assistant',
+        changes: { query: req.body.query.slice(0, 120) },
       });
       res.json(result);
     } catch (err) {
