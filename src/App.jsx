@@ -2,12 +2,13 @@ import { Component, Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
-import { PlatformConfigProvider } from './context/PlatformConfigContext.jsx';
+import { PlatformConfigProvider, usePlatformConfig } from './context/PlatformConfigContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import GlobalWatermark from './components/GlobalWatermark.jsx';
 import RouteSeoManager from './components/RouteSeoManager.jsx';
 import QuickSearchModal from './components/QuickSearchModal.jsx';
 import AppLayout from './layouts/AppLayout.jsx';
+import { scheduleIdleTask, warmupCoreRoutes } from './utils/routePrefetch.js';
 const HomePage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.HomePage })));
 const AboutPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.AboutPage })));
 const FeaturesPage = lazy(() => import('./pages/PublicPages.jsx').then((m) => ({ default: m.FeaturesPage })));
@@ -179,14 +180,201 @@ function CustomerProtectedRoute({ children }) {
   return children;
 }
 
+function AppShell({ searchOpen, setSearchOpen }) {
+  const { t } = useTranslation();
+  const { user, loading } = useAuth();
+  const { config, isDevelopmentMode, isMaintenanceMode } = usePlatformConfig();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (loading) return undefined;
+    const cancel = scheduleIdleTask(() => {
+      warmupCoreRoutes(Boolean(user));
+    }, 1200);
+    return cancel;
+  }, [loading, user]);
+
+  const isAppWorkspaceRoute = location.pathname.startsWith('/app');
+  const isLoginOrAdminRoute =
+    location.pathname.startsWith('/login') ||
+    location.pathname.startsWith('/app/admin') ||
+    location.pathname.startsWith('/forgot-password');
+
+  if (!loading && isMaintenanceMode && !user?.is_platform_admin && !isLoginOrAdminRoute) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
+        <div className="max-w-lg w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center space-y-4 shadow-sm animate-page-enter">
+          <div className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            {t('system.maintenanceBadge', { defaultValue: 'Scheduled System Maintenance' })}
+          </div>
+          <h1 className="text-xl font-bold text-[#0B192C] dark:text-white">
+            {config.platform_name || 'BizTrade Africa'}
+          </h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {config.maintenance_message || t('system.maintenanceDefaultMsg', { defaultValue: 'We are currently performing scheduled upgrades to improve performance and reliability. Please check back shortly.' })}
+          </p>
+          <div className="pt-2 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
+            >
+              {t('common.retry')}
+            </button>
+            <a
+              href="/login"
+              className="btn-auth-login-live inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <span>{t('nav.signIn')}</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <RouteSeoManager />
+      <QuickSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <GlobalWatermark />
+      {user?.is_platform_admin && isDevelopmentMode && (
+        <div className="bg-amber-500 text-slate-950 text-xs font-semibold px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 no-print">
+          <span>
+            {t('system.devModeBannerTitle', { defaultValue: 'Development Mode ON:' })}{' '}
+            {config.development_banner_message || t('system.devModeBannerDefault', { defaultValue: 'Staging and system feature controls are active for Super Admin testing.' })}
+          </span>
+          <a
+            href="/app/admin"
+            className="px-2.5 py-0.5 rounded bg-slate-950 text-amber-300 hover:bg-slate-900 transition-colors"
+          >
+            {t('system.manageDevModeBtn', { defaultValue: 'Manage / Confirm Release' })}
+          </a>
+        </div>
+      )}
+      <AppErrorBoundary>
+        <Suspense fallback={<AuthLoadingScreen />}>
+          <div key={isAppWorkspaceRoute ? 'app-shell' : location.pathname} className={isAppWorkspaceRoute ? '' : 'animate-page-enter'}>
+            <Routes>
+              {/* Public Website Routes */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/businesses" element={<PublicBusinessesPage />} />
+              <Route path="/businesses/:slug" element={<PublicBusinessDetailPage />} />
+              <Route path="/jobs" element={<PublicJobsPage />} />
+              <Route path="/jobs/:id" element={<PublicJobDetailPage />} />
+              <Route
+                path="/jobs/:id/apply"
+                element={
+                  <CustomerProtectedRoute>
+                    <JobApplicationFormPage />
+                  </CustomerProtectedRoute>
+                }
+              />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/features" element={<FeaturesPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/track-order" element={<TrackOrderPage />} />
+              <Route path="/terms" element={<LegalPage type="terms" />} />
+              <Route path="/privacy" element={<LegalPage type="privacy" />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/activate-account" element={<ActivateAccountPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route
+                path="/change-temporary-password"
+                element={
+                  <ForcePasswordChangeProtectedRoute>
+                    <ForceChangePasswordPage />
+                  </ForcePasswordChangeProtectedRoute>
+                }
+              />
+              <Route
+                path="/complete-profile"
+                element={
+                  <CompleteProfileProtectedRoute>
+                    <CompleteProfilePage />
+                  </CompleteProfileProtectedRoute>
+                }
+              />
+
+              {/* Customer Portal */}
+              <Route
+                path="/customer"
+                element={
+                  <CustomerProtectedRoute>
+                    <CustomerPortalPage />
+                  </CustomerProtectedRoute>
+                }
+              />
+
+              {/* Authenticated Business & Super Admin SaaS Workspace Routes */}
+              <Route
+                path="/app"
+                element={
+                  <BusinessProtectedRoute>
+                    <AppLayout />
+                  </BusinessProtectedRoute>
+                }
+              >
+                <Route index element={<Navigate to="/app/dashboard" replace />} />
+                <Route path="dashboard" element={<DashboardPage />} />
+                <Route path="products" element={<ProductsPage />} />
+                <Route path="inventory" element={<InventoryPage />} />
+                <Route path="pos" element={<PosPage />} />
+                <Route path="sales" element={<SalesPage />} />
+                <Route path="orders" element={<OrdersPage />} />
+                <Route path="customers" element={<CustomersPage />} />
+                <Route path="suppliers" element={<SuppliersPage />} />
+                <Route path="purchases" element={<PurchasesPage />} />
+                <Route path="finance" element={<FinancePage />} />
+                <Route path="payroll" element={<PayrollPage />} />
+                <Route path="my-payroll" element={<MyPayrollPage />} />
+                <Route path="employees" element={<EmployeesPage />} />
+                <Route path="recruitment" element={<RecruitmentPage />} />
+                <Route path="branches" element={<BranchesPage />} />
+                <Route path="ads" element={<AdvertisementsPage />} />
+                <Route path="onboarding" element={<BusinessOnboardingPage />} />
+                <Route path="tasks" element={<TasksPage />} />
+                <Route path="reports" element={<ReportsPage />} />
+                <Route path="ai" element={<AiAssistantPage />} />
+                <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route
+                  path="admin"
+                  element={
+                    <SuperAdminProtectedRoute>
+                      <SuperAdminPage />
+                    </SuperAdminProtectedRoute>
+                  }
+                />
+              </Route>
+
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+        </Suspense>
+      </AppErrorBoundary>
+    </>
+  );
+}
+
 export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
+    const triggerGlobalSearch = () => {
+      const hasInlineBar = Boolean(document.querySelector('[data-global-search-input="true"]'));
+      if (hasInlineBar) {
+        window.dispatchEvent(new CustomEvent('biztrade:focus-global-search'));
+      } else {
+        setSearchOpen((prev) => !prev);
+      }
+    };
     const onKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setSearchOpen((prev) => !prev);
+        triggerGlobalSearch();
         return;
       }
       if (
@@ -198,10 +386,15 @@ export default function App() {
         !document.activeElement?.isContentEditable
       ) {
         e.preventDefault();
-        setSearchOpen(true);
+        const hasInlineBar = Boolean(document.querySelector('[data-global-search-input="true"]'));
+        if (hasInlineBar) {
+          window.dispatchEvent(new CustomEvent('biztrade:focus-global-search'));
+        } else {
+          setSearchOpen(true);
+        }
       }
     };
-    const onOpenEvent = () => setSearchOpen(true);
+    const onOpenEvent = () => triggerGlobalSearch();
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('biztrade:open-search', onOpenEvent);
     return () => {
@@ -215,110 +408,7 @@ export default function App() {
       <ThemeProvider>
         <PlatformConfigProvider>
           <BrowserRouter>
-            <RouteSeoManager />
-            <QuickSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
-            <GlobalWatermark />
-            <AppErrorBoundary>
-              <Suspense fallback={<AuthLoadingScreen />}>
-              <Routes>
-                {/* Public Website Routes */}
-                <Route path="/" element={<HomePage />} />
-                <Route path="/businesses" element={<PublicBusinessesPage />} />
-                <Route path="/businesses/:slug" element={<PublicBusinessDetailPage />} />
-                <Route path="/jobs" element={<PublicJobsPage />} />
-                <Route path="/jobs/:id" element={<PublicJobDetailPage />} />
-                <Route
-                  path="/jobs/:id/apply"
-                  element={
-                    <CustomerProtectedRoute>
-                      <JobApplicationFormPage />
-                    </CustomerProtectedRoute>
-                  }
-                />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/features" element={<FeaturesPage />} />
-                <Route path="/pricing" element={<PricingPage />} />
-                <Route path="/contact" element={<ContactPage />} />
-                <Route path="/track-order" element={<TrackOrderPage />} />
-                <Route path="/terms" element={<LegalPage type="terms" />} />
-                <Route path="/privacy" element={<LegalPage type="privacy" />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/activate-account" element={<ActivateAccountPage />} />
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route
-                  path="/change-temporary-password"
-                  element={
-                    <ForcePasswordChangeProtectedRoute>
-                      <ForceChangePasswordPage />
-                    </ForcePasswordChangeProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/complete-profile"
-                  element={
-                    <CompleteProfileProtectedRoute>
-                      <CompleteProfilePage />
-                    </CompleteProfileProtectedRoute>
-                  }
-                />
-
-                {/* Customer Portal */}
-                <Route
-                  path="/customer"
-                  element={
-                    <CustomerProtectedRoute>
-                      <CustomerPortalPage />
-                    </CustomerProtectedRoute>
-                  }
-                />
-
-                {/* Authenticated Business & Super Admin SaaS Workspace Routes */}
-                <Route
-                  path="/app"
-                  element={
-                    <BusinessProtectedRoute>
-                      <AppLayout />
-                    </BusinessProtectedRoute>
-                  }
-                >
-                  <Route index element={<Navigate to="/app/dashboard" replace />} />
-                  <Route path="dashboard" element={<DashboardPage />} />
-                  <Route path="products" element={<ProductsPage />} />
-                  <Route path="inventory" element={<InventoryPage />} />
-                  <Route path="pos" element={<PosPage />} />
-                  <Route path="sales" element={<SalesPage />} />
-                  <Route path="orders" element={<OrdersPage />} />
-                  <Route path="customers" element={<CustomersPage />} />
-                  <Route path="suppliers" element={<SuppliersPage />} />
-                  <Route path="purchases" element={<PurchasesPage />} />
-                  <Route path="finance" element={<FinancePage />} />
-                  <Route path="payroll" element={<PayrollPage />} />
-                  <Route path="my-payroll" element={<MyPayrollPage />} />
-                  <Route path="employees" element={<EmployeesPage />} />
-                  <Route path="recruitment" element={<RecruitmentPage />} />
-                  <Route path="branches" element={<BranchesPage />} />
-                  <Route path="ads" element={<AdvertisementsPage />} />
-                  <Route path="onboarding" element={<BusinessOnboardingPage />} />
-                  <Route path="tasks" element={<TasksPage />} />
-                  <Route path="reports" element={<ReportsPage />} />
-                  <Route path="ai" element={<AiAssistantPage />} />
-                  <Route path="notifications" element={<NotificationsPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                  <Route
-                    path="admin"
-                    element={
-                      <SuperAdminProtectedRoute>
-                        <SuperAdminPage />
-                      </SuperAdminProtectedRoute>
-                    }
-                  />
-                </Route>
-
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
-            </AppErrorBoundary>
+            <AppShell searchOpen={searchOpen} setSearchOpen={setSearchOpen} />
           </BrowserRouter>
         </PlatformConfigProvider>
       </ThemeProvider>

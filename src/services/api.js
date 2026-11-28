@@ -34,20 +34,79 @@ export const api = axios.create({
 });
 
 const clientResponseCache = new Map();
+const inFlightGets = new Map();
+const clientTelemetry = {
+  cacheHits: 0,
+  cacheMisses: 0,
+  dedupSaved: 0,
+  networkRequests: 0,
+  latenciesMs: [],
+};
+
+function recordClientLatency(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return;
+  clientTelemetry.networkRequests += 1;
+  clientTelemetry.latenciesMs.push(Math.round(ms * 100) / 100);
+  if (clientTelemetry.latenciesMs.length > 100) {
+    clientTelemetry.latenciesMs.shift();
+  }
+}
+
+export function getClientTelemetry() {
+  const arr = clientTelemetry.latenciesMs;
+  const avgRoundTripMs = arr.length
+    ? Math.round((arr.reduce((sum, v) => sum + v, 0) / arr.length) * 100) / 100
+    : 0;
+  const lastRoundTripMs = arr.length ? arr[arr.length - 1] : 0;
+  const totalLookups = clientTelemetry.cacheHits + clientTelemetry.cacheMisses;
+  const clientCacheHitPct = totalLookups > 0 ? Math.round((clientTelemetry.cacheHits / totalLookups) * 1000) / 10 : 0;
+  return {
+    cacheHits: clientTelemetry.cacheHits,
+    cacheMisses: clientTelemetry.cacheMisses,
+    dedupSaved: clientTelemetry.dedupSaved,
+    clientCacheEntries: clientResponseCache.size,
+    clientCacheHitPct,
+    networkRequests: clientTelemetry.networkRequests,
+    avgRoundTripMs,
+    lastRoundTripMs,
+  };
+}
+
+export function resetClientTelemetry() {
+  clientTelemetry.cacheHits = 0;
+  clientTelemetry.cacheMisses = 0;
+  clientTelemetry.dedupSaved = 0;
+  clientTelemetry.networkRequests = 0;
+  clientTelemetry.latenciesMs = [];
+}
 
 export async function cachedGet(url, { params, ttlMs = 60000 } = {}) {
   const bizKey = workspaceContext.businessId || localStorage.getItem('biztrade_business_id') || '';
   const key = `${bizKey}:${url}:${params ? JSON.stringify(params) : ''}`;
   const existing = clientResponseCache.get(key);
   if (existing && existing.expiresAt > Date.now()) {
+    clientTelemetry.cacheHits += 1;
     return existing.data;
   }
-  const { data } = await api.get(url, params ? { params } : undefined);
-  clientResponseCache.set(key, {
-    expiresAt: Date.now() + ttlMs,
-    data,
-  });
-  return data;
+  if (inFlightGets.has(key)) {
+    clientTelemetry.dedupSaved += 1;
+    return inFlightGets.get(key);
+  }
+  clientTelemetry.cacheMisses += 1;
+  const promise = api
+    .get(url, params ? { params } : undefined)
+    .then(({ data }) => {
+      clientResponseCache.set(key, {
+        expiresAt: Date.now() + ttlMs,
+        data,
+      });
+      return data;
+    })
+    .finally(() => {
+      inFlightGets.delete(key);
+    });
+  inFlightGets.set(key, promise);
+  return promise;
 }
 
 export function invalidateApiCache(prefix = '') {
@@ -97,6 +156,7 @@ api.interceptors.request.use((config) => {
     config.headers['x-branch-id'] = String(branchId);
   }
   config.headers['Accept-Language'] = i18n.language || 'en';
+  config._startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
   return config;
 });
 
@@ -119,7 +179,13 @@ function sanitizeFriendlyError(rawMessage, status, hasBackendMessage, { isTimeou
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response?.config?._startTime && !String(response.config.url || '').includes('/admin/diagnostics/')) {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      recordClientLatency(now - response.config._startTime);
+    }
+    return response;
+  },
   async (error) => {
     if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
       const canceled = new Error('Request cancelled');

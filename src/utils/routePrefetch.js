@@ -38,6 +38,16 @@ const ROUTE_LOADERS = [
   ['/register', () => import('../pages/AuthPages.jsx')],
 ];
 
+export function scheduleIdleTask(fn, timeout = 1200) {
+  if (typeof window === 'undefined') return () => {};
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(fn, { timeout });
+    return () => window.cancelIdleCallback(id);
+  }
+  const timer = window.setTimeout(fn, 250);
+  return () => window.clearTimeout(timer);
+}
+
 export function prefetchRoute(to) {
   if (!to || typeof to !== 'string') return;
   const pathOnly = to.split('?')[0].split('#')[0];
@@ -51,4 +61,11 @@ export function prefetchRoute(to) {
       return;
     }
   }
+}
+
+export function warmupCoreRoutes(isAuthenticated = false) {
+  const targets = isAuthenticated
+    ? ['/app/dashboard', '/app/pos', '/app/products', '/businesses']
+    : ['/businesses', '/pricing', '/features', '/jobs', '/login'];
+  targets.forEach((route) => prefetchRoute(route));
 }

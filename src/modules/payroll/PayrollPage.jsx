@@ -19,6 +19,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import PasswordInput from '../../components/PasswordInput.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
@@ -1353,19 +1354,17 @@ export default function PayrollPage() {
                   placeholder={account.has_business_mtn_keys ? t('payroll.updateMtnUserPlaceholder') : t('payroll.mtnUserPlaceholder')}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
-                <input
-                  type="password"
+                <PasswordInput
                   value={gatewayForm.mtn_subscription_key}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, mtn_subscription_key: e.target.value })}
                   placeholder={account.has_business_mtn_keys ? t('payroll.updateMtnSubKeyPlaceholder') : t('payroll.mtnSubKeyPlaceholder')}
-                  className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
-                <input
-                  type="password"
+                <PasswordInput
                   value={gatewayForm.mtn_api_key}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, mtn_api_key: e.target.value })}
                   placeholder={account.has_business_mtn_keys ? t('payroll.updateMtnKeyPlaceholder') : t('payroll.mtnKeyPlaceholder')}
-                  className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
               </div>
             </div>
@@ -1392,12 +1391,11 @@ export default function PayrollPage() {
                   placeholder={account.has_business_airtel_keys ? t('payroll.updateAirtelIdPlaceholder') : t('payroll.airtelIdPlaceholder')}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
-                <input
-                  type="password"
+                <PasswordInput
                   value={gatewayForm.airtel_client_secret}
                   onChange={(e) => setGatewayForm({ ...gatewayForm, airtel_client_secret: e.target.value })}
                   placeholder={account.has_business_airtel_keys ? t('payroll.updateAirtelSecretPlaceholder') : t('payroll.airtelSecretPlaceholder')}
-                  className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-mono"
                 />
               </div>
             </div>

@@ -45,7 +45,7 @@ router.get('/tasks', authenticate, requireBusiness, requirePermission('tasks.vie
       const allComments = await query(
         `SELECT tc.*, u.full_name AS author_name, u.avatar_url AS author_avatar
          FROM task_comments tc JOIN users u ON u.id = tc.user_id
-         WHERE tc.task_id IN (${placeholders}) ORDER BY tc.id ASC`,
+         WHERE tc.task_id IN (${placeholders}) ORDER BY tc.id DESC`,
         ids
       );
       const byTask = new Map();
@@ -422,7 +422,7 @@ router.get('/reports/dashboard', authenticate, requireBusiness, async (req, res,
       query(
         `SELECT al.*, u.full_name AS user_name, u.avatar_url AS user_avatar
          FROM activity_logs al LEFT JOIN users u ON u.id = al.user_id
-         WHERE al.business_id = ? ORDER BY al.id DESC LIMIT 12`,
+         WHERE al.business_id = ? ORDER BY al.id DESC LIMIT 50`,
         [req.businessId]
       ),
       canViewPayroll
@@ -773,6 +773,7 @@ router.post(
 // ================= SUBSCRIPTIONS & PLATFORM SUPER ADMIN =================
 router.get('/subscriptions/plans', async (_req, res, next) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
     const cached = getCached('public:subscription-plans');
     if (cached) return res.json({ plans: cached });
     const plans = await query('SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY monthly_price_rwf ASC');
@@ -902,7 +903,7 @@ router.get('/admin/overview', authenticate, requirePlatformAdmin, async (_req, r
          FROM users u
          LEFT JOIN platform_admins pa ON pa.user_id = u.id
          WHERE u.is_platform_admin = 1
-         ORDER BY u.id ASC`
+         ORDER BY u.id DESC`
       ),
       query('SELECT * FROM subscription_plans ORDER BY monthly_price_rwf ASC'),
       query(
@@ -1576,14 +1577,34 @@ router.post('/admin/businesses/:id/reset-admin-access', authenticate, requirePla
   }
 });
 
+async function upsertPlatformSetting(key, value, userId) {
+  const val = String(value ?? '');
+  const existing = await queryOne('SELECT id FROM platform_settings WHERE setting_key = ?', [key]);
+  if (existing) {
+    await execute(
+      `UPDATE platform_settings SET setting_value = ?, updated_by_user_id = ?, updated_at = datetime('now') WHERE id = ?`,
+      [val, userId, existing.id]
+    );
+  } else {
+    await execute(
+      `INSERT INTO platform_settings (setting_key, setting_value, updated_by_user_id) VALUES (?, ?, ?)`,
+      [key, val, userId]
+    );
+  }
+}
+
+async function readPlatformSettingsMap() {
+  const rows = await query('SELECT setting_key, setting_value FROM platform_settings ORDER BY id ASC');
+  return rows.reduce((acc, row) => {
+    acc[row.setting_key] = row.setting_value;
+    return acc;
+  }, {});
+}
+
 // Super Admin: Platform-wide settings
 router.get('/admin/settings', authenticate, requirePlatformAdmin, async (_req, res, next) => {
   try {
-    const rows = await query('SELECT setting_key, setting_value FROM platform_settings ORDER BY id ASC');
-    const settings = rows.reduce((acc, row) => {
-      acc[row.setting_key] = row.setting_value;
-      return acc;
-    }, {});
+    const settings = await readPlatformSettingsMap();
     res.json({ settings });
   } catch (err) {
     next(err);
@@ -1614,22 +1635,46 @@ router.put('/admin/settings', authenticate, requirePlatformAdmin, async (req, re
       'allow_customer_reviews',
       'business_retention_days',
       'require_email_verification',
+      'development_mode',
+      'development_banner_message',
+      'feature_flags_json',
+      'maintenance_mode',
+      'maintenance_message',
+      'allow_business_onboarding',
+      'allow_customer_registration',
+      'session_timeout_minutes',
+      'max_upload_size_mb',
+      'api_rate_limit_rpm',
+      'audit_log_retention_days',
+      'auto_backup_enabled',
     ];
     for (const key of allowedKeys) {
       if (updates[key] !== undefined) {
-        const val = String(updates[key]);
-        const existing = await queryOne('SELECT id FROM platform_settings WHERE setting_key = ?', [key]);
-        if (existing) {
-          await execute(
-            `UPDATE platform_settings SET setting_value = ?, updated_by_user_id = ?, updated_at = datetime('now') WHERE id = ?`,
-            [val, req.user.id, existing.id]
-          );
-        } else {
-          await execute(
-            `INSERT INTO platform_settings (setting_key, setting_value, updated_by_user_id) VALUES (?, ?, ?)`,
-            [key, val, req.user.id]
-          );
+        let val = String(updates[key]);
+        if (key === 'session_timeout_minutes') {
+          const n = Math.min(10080, Math.max(15, parseInt(val, 10) || 480));
+          val = String(n);
+        } else if (key === 'max_upload_size_mb') {
+          const n = Math.min(250, Math.max(2, parseInt(val, 10) || 25));
+          val = String(n);
+        } else if (key === 'api_rate_limit_rpm') {
+          const n = Math.min(20000, Math.max(60, parseInt(val, 10) || 1200));
+          val = String(n);
+        } else if (key === 'audit_log_retention_days' || key === 'business_retention_days') {
+          const n = Math.min(3650, Math.max(30, parseInt(val, 10) || 365));
+          val = String(n);
+        } else if (key === 'default_tax_rate') {
+          const n = Math.min(100, Math.max(0, Number(val) || 0));
+          val = String(n);
+        } else if (key === 'feature_flags_json') {
+          try {
+            const parsed = typeof updates[key] === 'string' ? JSON.parse(updates[key]) : updates[key];
+            val = JSON.stringify(parsed && typeof parsed === 'object' ? parsed : {});
+          } catch {
+            return res.status(422).json({ error: 'Invalid feature flags configuration payload.' });
+          }
         }
+        await upsertPlatformSetting(key, val, req.user.id);
       }
     }
 
@@ -1641,13 +1686,161 @@ router.put('/admin/settings', authenticate, requirePlatformAdmin, async (req, re
       ipAddress: req.ip,
     });
 
-    const rows = await query('SELECT setting_key, setting_value FROM platform_settings ORDER BY id ASC');
-    const settings = rows.reduce((acc, row) => {
-      acc[row.setting_key] = row.setting_value;
-      return acc;
-    }, {});
+    const settings = await readPlatformSettingsMap();
     invalidateCache('public:platform-config');
+    invalidateCache('system:runtime-flags');
     res.json({ message: 'Platform settings saved', settings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Super Admin: Toggle Development / Feature Staging Mode
+router.post('/admin/system-mode/development', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const enabled =
+      req.body?.enabled === true ||
+      req.body?.enabled === 'true' ||
+      req.body?.enabled === '1' ||
+      req.body?.enabled === 1;
+
+    await upsertPlatformSetting('development_mode', enabled ? '1' : '0', req.user.id);
+
+    if (req.body?.banner_message !== undefined) {
+      await upsertPlatformSetting('development_banner_message', String(req.body.banner_message).trim(), req.user.id);
+    }
+    if (req.body?.feature_flags && typeof req.body.feature_flags === 'object') {
+      await upsertPlatformSetting('feature_flags_json', JSON.stringify(req.body.feature_flags), req.user.id);
+    }
+
+    await logAudit({
+      userId: req.user.id,
+      action: enabled ? 'platform.development_mode_enabled' : 'platform.development_mode_disabled',
+      entityType: 'platform_settings',
+      changes: {
+        development_mode: enabled ? '1' : '0',
+        feature_flags: req.body?.feature_flags || undefined,
+      },
+      ipAddress: req.ip,
+    });
+
+    const settings = await readPlatformSettingsMap();
+    invalidateCache('public:platform-config');
+    invalidateCache('system:runtime-flags');
+
+    res.json({
+      message: enabled
+        ? 'Development Mode turned ON. New features and staged changes can now be developed and tested safely.'
+        : 'Development Mode turned OFF. Platform returned to standard production operation.',
+      settings,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Super Admin: Run live verification checks, confirm staged features work properly, and turn OFF Development Mode
+router.post('/admin/system-mode/confirm-release', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const checks = [];
+
+    const dbRow = await queryOne('SELECT 1 AS ok');
+    checks.push({
+      id: 'database_connectivity',
+      label: 'Primary database connectivity & query readiness',
+      passed: Boolean(dbRow && Number(dbRow.ok) === 1),
+    });
+
+    const coreCounts = await queryOne(
+      `SELECT
+        (SELECT COUNT(*) FROM subscription_plans WHERE is_active = 1) AS active_plans,
+        (SELECT COUNT(*) FROM roles) AS roles_count,
+        (SELECT COUNT(*) FROM permissions) AS permissions_count,
+        (SELECT COUNT(*) FROM users WHERE is_platform_admin = 1 AND is_active = 1) AS active_admins`
+    );
+    checks.push({
+      id: 'subscription_plans',
+      label: 'Active subscription plans available for Pricing & Onboarding',
+      passed: Number(coreCounts?.active_plans || 0) > 0,
+      detail: `${coreCounts?.active_plans || 0} active plans`,
+    });
+    checks.push({
+      id: 'rbac_integrity',
+      label: 'RBAC roles, permissions, and active Super Admin integrity',
+      passed:
+        Number(coreCounts?.roles_count || 0) > 0 &&
+        Number(coreCounts?.permissions_count || 0) > 0 &&
+        Number(coreCounts?.active_admins || 0) > 0,
+      detail: `${coreCounts?.roles_count || 0} roles · ${coreCounts?.permissions_count || 0} permissions`,
+    });
+
+    let validFlags = true;
+    if (req.body?.feature_flags && typeof req.body.feature_flags === 'object') {
+      await upsertPlatformSetting('feature_flags_json', JSON.stringify(req.body.feature_flags), req.user.id);
+    } else {
+      const currentFlags = await queryOne(`SELECT setting_value FROM platform_settings WHERE setting_key = 'feature_flags_json'`);
+      if (currentFlags?.setting_value) {
+        try {
+          JSON.parse(currentFlags.setting_value);
+        } catch {
+          validFlags = false;
+        }
+      }
+    }
+    checks.push({
+      id: 'feature_flags_schema',
+      label: 'Staged feature flags JSON schema validation',
+      passed: validFlags,
+    });
+
+    const allPassed = checks.every((c) => c.passed);
+    if (!allPassed) {
+      return res.status(409).json({
+        error: 'System verification detected an issue. Development Mode remains ON until resolved.',
+        checks,
+      });
+    }
+
+    const confirmedAt = new Date().toISOString();
+    const confirmedBy = req.user.email || req.user.full_name || 'Super Admin';
+    await upsertPlatformSetting('development_mode', '0', req.user.id);
+    await upsertPlatformSetting('development_last_confirmed_at', confirmedAt, req.user.id);
+    await upsertPlatformSetting('development_last_confirmed_by', confirmedBy, req.user.id);
+
+    await logAudit({
+      userId: req.user.id,
+      action: 'platform.development_release_confirmed',
+      entityType: 'platform_settings',
+      changes: { confirmed_at: confirmedAt, confirmed_by: confirmedBy, checks },
+      ipAddress: req.ip,
+    });
+
+    invalidatePrefix('');
+    const settings = await readPlatformSettingsMap();
+
+    res.json({
+      message: 'All system verification checks passed. Changes confirmed and Development Mode turned OFF.',
+      checks,
+      confirmed_at: confirmedAt,
+      confirmed_by: confirmedBy,
+      settings,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Super Admin: Flush in-memory server response cache
+router.post('/admin/system-cache/flush', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    invalidatePrefix('');
+    await logAudit({
+      userId: req.user.id,
+      action: 'platform.cache_flushed',
+      entityType: 'platform_settings',
+      ipAddress: req.ip,
+    });
+    res.json({ message: 'Server response cache flushed successfully.' });
   } catch (err) {
     next(err);
   }
@@ -1911,6 +2104,7 @@ router.patch('/admin/plans/:id', authenticate, requirePlatformAdmin, async (req,
       changes: req.body,
       ipAddress: req.ip,
     });
+    invalidateCache('public:subscription-plans');
     res.json({ message: 'Subscription plan updated' });
   } catch (err) {
     next(err);

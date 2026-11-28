@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Camera, CheckCircle2, Lock, LogOut, Mail } from 'lucide-react';
+import { Camera, CheckCircle2, Lock, LogIn, LogOut, Mail } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../components/LanguageSelector.jsx';
 import LogoutConfirmModal from '../components/LogoutConfirmModal.jsx';
+import PasswordInput from '../components/PasswordInput.jsx';
 import ProfilePhotoUploader, { validateAvatarFile } from '../components/ProfilePhotoUploader.jsx';
 import PublicHeader from '../components/PublicHeader.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
@@ -133,9 +134,9 @@ export function LoginPage() {
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">{t('auth.password')}</label>
                 <Link to="/forgot-password" className="text-xs text-sky-700 dark:text-sky-400 hover:underline whitespace-nowrap shrink-0">{t('auth.forgotPassword')}</Link>
               </div>
-              <input
+              <PasswordInput
                 required
-                type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -144,9 +145,10 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
+              className="btn-auth-login-live w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60 inline-flex items-center justify-center gap-2 transition-colors"
             >
-              {submitting ? t('auth.signingIn') : t('auth.signIn')}
+              <LogIn className="w-4 h-4 auth-btn-icon shrink-0" aria-hidden="true" />
+              <span>{submitting ? t('auth.signingIn') : t('auth.signIn')}</span>
             </button>
           </form>
 
@@ -417,10 +419,10 @@ export function RegisterPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.password')}</label>
-                    <input
+                    <PasswordInput
                       required
                       minLength={8}
-                      type="password"
+                      autoComplete="new-password"
                       value={form.password}
                       onChange={(e) => setForm({ ...form, password: e.target.value })}
                       className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -428,10 +430,10 @@ export function RegisterPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.confirmPassword')}</label>
-                    <input
+                    <PasswordInput
                       required
                       minLength={8}
-                      type="password"
+                      autoComplete="new-password"
                       value={form.confirm_password}
                       onChange={(e) => setForm({ ...form, confirm_password: e.target.value })}
                       className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -779,10 +781,10 @@ export function ActivateAccountPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.setPasswordMin')}</label>
-                <input
+                <PasswordInput
                   required
                   minLength={8}
-                  type="password"
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -790,10 +792,10 @@ export function ActivateAccountPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.confirmPassword')}</label>
-                <input
+                <PasswordInput
                   required
                   minLength={8}
-                  type="password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -977,9 +979,9 @@ export function ForceChangePasswordPage() {
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.currentTempPw')}</label>
-              <input
+              <PasswordInput
                 required
-                type="password"
+                autoComplete="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder={t('auth.currentTempPwPlaceholder')}
@@ -988,10 +990,10 @@ export function ForceChangePasswordPage() {
             </div>
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.newPermPw')}</label>
-              <input
+              <PasswordInput
                 required
                 minLength={8}
-                type="password"
+                autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder={t('auth.newPermPwPlaceholder')}
@@ -1000,10 +1002,10 @@ export function ForceChangePasswordPage() {
             </div>
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">{t('auth.confirmNewPw')}</label>
-              <input
+              <PasswordInput
                 required
                 minLength={8}
-                type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder={t('auth.confirmNewPwPlaceholder')}
@@ -1095,7 +1097,7 @@ export function ForgotPasswordPage() {
           {step === 'reset' && (
             <form onSubmit={handleReset} className="space-y-4">
               <input required value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder={t('auth.pasteRecoveryToken')} className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg font-mono" />
-              <input required minLength={8} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('auth.newPasswordPlaceholder')} className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
+              <PasswordInput required minLength={8} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('auth.newPasswordPlaceholder')} className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg" />
               <button type="submit" disabled={submitting} className="w-full py-2.5 text-sm font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg disabled:opacity-60">{t('auth.resetPassword')}</button>
             </form>
           )}

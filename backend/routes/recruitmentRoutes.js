@@ -145,23 +145,23 @@ async function attachOptionalUser(req) {
 
 async function loadApplicationRelations(appId, { includeNotes = false, docBaseUrl = '/api/customer/applications' } = {}) {
   const [education, experiences, skills, documents, answers, statusHistory, interviews] = await Promise.all([
-    query('SELECT * FROM applicant_education WHERE application_id = ? ORDER BY id ASC', [appId]),
-    query('SELECT * FROM applicant_experiences WHERE application_id = ? ORDER BY id ASC', [appId]),
-    query('SELECT * FROM applicant_skills WHERE application_id = ? ORDER BY id ASC', [appId]),
+    query('SELECT * FROM applicant_education WHERE application_id = ? ORDER BY id DESC', [appId]),
+    query('SELECT * FROM applicant_experiences WHERE application_id = ? ORDER BY id DESC', [appId]),
+    query('SELECT * FROM applicant_skills WHERE application_id = ? ORDER BY id DESC', [appId]),
     query(
       `SELECT id, application_id, document_category, document_type, document_name, original_filename, mime_type, file_size_bytes, is_active, uploaded_at
        FROM application_documents
        WHERE application_id = ? AND is_active = 1
-       ORDER BY CASE WHEN document_category = 'cv' THEN 0 ELSE 1 END, id ASC`,
+       ORDER BY CASE WHEN document_category = 'cv' THEN 0 ELSE 1 END, id DESC`,
       [appId]
     ),
-    query('SELECT * FROM application_answers WHERE application_id = ? ORDER BY id ASC', [appId]),
+    query('SELECT * FROM application_answers WHERE application_id = ? ORDER BY id DESC', [appId]),
     query(
       `SELECT h.*, u.full_name AS changed_by_name
        FROM application_status_history h
        LEFT JOIN users u ON u.id = h.changed_by_user_id
        WHERE h.application_id = ?
-       ORDER BY h.id ASC`,
+       ORDER BY h.id DESC`,
       [appId]
     ),
     query(

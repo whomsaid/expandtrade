@@ -12,10 +12,15 @@ export default defineConfig(() => {
       },
     },
     build: {
+      target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+      cssCodeSplit: true,
       rollupOptions: {
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return;
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) return 'vendor-react';
+            if (id.includes('i18next')) return 'vendor-i18n';
+            if (id.includes('axios')) return 'vendor-http';
             if (id.includes('recharts')) return 'vendor-charts';
             if (id.includes('lucide-react')) return 'vendor-icons';
             if (id.includes('socket.io-client') || id.includes('engine.io-client')) return 'vendor-socket';

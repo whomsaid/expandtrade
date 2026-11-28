@@ -32,7 +32,7 @@ router.get('/businesses', authenticate, requireProfileImage, async (req, res, ne
        JOIN businesses b ON b.id = bm.business_id
        JOIN roles r ON r.id = bm.role_id
        WHERE bm.user_id = ? AND bm.status = 'active' AND b.status != 'deleted' AND b.deleted_at IS NULL
-       ORDER BY b.id ASC`,
+       ORDER BY b.id DESC`,
       [req.user.id]
     );
     res.json({ businesses: rows });
@@ -181,7 +181,7 @@ router.get('/businesses/current', authenticate, requireBusiness, async (req, res
   try {
     const settings = await queryOne('SELECT * FROM business_settings WHERE business_id = ?', [req.businessId]);
     const branches = req.membership.all_branches_access
-      ? await query('SELECT * FROM branches WHERE business_id = ? ORDER BY is_main DESC, id ASC', [req.businessId])
+      ? await query('SELECT * FROM branches WHERE business_id = ? ORDER BY is_main DESC, id DESC', [req.businessId])
       : await query('SELECT * FROM branches WHERE id = ? AND business_id = ?', [req.branchId, req.businessId]);
 
     res.json({
@@ -596,7 +596,7 @@ router.get('/branches', authenticate, requireBusiness, async (req, res, next) =>
        FROM branches b
        LEFT JOIN users u ON u.id = b.manager_user_id
        WHERE b.business_id = ?
-       ORDER BY b.is_main DESC, b.id ASC`,
+       ORDER BY b.is_main DESC, b.id DESC`,
       [req.businessId]
     );
     res.json({ branches });
@@ -720,7 +720,7 @@ router.get('/members', authenticate, requireBusiness, requirePermission('employe
        JOIN roles r ON r.id = bm.role_id
        LEFT JOIN branches b ON b.id = bm.assigned_branch_id
        WHERE bm.business_id = ?
-       ORDER BY bm.id ASC`,
+       ORDER BY bm.id DESC`,
       [req.businessId]
     );
 

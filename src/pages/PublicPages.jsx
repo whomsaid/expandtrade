@@ -48,9 +48,11 @@ import WhatsAppContactButton from '../components/WhatsAppContactButton.jsx';
 import { buildBreadcrumbJsonLd, setDynamicSeo } from '../components/RouteSeoManager.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { usePlatformConfig } from '../context/PlatformConfigContext.jsx';
-import { api } from '../services/api.js';
+import { api, cachedGet } from '../services/api.js';
 import { formatDate, formatDateTime, formatMoney } from '../utils/format.js';
 import { prefetchRoute } from '../utils/routePrefetch.js';
+import { useExpandableList } from '../utils/listOrder.js';
+import ViewMoreFooter from '../components/ViewMoreFooter.jsx';
 import heroKigaliImg from '../assets/images/hero_kigali_commerce_1794724575172.jpg';
 import featurePosImg from '../assets/images/feature_pos_inventory_1794724576072.jpg';
 import featureRetailPosImg from '../assets/images/feature_retail_pos_1795098957916.jpg';
@@ -738,6 +740,9 @@ export function PublicBusinessesPage() {
     setSearchParams({}, { replace: true });
   };
 
+  const businessesBox = useExpandableList(businesses, { initialLimit: 6, sortNewest: sort === 'newest' });
+  const videosBox = useExpandableList(videos, { initialLimit: 3, sortNewest: true });
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
@@ -855,7 +860,7 @@ export function PublicBusinessesPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {businesses.map((b) => (
+              {businessesBox.visibleItems.map((b) => (
                 <div
                   key={b.id}
                   onMouseEnter={() => prefetchRoute(`/businesses/${b.slug}`)}
@@ -908,6 +913,14 @@ export function PublicBusinessesPage() {
                 </div>
               ))}
             </div>
+            <ViewMoreFooter
+              totalCount={businessesBox.totalCount}
+              visibleCount={businessesBox.visibleCount}
+              initialLimit={6}
+              expanded={businessesBox.expanded}
+              onToggle={businessesBox.toggleExpanded}
+              className="rounded-xl border border-slate-200 dark:border-slate-800"
+            />
 
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-3 pt-2 text-xs">
@@ -935,7 +948,7 @@ export function PublicBusinessesPage() {
           </>
         )}
 
-        {!loading && videos.length > 0 && (
+        {!loading && videosBox.totalCount > 0 && (
           <section className="space-y-4 pt-4">
             <div>
               <h2 className="text-xl font-bold text-[#0B192C] dark:text-white">{t('public.featuredVideosTitle')}</h2>
@@ -944,10 +957,18 @@ export function PublicBusinessesPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {videos.map((vid) => (
+              {videosBox.visibleItems.map((vid) => (
                 <VideoAdPlayer key={vid.id} video={vid} showBusiness />
               ))}
             </div>
+            <ViewMoreFooter
+              totalCount={videosBox.totalCount}
+              visibleCount={videosBox.visibleCount}
+              initialLimit={3}
+              expanded={videosBox.expanded}
+              onToggle={videosBox.toggleExpanded}
+              className="rounded-xl border border-slate-200 dark:border-slate-800"
+            />
           </section>
         )}
       </main>
@@ -1087,6 +1108,11 @@ export function PublicBusinessDetailPage() {
         p.description?.toLowerCase().includes(q)
     );
   }, [data?.products, catalogQuery]);
+
+  const detailVideosBox = useExpandableList(data?.videos || [], { initialLimit: 3, sortNewest: true });
+  const detailVacanciesBox = useExpandableList(data?.vacancies || [], { initialLimit: 3, sortNewest: true });
+  const detailProductsBox = useExpandableList(filteredProducts, { initialLimit: 6, sortNewest: true });
+  const detailReviewsBox = useExpandableList(data?.reviews || [], { initialLimit: 5, sortNewest: true });
 
   const adjustQty = (productId, delta) => {
     setCart((prev) => {
@@ -1261,7 +1287,7 @@ export function PublicBusinessDetailPage() {
             </div>
 
             {/* Published Business Promotional Videos */}
-            {data.videos?.length > 0 && (
+            {detailVideosBox.totalCount > 0 && (
               <section className="space-y-4">
                 <div>
                   <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('public.promoVideos')}</h2>
@@ -1270,15 +1296,23 @@ export function PublicBusinessDetailPage() {
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {data.videos.map((vid) => (
+                  {detailVideosBox.visibleItems.map((vid) => (
                     <VideoAdPlayer key={vid.id} video={vid} />
                   ))}
                 </div>
+                <ViewMoreFooter
+                  totalCount={detailVideosBox.totalCount}
+                  visibleCount={detailVideosBox.visibleCount}
+                  initialLimit={3}
+                  expanded={detailVideosBox.expanded}
+                  onToggle={detailVideosBox.toggleExpanded}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800"
+                />
               </section>
             )}
 
             {/* Open Job Vacancies at This Business */}
-            {data.vacancies?.length > 0 && (
+            {detailVacanciesBox.totalCount > 0 && (
               <section className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -1292,7 +1326,7 @@ export function PublicBusinessDetailPage() {
                   </Link>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data.vacancies.map((vac) => (
+                  {detailVacanciesBox.visibleItems.map((vac) => (
                     <div key={vac.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3 text-xs">
                       <div className="space-y-1">
                         <div className="font-bold text-sm text-slate-900 dark:text-white">{vac.title}</div>
@@ -1315,6 +1349,14 @@ export function PublicBusinessDetailPage() {
                     </div>
                   ))}
                 </div>
+                <ViewMoreFooter
+                  totalCount={detailVacanciesBox.totalCount}
+                  visibleCount={detailVacanciesBox.visibleCount}
+                  initialLimit={3}
+                  expanded={detailVacanciesBox.expanded}
+                  onToggle={detailVacanciesBox.toggleExpanded}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800"
+                />
               </section>
             )}
 
@@ -1335,7 +1377,7 @@ export function PublicBusinessDetailPage() {
                     </div>
                   )}
                 </div>
-                {filteredProducts.length === 0 ? (
+                {detailProductsBox.totalCount === 0 ? (
                   <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between gap-3">
                     <span>{catalogQuery ? t('search.noMatches') : t('public.noCatalogItems')}</span>
                     {catalogQuery && (
@@ -1349,45 +1391,55 @@ export function PublicBusinessDetailPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {filteredProducts.map((p) => (
-                      <div key={p.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3">
-                        <div className="space-y-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">{p.name}</div>
-                            <span className={`text-[11px] font-medium ${p.in_stock ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                              {p.in_stock ? t('public.available') : t('public.outOfStock')}
-                            </span>
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {detailProductsBox.visibleItems.map((p) => (
+                        <div key={p.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3">
+                          <div className="space-y-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">{p.name}</div>
+                              <span className={`text-[11px] font-medium ${p.in_stock ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                {p.in_stock ? t('public.available') : t('public.outOfStock')}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{p.category_name || t('public.general')} · {p.unit}</div>
+                            {p.description && <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{p.description}</p>}
                           </div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400">{p.category_name || t('public.general')} · {p.unit}</div>
-                          {p.description && <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{p.description}</p>}
+                          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div className="text-sm font-bold text-[#0B192C] dark:text-sky-300 tabular-nums">
+                              {formatMoney(p.selling_price, data.business.currency_code)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {cart[p.id] > 0 ? (
+                                <div className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-lg text-xs">
+                                  <button type="button" onClick={() => adjustQty(p.id, -1)} className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800">-</button>
+                                  <span className="px-2 font-semibold tabular-nums">{cart[p.id]}</span>
+                                  <button type="button" onClick={() => adjustQty(p.id, 1)} className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800">+</button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={!p.in_stock}
+                                  onClick={() => adjustQty(p.id, 1)}
+                                  className="px-3 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
+                                >
+                                  {t('public.addToOrder')}
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                          <div className="text-sm font-bold text-[#0B192C] dark:text-sky-300 tabular-nums">
-                            {formatMoney(p.selling_price, data.business.currency_code)}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {cart[p.id] > 0 ? (
-                              <div className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded-lg text-xs">
-                                <button type="button" onClick={() => adjustQty(p.id, -1)} className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800">-</button>
-                                <span className="px-2 font-semibold tabular-nums">{cart[p.id]}</span>
-                                <button type="button" onClick={() => adjustQty(p.id, 1)} className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800">+</button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={!p.in_stock}
-                                onClick={() => adjustQty(p.id, 1)}
-                                className="px-3 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
-                              >
-                                {t('public.addToOrder')}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                    <ViewMoreFooter
+                      totalCount={detailProductsBox.totalCount}
+                      visibleCount={detailProductsBox.visibleCount}
+                      initialLimit={6}
+                      expanded={detailProductsBox.expanded}
+                      onToggle={detailProductsBox.toggleExpanded}
+                      className="rounded-xl border border-slate-200 dark:border-slate-800"
+                    />
+                  </>
                 )}
               </div>
 
@@ -1462,7 +1514,7 @@ export function PublicBusinessDetailPage() {
                       ) : (
                         <Link
                           to="/login"
-                          className="block text-center w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
+                          className="btn-auth-login-live block text-center w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
                         >
                           {t('public.signInPlaceOrder')}
                         </Link>
@@ -1490,7 +1542,7 @@ export function PublicBusinessDetailPage() {
                       {t('public.sendMessage')}
                     </button>
                   ) : (
-                    <Link to="/login" className="block text-center py-2 text-xs font-semibold text-sky-700 dark:text-sky-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <Link to="/login" className="btn-auth-login-live block text-center py-2 text-xs font-semibold text-sky-700 dark:text-sky-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
                       {t('public.signInMessageBusiness')}
                     </Link>
                   )}
@@ -1539,34 +1591,44 @@ export function PublicBusinessDetailPage() {
                       {t('public.submitReview')}
                     </button>
                   ) : (
-                    <Link to="/login" className="md:col-span-2 text-center px-4 py-2 font-semibold text-sky-700 dark:text-sky-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <Link to="/login" className="btn-auth-login-live md:col-span-2 text-center px-4 py-2 font-semibold text-sky-700 dark:text-sky-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
                       {t('nav.signIn')}
                     </Link>
                   )}
                 </form>
               )}
 
-              {data.reviews.length === 0 ? (
+              {detailReviewsBox.totalCount === 0 ? (
                 <p className="text-xs text-slate-500 dark:text-slate-400">{t('public.noReviewsSubmitted')}</p>
               ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                  {data.reviews.map((rev) => (
-                    <div key={rev.id} className="py-3 space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
-                          <UserAvatar src={rev.customer_avatar} name={rev.customer_name} size="xs" />
-                          <span>{rev.customer_name} {rev.product_name ? `· ${rev.product_name}` : ''}</span>
+                <>
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                    {detailReviewsBox.visibleItems.map((rev) => (
+                      <div key={rev.id} className="py-3 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                            <UserAvatar src={rev.customer_avatar} name={rev.customer_name} size="xs" />
+                            <span>{rev.customer_name} {rev.product_name ? `· ${rev.product_name}` : ''}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
+                            <Star className="w-3.5 h-3.5 fill-amber-500" />
+                            <span>{rev.rating}/5</span>
+                            <span className="text-slate-400 dark:text-slate-500 font-normal ml-2">{formatDate(rev.created_at)}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
-                          <Star className="w-3.5 h-3.5 fill-amber-500" />
-                          <span>{rev.rating}/5</span>
-                          <span className="text-slate-400 dark:text-slate-500 font-normal ml-2">{formatDate(rev.created_at)}</span>
-                        </div>
+                        <p className="text-slate-600 dark:text-slate-300">{rev.comment}</p>
                       </div>
-                      <p className="text-slate-600 dark:text-slate-300">{rev.comment}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  <ViewMoreFooter
+                    totalCount={detailReviewsBox.totalCount}
+                    visibleCount={detailReviewsBox.visibleCount}
+                    initialLimit={5}
+                    expanded={detailReviewsBox.expanded}
+                    onToggle={detailReviewsBox.toggleExpanded}
+                    className="-mx-6 -mb-6 rounded-b-xl"
+                  />
+                </>
               )}
             </section>
           </>
@@ -1645,16 +1707,28 @@ export function FeaturesPage() {
 export function PricingPage() {
   const { t } = useTranslation();
   const [plans, setPlans] = useState([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [billing, setBilling] = useState('monthly');
 
   useEffect(() => {
-    api.get('/subscriptions/plans').then((res) => setPlans(res.data.plans || [])).catch(() => {});
+    let active = true;
+    cachedGet('/subscriptions/plans', { ttlMs: 120_000 })
+      .then((data) => {
+        if (active) setPlans(data?.plans || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoadingPlans(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <PublicHeader />
-      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-6 py-12 space-y-10 w-full animate-fade-up">
+      <main id="main-content" className="flex-1 max-w-7xl mx-auto px-6 py-12 space-y-12 w-full">
         <PageBreadcrumb
           fallbackTo="/"
           items={[
@@ -1663,21 +1737,23 @@ export function PricingPage() {
           ]}
           rightLink={{ label: t('nav.features'), to: '/features' }}
         />
+
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white">{t('public.pricingTitle')}</h1>
+          <div className="space-y-2 max-w-2xl">
+            <h1 className="text-3xl font-bold text-[#0B192C] dark:text-white tracking-tight">{t('public.pricingTitle')}</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400">
               {t('public.pricingSubtitle')}
             </p>
           </div>
-          <div className="inline-flex p-1 bg-slate-200/70 dark:bg-slate-800 rounded-lg self-start">
+          <div className="inline-flex p-1 bg-slate-200/80 dark:bg-slate-800 rounded-lg self-start shrink-0" role="group" aria-label={t('public.pricingTitle')}>
             <button
               type="button"
               onClick={() => setBilling('monthly')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+              aria-pressed={billing === 'monthly'}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                 billing === 'monthly'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               {t('public.monthlyBilling')}
@@ -1685,10 +1761,11 @@ export function PricingPage() {
             <button
               type="button"
               onClick={() => setBilling('annual')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+              aria-pressed={billing === 'annual'}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                 billing === 'annual'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               {t('public.annualBilling')}
@@ -1696,45 +1773,177 @@ export function PricingPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {plans.map((plan) => {
-            const price = billing === 'annual' ? plan.annual_price_rwf : plan.monthly_price_rwf;
-            return (
-              <div
-                key={plan.id}
-                className={`bg-white dark:bg-slate-900 p-6 rounded-xl border flex flex-col justify-between space-y-6 ${
-                  plan.code === 'business'
-                    ? 'border-sky-600 dark:border-sky-500 ring-1 ring-sky-600 dark:ring-sky-500'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
-              >
-                <div className="space-y-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">{plan.name}</h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{plan.target_audience}</p>
-                  </div>
-                  <div className="text-2xl font-bold text-[#0B192C] dark:text-white tabular-nums">
-                    {formatMoney(price, 'RWF')}
-                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400"> / {billing === 'annual' ? t('public.yearUnit') : t('public.monthUnit')}</span>
-                  </div>
-                  <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.upToEmployees', { count: plan.max_employees })}</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.upToBranches', { count: plan.max_branches })}</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.activeSkus', { count: plan.max_products.toLocaleString() })}</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {t('public.aiQueriesMonth', { count: plan.max_ai_requests_monthly })}</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> {plan.advanced_reports_enabled ? t('public.fullPnlReports') : t('public.standardDailyReports')}</li>
-                  </ul>
+        {loadingPlans ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" aria-busy="true">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="h-96 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 space-y-4 animate-pulse">
+                <div className="h-5 w-28 rounded bg-slate-200 dark:bg-slate-800" />
+                <div className="h-8 w-36 rounded bg-slate-200 dark:bg-slate-800" />
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="h-3.5 w-full rounded bg-slate-200 dark:bg-slate-800" />
+                  <div className="h-3.5 w-4/5 rounded bg-slate-200 dark:bg-slate-800" />
+                  <div className="h-3.5 w-3/4 rounded bg-slate-200 dark:bg-slate-800" />
                 </div>
-                <Link
-                  to="/contact"
-                  className="block text-center py-2.5 px-4 text-xs font-semibold rounded-lg bg-[#0B192C] dark:bg-sky-600 text-white hover:bg-slate-800 dark:hover:bg-sky-500 transition-colors"
-                >
-                  {t('public.requestOnboardingBtn')}
-                </Link>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {plans.map((plan) => {
+              const monthly = Number(plan.monthly_price_rwf || 0);
+              const annual = Number(plan.annual_price_rwf || 0);
+              const price = billing === 'annual' ? annual : monthly;
+              const monthlyEquivalent = billing === 'annual' && annual > 0 ? Math.round(annual / 12) : monthly;
+              const annualBaseline = monthly * 12;
+              const annualSavingsRwf = annualBaseline > annual ? annualBaseline - annual : 0;
+              const isFeatured = plan.code === 'business';
+
+              return (
+                <div
+                  key={plan.id}
+                  className={`bg-white dark:bg-slate-900 p-6 rounded-xl border flex flex-col justify-between space-y-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                    isFeatured
+                      ? 'border-sky-600 dark:border-sky-500 ring-1 ring-sky-600 dark:ring-sky-500'
+                      : 'border-slate-200 dark:border-slate-800'
+                  }`}
+                >
+                  <div className="space-y-4">
+                    <div>
+                      {isFeatured && (
+                        <div className="text-[11px] font-semibold text-sky-700 dark:text-sky-400 mb-1">
+                          {t('pricing.recommendedPlan')}
+                        </div>
+                      )}
+                      <h2 className="text-lg font-bold text-slate-900 dark:text-white">{plan.name}</h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{plan.target_audience}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-2xl font-bold text-[#0B192C] dark:text-white tabular-nums">
+                        {formatMoney(price, 'RWF')}
+                        <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                          {' '}
+                          / {billing === 'annual' ? t('public.yearUnit') : t('public.monthUnit')}
+                        </span>
+                      </div>
+                      {billing === 'annual' && monthlyEquivalent > 0 && (
+                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium tabular-nums">
+                          {t('pricing.monthlyEquivalent', { amount: formatMoney(monthlyEquivalent, 'RWF') })}
+                          {annualSavingsRwf > 0 ? ` · ${t('pricing.saveAmountYear', { amount: formatMoney(annualSavingsRwf, 'RWF') })}` : ''}
+                        </div>
+                      )}
+                    </div>
+                    <ul className="space-y-2.5 text-xs text-slate-700 dark:text-slate-300 pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <li className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>{t('public.upToEmployees', { count: plan.max_employees })}</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>{t('public.upToBranches', { count: plan.max_branches })}</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>{t('public.activeSkus', { count: Number(plan.max_products || 0).toLocaleString() })}</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>{t('public.aiQueriesMonth', { count: plan.max_ai_requests_monthly })}</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>{plan.advanced_reports_enabled ? t('public.fullPnlReports') : t('public.standardDailyReports')}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <Link
+                    to="/contact"
+                    onMouseEnter={() => prefetchRoute('/contact')}
+                    className={`block text-center py-2.5 px-4 text-xs font-semibold rounded-lg transition-colors ${
+                      isFeatured
+                        ? 'bg-sky-600 text-white hover:bg-sky-700'
+                        : 'bg-[#0B192C] dark:bg-sky-600 text-white hover:bg-slate-800 dark:hover:bg-sky-500'
+                    }`}
+                  >
+                    {t('public.requestOnboardingBtn')}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!loadingPlans && plans.length > 0 && (
+          <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+              <h2 className="text-base font-bold text-[#0B192C] dark:text-white">{t('pricing.comparisonTitle')}</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('pricing.comparisonSubtitle')}</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4 font-semibold">{t('pricing.featureCol')}</th>
+                    {plans.map((p) => (
+                      <th key={p.id} className="py-3 px-4 font-semibold text-right whitespace-nowrap">
+                        {p.name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                  <tr>
+                    <td className="py-3 px-4 font-medium">{t('pricing.monthlyPriceRow')}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="py-3 px-4 text-right tabular-nums font-semibold text-slate-900 dark:text-white">
+                        {formatMoney(p.monthly_price_rwf, 'RWF')}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-medium">{t('pricing.annualPriceRow')}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="py-3 px-4 text-right tabular-nums">
+                        {formatMoney(p.annual_price_rwf, 'RWF')}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-medium">{t('superAdmin.maxStaff')}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="py-3 px-4 text-right tabular-nums">{p.max_employees}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-medium">{t('superAdmin.maxBranches')}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="py-3 px-4 text-right tabular-nums">{p.max_branches}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-medium">{t('superAdmin.maxProducts')}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="py-3 px-4 text-right tabular-nums">{Number(p.max_products || 0).toLocaleString()}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-medium">{t('superAdmin.monthlyAiCalls')}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="py-3 px-4 text-right tabular-nums">{p.max_ai_requests_monthly}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-medium">{t('public.fullPnlReports')}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className="py-3 px-4 text-right">
+                        {p.advanced_reports_enabled ? t('common.yes') : t('common.no')}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </main>
       <PublicFooter />
     </div>
@@ -2199,6 +2408,7 @@ export function TrackOrderPage() {
   const [phone, setPhone] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const historyBox = useExpandableList(result?.history || [], { initialLimit: 5, sortNewest: true });
 
   const handleTrack = async (e) => {
     e.preventDefault();
@@ -2281,7 +2491,7 @@ export function TrackOrderPage() {
             </div>
             <div className="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-2">
               <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('public.statusTimeline')}</div>
-              {(result.history || []).map((h, idx) => (
+              {historyBox.visibleItems.map((h, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs py-1">
                   <span className="font-medium text-slate-800 dark:text-slate-200">
                     {t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })} {h.note ? `— ${h.note}` : ''}
@@ -2289,6 +2499,14 @@ export function TrackOrderPage() {
                   <span className="text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(h.created_at)}</span>
                 </div>
               ))}
+              <ViewMoreFooter
+                totalCount={historyBox.totalCount}
+                visibleCount={historyBox.visibleCount}
+                initialLimit={5}
+                expanded={historyBox.expanded}
+                onToggle={historyBox.toggleExpanded}
+                className="-mx-6 -mb-6 mt-2 rounded-b-xl"
+              />
             </div>
           </div>
         )}

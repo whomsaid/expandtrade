@@ -33,6 +33,59 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { formatMoney } from '../utils/format.js';
 import { prefetchRoute } from '../utils/routePrefetch.js';
+import {
+  buildPlatformCatalog,
+  detectBizTradeQueryIntent,
+  rankLiveResults,
+  rankSearchCatalog,
+  splitHighlightSegments,
+} from '../utils/globalSearchEngine.js';
+
+const ICON_MAP = {
+  compass: Compass,
+  store: Store,
+  briefcase: Briefcase,
+  boxes: Boxes,
+  'credit-card': CreditCard,
+  'shopping-bag': ShoppingBag,
+  building: Building2,
+  bell: Bell,
+  dashboard: LayoutDashboard,
+  'shopping-cart': ShoppingCart,
+  package: Package,
+  receipt: Receipt,
+  users: Users,
+  truck: Truck,
+  wallet: Wallet,
+  banknote: Banknote,
+  'git-branch': GitBranch,
+  video: Video,
+  clipboard: ClipboardList,
+  'file-spreadsheet': FileSpreadsheet,
+  bot: Bot,
+  settings: Settings,
+  'shield-check': ShieldCheck,
+};
+
+function HighlightedText({ text, query }) {
+  const segments = useMemo(() => splitHighlightSegments(text, query), [text, query]);
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.match ? (
+          <mark
+            key={`${i}-${seg.text}`}
+            className="bg-sky-100 dark:bg-sky-900/70 text-[#0B192C] dark:text-sky-200 rounded-xs px-0.5 font-semibold"
+          >
+            {seg.text}
+          </mark>
+        ) : (
+          <span key={`${i}-${seg.text}`}>{seg.text}</span>
+        )
+      )}
+    </>
+  );
+}
 
 export default function QuickSearchModal({ open, onClose }) {
   const { t } = useTranslation();
@@ -50,149 +103,13 @@ export default function QuickSearchModal({ open, onClose }) {
   const inWorkspace =
     typeof window !== 'undefined' && window.location.pathname.startsWith('/app') && Boolean(user);
 
-  const accessiblePages = useMemo(() => {
-    const publicPages = [
-      {
-        id: 'page:home',
-        label: `BizTrade Africa — ${t('nav.home')}`,
-        sub: '/',
-        to: '/',
-        group: t('search.pagesGroup'),
-        icon: Compass,
-        keywords: 'biztrade biztrade africa bta home platform erp business commerce pos inventory marketplace dashboard',
-      },
-      {
-        id: 'page:businesses',
-        label: t('nav.businesses'),
-        sub: '/businesses',
-        to: '/businesses',
-        group: t('search.pagesGroup'),
-        icon: Store,
-        keywords: 'biztrade directory shops stores vendors wholesale marketplace storefronts catalog products kigali rwanda',
-      },
-      {
-        id: 'page:jobs',
-        label: t('nav.jobs'),
-        sub: '/jobs',
-        to: '/jobs',
-        group: t('search.pagesGroup'),
-        icon: Briefcase,
-        keywords: 'biztrade careers hiring vacancies work employment cv resume apply',
-      },
-      {
-        id: 'page:features',
-        label: t('nav.features'),
-        sub: '/features',
-        to: '/features',
-        group: t('search.pagesGroup'),
-        icon: Boxes,
-        keywords: 'biztrade modules pos inventory sales finance payroll orders procurement crm reports ai assistant',
-      },
-      {
-        id: 'page:pricing',
-        label: t('nav.pricing'),
-        sub: '/pricing',
-        to: '/pricing',
-        group: t('search.pagesGroup'),
-        icon: CreditCard,
-        keywords: 'biztrade plans subscription price cost rwf monthly annual enterprise',
-      },
-      {
-        id: 'page:track',
-        label: t('nav.trackOrder'),
-        sub: '/track-order',
-        to: '/track-order',
-        group: t('search.pagesGroup'),
-        icon: ShoppingBag,
-        keywords: 'biztrade track order status delivery shipment receipt tracking number',
-      },
-      {
-        id: 'page:about',
-        label: t('nav.about'),
-        sub: '/about',
-        to: '/about',
-        group: t('search.pagesGroup'),
-        icon: Building2,
-        keywords: 'biztrade africa bta mission company platform overview',
-      },
-      {
-        id: 'page:contact',
-        label: t('nav.contact'),
-        sub: '/contact',
-        to: '/contact',
-        group: t('search.pagesGroup'),
-        icon: Bell,
-        keywords: 'biztrade support onboarding help email whatsapp phone demo',
-      },
-    ];
-
-    if (!user) return publicPages;
-
-    const workspacePages = [
-      { to: '/app/dashboard', label: t('nav.dashboard'), perm: 'dashboard.view', icon: LayoutDashboard, keywords: 'biztrade overview kpi revenue analytics summary' },
-      { to: '/app/pos', label: t('nav.pos'), perm: 'pos.sell', icon: ShoppingCart, keywords: 'point of sale checkout cashier receipt barcode sell cart' },
-      { to: '/app/products', label: t('nav.products'), perm: 'products.view', icon: Package, keywords: 'catalog sku items pricing import csv excel' },
-      { to: '/app/inventory', label: t('nav.inventory'), perm: 'inventory.view', icon: Boxes, keywords: 'stock warehouse quantity transfers low stock valuation' },
-      { to: '/app/sales', label: t('nav.sales'), perm: 'sales.view', icon: Receipt, keywords: 'invoices receipts revenue transactions payments' },
-      { to: '/app/orders', label: t('nav.orders'), perm: 'orders.view', icon: ShoppingBag, keywords: 'online orders fulfillment delivery dispatch' },
-      { to: '/app/customers', label: t('nav.customers'), perm: 'customers.view', icon: Users, keywords: 'clients buyers crm receivables debt loyalty' },
-      { to: '/app/suppliers', label: t('nav.suppliers'), perm: 'suppliers.view', icon: Truck, keywords: 'vendors wholesale sourcing procurement' },
-      { to: '/app/purchases', label: t('nav.purchases'), perm: 'purchases.view', icon: CreditCard, keywords: 'restock purchase orders bills payables' },
-      { to: '/app/finance', label: t('nav.finance'), perm: 'finance.view', icon: Wallet, keywords: 'accounting expenses cashflow profit balance' },
-      { to: '/app/payroll', label: t('nav.payroll'), perm: 'payroll.view', icon: Banknote, keywords: 'salary wages staff pay disbursement' },
-      { to: '/app/my-payroll', label: t('nav.myPayroll'), perm: null, requiresMember: true, icon: Banknote, keywords: 'payslip my salary compensation' },
-      { to: '/app/employees', label: t('nav.employees'), perm: 'employees.view', icon: Users, keywords: 'hr staff team roles permissions' },
-      { to: '/app/recruitment', label: t('nav.recruitment'), perm: 'recruitment.view', icon: Briefcase, keywords: 'hiring jobs candidates applicants' },
-      { to: '/app/branches', label: t('nav.branches'), perm: 'branches.view', icon: GitBranch, keywords: 'locations shops warehouses multi branch' },
-      { to: '/app/ads', label: t('nav.ads'), perm: 'ads.view', icon: Video, keywords: 'videos promotions marketing showcase' },
-      { to: '/app/tasks', label: t('nav.tasks'), perm: 'tasks.view', icon: ClipboardList, keywords: 'todo team chat messaging collaboration' },
-      { to: '/app/reports', label: t('nav.reports'), perm: 'reports.view', icon: FileSpreadsheet, keywords: 'analytics export financial statements' },
-      { to: '/app/ai', label: t('nav.ai'), perm: 'ai.use', icon: Bot, keywords: 'gemini chatbot advisor market research search' },
-      { to: '/app/notifications', label: t('nav.notifications'), perm: null, icon: Bell, keywords: 'alerts updates inbox' },
-      { to: '/app/settings', label: t('nav.settings'), perm: null, icon: Settings, keywords: 'profile account security password theme language' },
-    ]
-      .filter((item) => {
-        if (!(memberships?.length > 0 || user?.is_platform_admin)) return false;
-        if (item.requiresMember && (!memberships || memberships.length === 0)) return false;
-        return !item.perm || hasPermission(item.perm);
-      })
-      .map((item) => ({
-        id: `app:${item.to}`,
-        label: item.label,
-        sub: item.to,
-        to: item.to,
-        group: t('search.workspaceGroup'),
-        icon: item.icon,
-        keywords: item.keywords,
-      }));
-
-    if (user?.is_platform_admin) {
-      workspacePages.unshift({
-        id: 'app:/app/admin',
-        label: t('nav.admin'),
-        sub: '/app/admin',
-        to: '/app/admin',
-        group: t('search.workspaceGroup'),
-        icon: ShieldCheck,
-        keywords: 'biztrade super admin governance qa monitoring platform config',
-      });
-    }
-
-    const portalPage = {
-      id: 'page:customer',
-      label: t('nav.customerPortal'),
-      sub: '/customer',
-      to: '/customer',
-      group: t('search.pagesGroup'),
-      icon: Users,
-      keywords: 'biztrade my orders applications wishlist reviews profile',
-    };
-
-    return inWorkspace ? [...workspacePages, portalPage, ...publicPages] : [portalPage, ...workspacePages, ...publicPages];
-  }, [user, memberships, hasPermission, inWorkspace, t]);
+  const accessiblePages = useMemo(
+    () => buildPlatformCatalog({ t, user, memberships, hasPermission, inWorkspace }),
+    [user, memberships, hasPermission, inWorkspace, t]
+  );
 
   const filteredPages = useMemo(() => {
-    const q = queryText.trim().toLowerCase();
+    const q = queryText.trim();
     if (!q) {
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const recentMatches = recentRoutes
@@ -205,38 +122,8 @@ export default function QuickSearchModal({ open, onClose }) {
       const basePages = accessiblePages.filter((p) => !recentPaths.has(p.to)).slice(0, 8 - recentMatches.length);
       return [...recentMatches, ...basePages];
     }
-
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const scored = [];
-
-    for (let i = 0; i < accessiblePages.length; i += 1) {
-      const page = accessiblePages[i];
-      const label = page.label.toLowerCase();
-      const sub = page.sub.toLowerCase();
-      const kw = (page.keywords || '').toLowerCase();
-      const combined = `${label} ${sub} ${kw}`;
-
-      if (!tokens.every((tok) => combined.includes(tok))) continue;
-
-      let score = 0;
-      if (label === q || sub === `/${q}`) score += 120;
-      else if (label.startsWith(q)) score += 95;
-      else if (kw.startsWith(q)) score += 85;
-      else if (label.includes(q)) score += 70;
-      else if (sub.includes(q)) score += 55;
-      else score += 45;
-
-      // Boost brand-home & core entry pages when searching brand/platform keywords
-      if (page.to === '/' && ('biztrade'.startsWith(q) || 'biztrade africa'.includes(q))) {
-        score += 30;
-      }
-
-      scored.push({ page, score, order: i });
-    }
-
-    scored.sort((a, b) => b.score - a.score || a.order - b.order);
-    return scored.slice(0, 6).map((s) => s.page);
-  }, [accessiblePages, queryText, recentRoutes, t]);
+    return rankSearchCatalog(accessiblePages, q, 6, inWorkspace);
+  }, [accessiblePages, queryText, recentRoutes, inWorkspace, t]);
 
   useEffect(() => {
     if (!open) {
@@ -284,7 +171,7 @@ export default function QuickSearchModal({ open, onClose }) {
           setLoading(false);
         }
       }
-    }, 200);
+    }, 180);
 
     return () => {
       clearTimeout(timer);
@@ -293,107 +180,113 @@ export default function QuickSearchModal({ open, onClose }) {
   }, [open, queryText, inWorkspace]);
 
   const flatItems = useMemo(() => {
-    const list = [...filteredPages];
-    if (!liveResults) return list;
+    const q = queryText.trim();
+    const { isBrand } = detectBizTradeQueryIntent(q);
+    const liveMapped = [];
 
-    if (liveResults.mode === 'public' && liveResults.data) {
+    if (liveResults?.mode === 'public' && liveResults.data) {
       const d = liveResults.data;
       (d.businesses || []).forEach((b) => {
-        list.push({
+        liveMapped.push({
           id: `biz:${b.id}`,
           label: b.name,
           sub: `${b.category} · ${b.district || ''}`,
           to: `/businesses/${b.slug}`,
           group: t('nav.businesses'),
-          icon: Store,
+          iconKey: 'store',
         });
       });
       (d.products || []).forEach((p) => {
-        list.push({
+        liveMapped.push({
           id: `prod:${p.id}`,
           label: p.name,
           sub: `${p.business_name} · ${formatMoney(p.selling_price, p.currency_code)}`,
           to: `/businesses/${p.business_slug}?q=${encodeURIComponent(p.name)}`,
           group: t('nav.products'),
-          icon: Package,
+          iconKey: 'package',
         });
       });
       (d.jobs || []).forEach((j) => {
-        list.push({
+        liveMapped.push({
           id: `job:${j.id}`,
           label: j.title,
           sub: `${j.business_name} · ${j.location}`,
           to: `/jobs/${j.id}`,
           group: t('nav.jobs'),
-          icon: Briefcase,
+          iconKey: 'briefcase',
         });
       });
-    } else if (liveResults.mode === 'app' && liveResults.data?.results) {
+    } else if (liveResults?.mode === 'app' && liveResults.data?.results) {
       const r = liveResults.data.results;
       const currency = liveResults.data.currency_code || 'RWF';
       (r.products || []).forEach((p) => {
-        list.push({
+        liveMapped.push({
           id: `ws-prod:${p.id}`,
           label: p.name,
           sub: `${p.sku} · ${formatMoney(p.selling_price, currency)}`,
           to: `/app/products?q=${encodeURIComponent(p.sku || p.name)}`,
           group: t('nav.products'),
-          icon: Package,
+          iconKey: 'package',
         });
       });
       (r.customers || []).forEach((c) => {
-        list.push({
+        liveMapped.push({
           id: `ws-cust:${c.id}`,
           label: c.full_name,
           sub: `${c.phone}${c.email ? ` · ${c.email}` : ''}`,
           to: `/app/customers?q=${encodeURIComponent(c.phone || c.full_name)}`,
           group: t('nav.customers'),
-          icon: Users,
+          iconKey: 'users',
         });
       });
       (r.sales || []).forEach((s) => {
-        list.push({
+        liveMapped.push({
           id: `ws-sale:${s.id}`,
           label: s.reference_number,
           sub: `${s.customer_name || t('common.total')} · ${formatMoney(s.total_amount, currency)}`,
           to: `/app/sales?q=${encodeURIComponent(s.reference_number)}`,
           group: t('nav.sales'),
-          icon: Receipt,
+          iconKey: 'receipt',
         });
       });
       (r.orders || []).forEach((o) => {
-        list.push({
+        liveMapped.push({
           id: `ws-ord:${o.id}`,
           label: o.order_number,
           sub: `${o.customer_name} · ${formatMoney(o.total_amount, currency)}`,
           to: `/app/orders?q=${encodeURIComponent(o.order_number)}`,
           group: t('nav.orders'),
-          icon: ShoppingBag,
+          iconKey: 'shopping-bag',
         });
       });
       (r.suppliers || []).forEach((s) => {
-        list.push({
+        liveMapped.push({
           id: `ws-sup:${s.id}`,
           label: s.name,
           sub: s.phone,
           to: `/app/suppliers?q=${encodeURIComponent(s.name)}`,
           group: t('nav.suppliers'),
-          icon: Truck,
+          iconKey: 'truck',
         });
       });
       (r.tasks || []).forEach((task) => {
-        list.push({
+        liveMapped.push({
           id: `ws-task:${task.id}`,
           label: task.title,
           sub: `${task.priority} · ${task.status}`,
           to: '/app/tasks',
           group: t('nav.tasks'),
-          icon: ClipboardList,
+          iconKey: 'clipboard',
         });
       });
     }
-    return list;
-  }, [filteredPages, liveResults, t]);
+
+    const rankedLive = rankLiveResults(liveMapped, q);
+    if (isBrand || !q || filteredPages.length > 0) {
+      return [...filteredPages, ...rankedLive].slice(0, 14);
+    }
+    return rankedLive.slice(0, 14);
+  }, [filteredPages, liveResults, queryText, t]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -483,7 +376,7 @@ export default function QuickSearchModal({ open, onClose }) {
             </div>
           ) : (
             flatItems.map((item, idx) => {
-              const Icon = item.icon;
+              const Icon = ICON_MAP[item.iconKey] || Compass;
               const isSelected = idx === activeIndex;
               return (
                 <button
@@ -508,8 +401,12 @@ export default function QuickSearchModal({ open, onClose }) {
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold truncate">{item.label}</div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{item.sub}</div>
+                      <div className="text-xs font-semibold truncate">
+                        <HighlightedText text={item.label} query={queryText} />
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        <HighlightedText text={item.sub} query={queryText} />
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

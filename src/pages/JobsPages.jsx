@@ -24,6 +24,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { formatDate, formatMoney } from '../utils/format.js';
 import { prefetchRoute } from '../utils/routePrefetch.js';
+import { useExpandableList } from '../utils/listOrder.js';
+import ViewMoreFooter from '../components/ViewMoreFooter.jsx';
 
 export function PublicJobsPage() {
   const { t } = useTranslation();
@@ -87,6 +89,8 @@ export function PublicJobsPage() {
     loadJobs(controller.signal);
     return () => controller.abort();
   }, [loadJobs]);
+
+  const vacanciesBox = useExpandableList(vacancies, { initialLimit: 6, sortNewest: true });
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -190,8 +194,9 @@ export function PublicJobsPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vacancies.map((v) => (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {vacanciesBox.visibleItems.map((v) => (
               <article
                 key={v.id}
                 className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-5 hover:border-sky-500/40 transition-colors"
@@ -273,6 +278,15 @@ export function PublicJobsPage() {
                 </div>
               </article>
             ))}
+            </div>
+            <ViewMoreFooter
+              totalCount={vacanciesBox.totalCount}
+              visibleCount={vacanciesBox.visibleCount}
+              initialLimit={6}
+              expanded={vacanciesBox.expanded}
+              onToggle={vacanciesBox.toggleExpanded}
+              className="rounded-xl border border-slate-200 dark:border-slate-800"
+            />
           </div>
         )}
       </main>
@@ -607,7 +621,7 @@ export function PublicJobDetailPage() {
                     <button
                       type="button"
                       onClick={handleApplyClick}
-                      className="w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
+                      className={`${!user ? 'btn-auth-login-live ' : ''}w-full py-2.5 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500`}
                     >
                       {user ? t('jobs.applyNow') : t('jobs.signInApply')}
                     </button>

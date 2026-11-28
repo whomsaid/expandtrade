@@ -19,17 +19,21 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext.jsx';
 import BrandLogo from '../../components/BrandLogo.jsx';
+import GlobalSearchBar from '../../components/GlobalSearchBar.jsx';
 import LanguageSelector from '../../components/LanguageSelector.jsx';
 import LogoutConfirmModal from '../../components/LogoutConfirmModal.jsx';
 import PageBreadcrumb from '../../components/PageBreadcrumb.jsx';
+import PasswordInput from '../../components/PasswordInput.jsx';
 import PrivateDocumentPreviewModal, { downloadPrivateDocument } from '../../components/PrivateDocumentPreviewModal.jsx';
 import ProfilePhotoUploader from '../../components/ProfilePhotoUploader.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import ThemeSelector from '../../components/ThemeSelector.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
 import VideoAdPlayer from '../../components/VideoAdPlayer.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { api } from '../../services/api.js';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
+import { sortNewestFirst, useExpandableList } from '../../utils/listOrder.js';
 import { prefetchRoute } from '../../utils/routePrefetch.js';
 
 const TABS = [
@@ -367,6 +371,22 @@ export default function CustomerPortalPage() {
   const canOpenWorkspace = Boolean(user?.is_platform_admin || memberships?.length > 0);
   const workspaceTo = user?.is_platform_admin ? '/app/admin' : '/app/dashboard';
 
+  const businessesBox = useExpandableList(businesses, { initialLimit: 6, sortNewest: true });
+  const videosBox = useExpandableList(videos, { initialLimit: 6, sortNewest: true });
+  const ordersBox = useExpandableList(orders, { initialLimit: 5, sortNewest: true });
+  const applicationsBox = useExpandableList(applications, { initialLimit: 5, sortNewest: true });
+  const receiptsBox = useExpandableList(receipts, { initialLimit: 5, sortNewest: true });
+  const sessionsBox = useExpandableList(sessions, { initialLimit: 5, sortNewest: true });
+  const reviewsBox = useExpandableList(history?.reviews, { initialLimit: 5, sortNewest: true });
+  const inquiriesBox = useExpandableList(history?.inquiries, { initialLimit: 5, sortNewest: true });
+  const loginsBox = useExpandableList(history?.logins, { initialLimit: 5, sortNewest: true });
+  const notificationsBox = useExpandableList(notifications, { initialLimit: 5, sortNewest: true });
+  const modalInterviewsBox = useExpandableList(selectedAppDetail?.interviews, { initialLimit: 5, sortNewest: true });
+  const modalStatusHistoryBox = useExpandableList(selectedAppDetail?.status_history, { initialLimit: 5, sortNewest: true });
+  const modalDocsBox = useExpandableList(selectedAppDetail?.documents, { initialLimit: 5, sortNewest: true });
+  const modalEduBox = useExpandableList(selectedAppDetail?.education, { initialLimit: 5, sortNewest: true });
+  const modalExpBox = useExpandableList(selectedAppDetail?.experiences, { initialLimit: 5, sortNewest: true });
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <a
@@ -397,17 +417,9 @@ export default function CustomerPortalPage() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('biztrade:open-search'))}
-              aria-label={t('search.modalTitle')}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors whitespace-nowrap shrink-0"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">{t('search.quickSearchBtn')}</span>
-            </button>
-            <div className="hidden sm:flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 flex-1 sm:flex-none justify-end min-w-0">
+            <GlobalSearchBar className="flex-1 sm:flex-none min-w-[105px] max-w-[175px] sm:w-52 lg:w-60 sm:max-w-none" />
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
               <LanguageSelector compact />
               <ThemeSelector compact />
             </div>
@@ -425,10 +437,10 @@ export default function CustomerPortalPage() {
             <button
               type="button"
               onClick={() => setLogoutConfirmOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+              className="btn-auth-logout-live inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 border border-rose-500/60 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t('customerPortal.signOut')}</span>
+              <LogOut className="w-3.5 h-3.5 auth-btn-icon shrink-0" />
+              <span>{t('customerPortal.signOut')}</span>
             </button>
             <button
               type="button"
@@ -604,25 +616,35 @@ export default function CustomerPortalPage() {
                 {t('customerPortal.noBusinessesMatch')}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {businesses.map((b) => (
-                  <div key={b.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4">
-                    <div className="space-y-2">
-                      <div className="font-bold text-sm text-slate-900 dark:text-white">{b.name}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">{b.category} · {b.district}, {b.country}</div>
-                      {b.description && <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{b.description}</p>}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {businessesBox.visibleItems.map((b) => (
+                    <div key={b.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4">
+                      <div className="space-y-2">
+                        <div className="font-bold text-sm text-slate-900 dark:text-white">{b.name}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{b.category} · {b.district}, {b.country}</div>
+                        {b.description && <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{b.description}</p>}
+                      </div>
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-slate-500 dark:text-slate-400 tabular-nums">{t('customerPortal.publishedItemsCount', { count: b.product_count })}</span>
+                        <Link
+                          to={`/businesses/${b.slug}`}
+                          className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
+                        >
+                          {t('customerPortal.browseAndOrder')}
+                        </Link>
+                      </div>
                     </div>
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-slate-500 dark:text-slate-400 tabular-nums">{t('customerPortal.publishedItemsCount', { count: b.product_count })}</span>
-                      <Link
-                        to={`/businesses/${b.slug}`}
-                        className="px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
-                      >
-                        {t('customerPortal.browseAndOrder')}
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <ViewMoreFooter
+                  totalCount={businessesBox.totalCount}
+                  visibleCount={businessesBox.visibleCount}
+                  initialLimit={6}
+                  expanded={businessesBox.expanded}
+                  onToggle={businessesBox.toggleExpanded}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800"
+                />
               </div>
             )}
 
@@ -635,10 +657,18 @@ export default function CustomerPortalPage() {
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {videos.map((vid) => (
+                  {videosBox.visibleItems.map((vid) => (
                     <VideoAdPlayer key={vid.id} video={vid} showBusiness compact />
                   ))}
                 </div>
+                <ViewMoreFooter
+                  totalCount={videosBox.totalCount}
+                  visibleCount={videosBox.visibleCount}
+                  initialLimit={6}
+                  expanded={videosBox.expanded}
+                  onToggle={videosBox.toggleExpanded}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800"
+                />
               </section>
             )}
           </div>
@@ -658,44 +688,54 @@ export default function CustomerPortalPage() {
                 </button>
               </div>
             ) : (
-              orders.map((o) => (
-                <div key={o.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">{o.business_name} · {o.branch_name || t('customerPortal.mainBranch')}</div>
-                      <div className="text-base font-bold font-mono text-slate-900 dark:text-white">{o.order_number}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(o.created_at)}</div>
+              <>
+                {ordersBox.visibleItems.map((o) => (
+                  <div key={o.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{o.business_name} · {o.branch_name || t('customerPortal.mainBranch')}</div>
+                        <div className="text-base font-bold font-mono text-slate-900 dark:text-white">{o.order_number}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(o.created_at)}</div>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <StatusBadge status={o.order_status} />
+                        <div className="text-sm font-bold text-[#0B192C] dark:text-sky-400 tabular-nums">
+                          {formatMoney(o.total_amount, o.currency_code)}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right space-y-1">
-                      <StatusBadge status={o.order_status} />
-                      <div className="text-sm font-bold text-[#0B192C] dark:text-sky-400 tabular-nums">
-                        {formatMoney(o.total_amount, o.currency_code)}
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <div className="font-semibold text-slate-700 dark:text-slate-200 mb-1.5">{t('customerPortal.itemsLabel')}</div>
+                        {(o.items || []).map((it) => (
+                          <div key={it.id} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
+                            <span>{it.product_name} × {it.quantity}</span>
+                            <span className="tabular-nums">{formatMoney(Number(it.unit_price) * it.quantity, o.currency_code)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-700 dark:text-slate-200 mb-1.5">{t('customerPortal.trackingHistory')}</div>
+                        {sortNewestFirst(o.history || []).map((h, idx) => (
+                          <div key={idx} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
+                            <span>{t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })} {h.note ? `— ${h.note}` : ''}</span>
+                            <span className="text-slate-400 tabular-nums">{formatDateTime(h.created_at)}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <div className="font-semibold text-slate-700 dark:text-slate-200 mb-1.5">{t('customerPortal.itemsLabel')}</div>
-                      {(o.items || []).map((it) => (
-                        <div key={it.id} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
-                          <span>{it.product_name} × {it.quantity}</span>
-                          <span className="tabular-nums">{formatMoney(Number(it.unit_price) * it.quantity, o.currency_code)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-700 dark:text-slate-200 mb-1.5">{t('customerPortal.trackingHistory')}</div>
-                      {(o.history || []).map((h, idx) => (
-                        <div key={idx} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
-                          <span>{t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })} {h.note ? `— ${h.note}` : ''}</span>
-                          <span className="text-slate-400 tabular-nums">{formatDateTime(h.created_at)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))
+                ))}
+                <ViewMoreFooter
+                  totalCount={ordersBox.totalCount}
+                  visibleCount={ordersBox.visibleCount}
+                  initialLimit={5}
+                  expanded={ordersBox.expanded}
+                  onToggle={ordersBox.toggleExpanded}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800"
+                />
+              </>
             )}
           </div>
         )}
@@ -730,7 +770,7 @@ export default function CustomerPortalPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {applications.map((app) => {
+                {applicationsBox.visibleItems.map((app) => {
                   const canWithdraw = ['submitted', 'under_review', 'shortlisted', 'interview_scheduled', 'interview_completed'].includes(app.status);
                   return (
                     <div key={app.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
@@ -804,45 +844,62 @@ export default function CustomerPortalPage() {
                     </div>
                   );
                 })}
+                <ViewMoreFooter
+                  totalCount={applicationsBox.totalCount}
+                  visibleCount={applicationsBox.visibleCount}
+                  initialLimit={5}
+                  expanded={applicationsBox.expanded}
+                  onToggle={applicationsBox.toggleExpanded}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800"
+                />
               </div>
             )}
           </div>
         )}
 
         {tab === 'receipts' && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                <tr>
-                  <th className="py-3 px-4 font-semibold">{t('customerPortal.colReceiptNum')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('customerPortal.colBusiness')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('customerPortal.colSaleRef')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('customerPortal.colTotal')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('customerPortal.colPayment')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('customerPortal.colDate')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {receipts.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                   <tr>
-                    <td colSpan={6} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">
-                      {t('customerPortal.noReceipts')}
-                    </td>
+                    <th className="py-3 px-4 font-semibold">{t('customerPortal.colReceiptNum')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('customerPortal.colBusiness')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('customerPortal.colSaleRef')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('customerPortal.colTotal')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('customerPortal.colPayment')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('customerPortal.colDate')}</th>
                   </tr>
-                ) : (
-                  receipts.map((r) => (
-                    <tr key={r.id}>
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-white">{r.receipt_number}</td>
-                      <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{r.business_name}</td>
-                      <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{r.reference_number}</td>
-                      <td className="py-3 px-4 text-right font-semibold tabular-nums">{formatMoney(r.total_amount, r.currency_code)}</td>
-                      <td className="py-3 px-4"><StatusBadge status={r.payment_status} /></td>
-                      <td className="py-3 px-4 text-right text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(r.sale_date)}</td>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {receiptsBox.totalCount === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">
+                        {t('customerPortal.noReceipts')}
+                      </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    receiptsBox.visibleItems.map((r) => (
+                      <tr key={r.id}>
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-white">{r.receipt_number}</td>
+                        <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{r.business_name}</td>
+                        <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{r.reference_number}</td>
+                        <td className="py-3 px-4 text-right font-semibold tabular-nums">{formatMoney(r.total_amount, r.currency_code)}</td>
+                        <td className="py-3 px-4"><StatusBadge status={r.payment_status} /></td>
+                        <td className="py-3 px-4 text-right text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(r.sale_date)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              totalCount={receiptsBox.totalCount}
+              visibleCount={receiptsBox.visibleCount}
+              initialLimit={5}
+              expanded={receiptsBox.expanded}
+              onToggle={receiptsBox.toggleExpanded}
+            />
           </div>
         )}
 
@@ -905,9 +962,9 @@ export default function CustomerPortalPage() {
                             onChange={(e) => setEmailChange({ ...emailChange, new_email: e.target.value })}
                             className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
                           />
-                          <input
+                          <PasswordInput
                             required
-                            type="password"
+                            autoComplete="current-password"
                             placeholder={t('customerPortal.currentPasswordPlaceholder')}
                             value={emailChange.current_password}
                             onChange={(e) => setEmailChange({ ...emailChange, current_password: e.target.value })}
@@ -1007,8 +1064,8 @@ export default function CustomerPortalPage() {
                     {t('customerPortal.signOutOtherDevices')}
                   </button>
                 </div>
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-44 overflow-y-auto">
-                  {sessions.map((s) => (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {sessionsBox.visibleItems.map((s) => (
                     <div key={s.id} className="py-2 flex items-center justify-between gap-2">
                       <div className="min-w-0 truncate">
                         <span className="font-medium text-slate-900 dark:text-slate-100">{s.device_info || t('customerPortal.browserFallback')}</span>
@@ -1018,26 +1075,58 @@ export default function CustomerPortalPage() {
                     </div>
                   ))}
                 </div>
+                <ViewMoreFooter
+                  totalCount={sessionsBox.totalCount}
+                  visibleCount={sessionsBox.visibleCount}
+                  initialLimit={5}
+                  expanded={sessionsBox.expanded}
+                  onToggle={sessionsBox.toggleExpanded}
+                  className="-mx-5 -mb-5 rounded-b-xl"
+                />
               </div>
 
               <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
                 <h2 className="text-sm font-bold text-[#0B192C] dark:text-white">{t('customerPortal.recentReviewsInquiries')}</h2>
-                {history.reviews.length === 0 && history.inquiries.length === 0 ? (
+                {reviewsBox.totalCount === 0 && inquiriesBox.totalCount === 0 ? (
                   <p className="text-slate-500 dark:text-slate-400">{t('customerPortal.noReviewsInquiries')}</p>
                 ) : (
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-2">
-                    {history.reviews.map((rev) => (
-                      <div key={`rev-${rev.id}`} className="pt-2 first:pt-0">
-                        <div className="font-semibold text-slate-900 dark:text-white">{t('customerPortal.reviewFor', { name: rev.business_name, rating: rev.rating })}</div>
-                        <div className="text-slate-600 dark:text-slate-300">{rev.comment}</div>
+                  <div className="space-y-3">
+                    {reviewsBox.totalCount > 0 && (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-2">
+                        {reviewsBox.visibleItems.map((rev) => (
+                          <div key={`rev-${rev.id}`} className="pt-2 first:pt-0">
+                            <div className="font-semibold text-slate-900 dark:text-white">{t('customerPortal.reviewFor', { name: rev.business_name, rating: rev.rating })}</div>
+                            <div className="text-slate-600 dark:text-slate-300">{rev.comment}</div>
+                          </div>
+                        ))}
+                        <ViewMoreFooter
+                          totalCount={reviewsBox.totalCount}
+                          visibleCount={reviewsBox.visibleCount}
+                          initialLimit={5}
+                          expanded={reviewsBox.expanded}
+                          onToggle={reviewsBox.toggleExpanded}
+                          className="mt-2 rounded-lg"
+                        />
                       </div>
-                    ))}
-                    {history.inquiries.map((inq) => (
-                      <div key={`inq-${inq.id}`} className="pt-2">
-                        <div className="font-semibold text-slate-900 dark:text-white">{t('customerPortal.messageTo', { name: inq.target_business_name || inq.business_name })}</div>
-                        <div className="text-slate-600 dark:text-slate-300">{inq.message}</div>
+                    )}
+                    {inquiriesBox.totalCount > 0 && (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-2">
+                        {inquiriesBox.visibleItems.map((inq) => (
+                          <div key={`inq-${inq.id}`} className="pt-2 first:pt-0">
+                            <div className="font-semibold text-slate-900 dark:text-white">{t('customerPortal.messageTo', { name: inq.target_business_name || inq.business_name })}</div>
+                            <div className="text-slate-600 dark:text-slate-300">{inq.message}</div>
+                          </div>
+                        ))}
+                        <ViewMoreFooter
+                          totalCount={inquiriesBox.totalCount}
+                          visibleCount={inquiriesBox.visibleCount}
+                          initialLimit={5}
+                          expanded={inquiriesBox.expanded}
+                          onToggle={inquiriesBox.toggleExpanded}
+                          className="mt-2 rounded-lg"
+                        />
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
@@ -1047,14 +1136,22 @@ export default function CustomerPortalPage() {
                   <Clock className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   <span>{t('customerPortal.loginHistoryTitle')}</span>
                 </div>
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-48 overflow-y-auto">
-                  {(history.logins || []).map((l, idx) => (
-                    <div key={idx} className="py-1.5 flex justify-between text-slate-700 dark:text-slate-300">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {loginsBox.visibleItems.map((l, idx) => (
+                    <div key={l.id || idx} className="py-1.5 flex justify-between text-slate-700 dark:text-slate-300">
                       <span>{l.was_successful ? t('customerPortal.loginSuccess') : t('customerPortal.loginFailed')} · {l.ip_address}</span>
                       <span className="text-slate-400 tabular-nums">{formatDateTime(l.created_at)}</span>
                     </div>
                   ))}
                 </div>
+                <ViewMoreFooter
+                  totalCount={loginsBox.totalCount}
+                  visibleCount={loginsBox.visibleCount}
+                  initialLimit={5}
+                  expanded={loginsBox.expanded}
+                  onToggle={loginsBox.toggleExpanded}
+                  className="-mx-5 -mb-5 rounded-b-xl"
+                />
               </div>
             </div>
           </div>
@@ -1072,28 +1169,38 @@ export default function CustomerPortalPage() {
                 {t('customerPortal.markAllRead')}
               </button>
             </div>
-            {notifications.length === 0 ? (
+            {notificationsBox.totalCount === 0 ? (
               <p className="text-xs text-slate-500 dark:text-slate-400">{t('customerPortal.noNotifications')}</p>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                {notifications.map((n) => (
-                  <div key={n.id} className={`py-3 flex flex-wrap items-start justify-between gap-2 ${n.is_read ? '' : 'bg-sky-50/40 dark:bg-sky-950/30 px-2 rounded'}`}>
-                    <div>
-                      <div className="font-semibold text-slate-900 dark:text-white">{n.title}</div>
-                      <div className="text-slate-600 dark:text-slate-300 mt-0.5">{n.message}</div>
-                      <div className="text-[11px] text-slate-400 mt-1 tabular-nums">{formatDateTime(n.created_at)}</div>
+              <>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {notificationsBox.visibleItems.map((n) => (
+                    <div key={n.id} className={`py-3 flex flex-wrap items-start justify-between gap-2 ${n.is_read ? '' : 'bg-sky-50/40 dark:bg-sky-950/30 px-2 rounded'}`}>
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-white">{n.title}</div>
+                        <div className="text-slate-600 dark:text-slate-300 mt-0.5">{n.message}</div>
+                        <div className="text-[11px] text-slate-400 mt-1 tabular-nums">{formatDateTime(n.created_at)}</div>
+                      </div>
+                      {n.related_url && (
+                        <Link
+                          to={n.related_url}
+                          className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline shrink-0"
+                        >
+                          {t('customerPortal.openLink')}
+                        </Link>
+                      )}
                     </div>
-                    {n.related_url && (
-                      <Link
-                        to={n.related_url}
-                        className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline shrink-0"
-                      >
-                        {t('customerPortal.openLink')}
-                      </Link>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <ViewMoreFooter
+                  totalCount={notificationsBox.totalCount}
+                  visibleCount={notificationsBox.visibleCount}
+                  initialLimit={5}
+                  expanded={notificationsBox.expanded}
+                  onToggle={notificationsBox.toggleExpanded}
+                  className="-mx-5 -mb-5 rounded-b-xl"
+                />
+              </>
             )}
           </div>
         )}
@@ -1134,13 +1241,13 @@ export default function CustomerPortalPage() {
               <div className="p-10 text-center text-slate-500">{t('customerPortal.loadingAppDetail')}</div>
             ) : selectedAppDetail && (
               <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                {selectedAppDetail.interviews?.length > 0 && (
+                {modalInterviewsBox.totalCount > 0 && (
                   <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 space-y-2">
                     <div className="font-bold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4" />
                       {t('customerPortal.scheduledInterviews')}
                     </div>
-                    {selectedAppDetail.interviews.map((iv) => (
+                    {modalInterviewsBox.visibleItems.map((iv) => (
                       <div key={iv.id} className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-sky-200/70 dark:border-sky-800 flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <div className="font-semibold text-slate-900 dark:text-white tabular-nums">
@@ -1156,29 +1263,47 @@ export default function CustomerPortalPage() {
                         <StatusBadge status={iv.status === 'scheduled' ? 'interview_scheduled' : iv.status} />
                       </div>
                     ))}
+                    <ViewMoreFooter
+                      totalCount={modalInterviewsBox.totalCount}
+                      visibleCount={modalInterviewsBox.visibleCount}
+                      initialLimit={5}
+                      expanded={modalInterviewsBox.expanded}
+                      onToggle={modalInterviewsBox.toggleExpanded}
+                      className="rounded-lg"
+                    />
                   </div>
                 )}
 
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
                   <div className="font-bold text-slate-900 dark:text-white">{t('customerPortal.statusTimeline')}</div>
-                  {selectedAppDetail.status_history.length === 0 ? (
+                  {modalStatusHistoryBox.totalCount === 0 ? (
                     <div className="text-slate-500">{t('customerPortal.draftSavedNotSubmitted')}</div>
                   ) : (
-                    selectedAppDetail.status_history.map((h) => (
-                      <div key={h.id} className="flex justify-between gap-2 py-1 border-b last:border-0 border-slate-200 dark:border-slate-800">
-                        <span>
-                          <strong>{t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })}</strong>
-                          {h.note ? ` — ${h.note}` : ''}
-                        </span>
-                        <span className="text-slate-400 tabular-nums shrink-0">{formatDateTime(h.changed_at)}</span>
-                      </div>
-                    ))
+                    <>
+                      {modalStatusHistoryBox.visibleItems.map((h) => (
+                        <div key={h.id} className="flex justify-between gap-2 py-1 border-b last:border-0 border-slate-200 dark:border-slate-800">
+                          <span>
+                            <strong>{t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })}</strong>
+                            {h.note ? ` — ${h.note}` : ''}
+                          </span>
+                          <span className="text-slate-400 tabular-nums shrink-0">{formatDateTime(h.changed_at)}</span>
+                        </div>
+                      ))}
+                      <ViewMoreFooter
+                        totalCount={modalStatusHistoryBox.totalCount}
+                        visibleCount={modalStatusHistoryBox.visibleCount}
+                        initialLimit={5}
+                        expanded={modalStatusHistoryBox.expanded}
+                        onToggle={modalStatusHistoryBox.toggleExpanded}
+                        className="rounded-lg"
+                      />
+                    </>
                   )}
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
                   <div className="font-bold text-slate-900 dark:text-white">{t('customerPortal.uploadedDocsTitle')}</div>
-                  {selectedAppDetail.documents.map((doc) => (
+                  {modalDocsBox.visibleItems.map((doc) => (
                     <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 border-b last:border-0 border-slate-200 dark:border-slate-800">
                       <div>
                         <span className="font-semibold text-slate-900 dark:text-white">{doc.document_name}</span>
@@ -1204,27 +1329,53 @@ export default function CustomerPortalPage() {
                       </div>
                     </div>
                   ))}
+                  <ViewMoreFooter
+                    totalCount={modalDocsBox.totalCount}
+                    visibleCount={modalDocsBox.visibleCount}
+                    initialLimit={5}
+                    expanded={modalDocsBox.expanded}
+                    onToggle={modalDocsBox.toggleExpanded}
+                    className="rounded-lg"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
                     <div className="font-bold text-slate-900 dark:text-white">{t('customerPortal.educationTitle', { count: selectedAppDetail.education.length })}</div>
-                    {selectedAppDetail.education.map((edu) => (
+                    {modalEduBox.visibleItems.map((edu) => (
                       <div key={edu.id} className="text-slate-600 dark:text-slate-300">
                         {edu.education_level} — {edu.institution_name} ({edu.education_status})
                       </div>
                     ))}
+                    <ViewMoreFooter
+                      totalCount={modalEduBox.totalCount}
+                      visibleCount={modalEduBox.visibleCount}
+                      initialLimit={5}
+                      expanded={modalEduBox.expanded}
+                      onToggle={modalEduBox.toggleExpanded}
+                      className="rounded-lg"
+                    />
                   </div>
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
                     <div className="font-bold text-slate-900 dark:text-white">{t('customerPortal.workExperienceTitle')}</div>
                     {!selectedAppDetail.application.has_work_experience ? (
                       <div className="text-slate-600 dark:text-slate-300">{t('customerPortal.noPriorExp')}</div>
                     ) : (
-                      selectedAppDetail.experiences.map((ex) => (
-                        <div key={ex.id} className="text-slate-600 dark:text-slate-300">
-                          {t('customerPortal.atCompany', { title: ex.job_title, company: ex.company_name })} ({ex.start_date} – {ex.is_current ? t('customerPortal.present') : ex.end_date || 'N/A'})
-                        </div>
-                      ))
+                      <>
+                        {modalExpBox.visibleItems.map((ex) => (
+                          <div key={ex.id} className="text-slate-600 dark:text-slate-300">
+                            {t('customerPortal.atCompany', { title: ex.job_title, company: ex.company_name })} ({ex.start_date} – {ex.is_current ? t('customerPortal.present') : ex.end_date || 'N/A'})
+                          </div>
+                        ))}
+                        <ViewMoreFooter
+                          totalCount={modalExpBox.totalCount}
+                          visibleCount={modalExpBox.visibleCount}
+                          initialLimit={5}
+                          expanded={modalExpBox.expanded}
+                          onToggle={modalExpBox.toggleExpanded}
+                          className="rounded-lg"
+                        />
+                      </>
                     )}
                   </div>
                 </div>

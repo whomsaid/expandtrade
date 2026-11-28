@@ -27,11 +27,24 @@ const PUBLIC_CONFIG_KEYS = [
   'developer_portfolio_url',
   'developer_github_url',
   'developer_linkedin_url',
+  'default_currency',
+  'default_tax_rate',
+  'allow_customer_reviews',
+  'require_email_verification',
+  'development_mode',
+  'development_banner_message',
+  'feature_flags_json',
+  'development_last_confirmed_at',
+  'maintenance_mode',
+  'maintenance_message',
+  'allow_business_onboarding',
+  'allow_customer_registration',
 ];
 
 // ================= PUBLIC PLATFORM CONFIG =================
 router.get('/public/platform-config', async (_req, res, next) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=45');
     const cached = getCached('public:platform-config');
     if (cached) return res.json({ config: cached });
 
@@ -44,14 +57,21 @@ router.get('/public/platform-config', async (_req, res, next) => {
     config.support_email = 'allofme140@gmail.com';
     config.platform_location = 'KN 4 Ave, Kigali, Rwanda';
     config.developer_role = 'Full Stack Developer';
+    config.default_currency = 'RWF';
+    config.default_tax_rate = '18';
+    config.allow_customer_reviews = '1';
+    config.require_email_verification = '1';
+    config.development_mode = '0';
+    config.maintenance_mode = '0';
+    config.allow_business_onboarding = '1';
+    config.allow_customer_registration = '1';
 
     for (const row of rows) {
       if (PUBLIC_CONFIG_KEYS.includes(row.setting_key)) {
         config[row.setting_key] = row.setting_value ?? '';
       }
     }
-    res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
-    setCached('public:platform-config', config, 30_000);
+    setCached('public:platform-config', config, 15_000);
     res.json({ config });
   } catch (err) {
     next(err);
@@ -353,7 +373,7 @@ router.get('/customer/orders', authenticate, requireProfileImage, async (req, re
       const [allItems, allHistory] = await Promise.all([
         query(`SELECT * FROM order_items WHERE order_id IN (${placeholders})`, ids),
         query(
-          `SELECT order_id, old_status, new_status, note, created_at FROM order_status_history WHERE order_id IN (${placeholders}) ORDER BY id ASC`,
+          `SELECT order_id, old_status, new_status, note, created_at FROM order_status_history WHERE order_id IN (${placeholders}) ORDER BY id DESC`,
           ids
         ),
       ]);

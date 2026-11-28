@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,6 +8,7 @@ import {
   CreditCard,
   Database,
   Download,
+  Gauge,
   Image as ImageIcon,
   KeyRound,
   LifeBuoy,
@@ -19,14 +20,20 @@ import {
   Trash2,
   Upload,
   Users,
+  Wrench,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { usePlatformConfig } from '../../context/PlatformConfigContext.jsx';
+import PasswordInput from '../../components/PasswordInput.jsx';
 import ProfilePhotoUploader from '../../components/ProfilePhotoUploader.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { AFRICAN_COUNTRIES, BUSINESS_CATEGORIES, formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
+
+const DiagnosticsPanel = lazy(() => import('./DiagnosticsPanel.jsx'));
 
 const TABS = [
   { id: 'activities', labelKey: 'superAdmin.tabActivities', icon: Activity },
@@ -34,6 +41,7 @@ const TABS = [
   { id: 'users', labelKey: 'superAdmin.tabUsers', icon: Users },
   { id: 'plans', labelKey: 'superAdmin.tabPlans', icon: CreditCard },
   { id: 'support', labelKey: 'superAdmin.tabSupport', icon: LifeBuoy },
+  { id: 'diagnostics', labelKey: 'superAdmin.tabDiagnostics', icon: Gauge },
   { id: 'monitoring', labelKey: 'superAdmin.tabMonitoring', icon: CheckCircle2 },
   { id: 'settings', labelKey: 'superAdmin.tabSettings', icon: Settings },
   { id: 'credentials', labelKey: 'superAdmin.tabCredentials', icon: KeyRound },
@@ -125,6 +133,7 @@ export default function SuperAdminPage() {
   const [platformLogoPreview, setPlatformLogoPreview] = useState('');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [platformLogoProgress, setPlatformLogoProgress] = useState(0);
+  const [devVerificationResult, setDevVerificationResult] = useState(null);
 
   // Credentials forms
   const [myCreds, setMyCreds] = useState({
@@ -550,6 +559,85 @@ export default function SuperAdminPage() {
     }
   };
 
+  const parsedFeatureFlags = (() => {
+    const defaults = {
+      pos_enabled: true,
+      marketplace_orders_enabled: true,
+      jobs_portal_enabled: true,
+      ai_assistant_enabled: true,
+      video_ads_enabled: true,
+      customer_registration_enabled: true,
+      beta_analytics_enabled: false,
+    };
+    try {
+      const raw = platformSettings.feature_flags_json;
+      if (!raw) return defaults;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return { ...defaults, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+    } catch {
+      return defaults;
+    }
+  })();
+
+  const handleToggleFeatureFlag = (flagKey) => {
+    const next = { ...parsedFeatureFlags, [flagKey]: !parsedFeatureFlags[flagKey] };
+    setPlatformSettings((prev) => ({ ...prev, feature_flags_json: JSON.stringify(next) }));
+  };
+
+  const handleToggleDevelopmentMode = async (enabled) => {
+    if (busyAction) return;
+    setError('');
+    setBusyAction('dev-mode');
+    try {
+      const res = await api.post('/admin/system-mode/development', {
+        enabled,
+        banner_message: platformSettings.development_banner_message,
+        feature_flags: parsedFeatureFlags,
+      });
+      if (res.data?.settings) setPlatformSettings(res.data.settings);
+      setDevVerificationResult(null);
+      await refreshPlatformConfig();
+      showFlash(res.data.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleConfirmDevelopmentRelease = async () => {
+    if (busyAction) return;
+    setError('');
+    setBusyAction('confirm-release');
+    try {
+      const res = await api.post('/admin/system-mode/confirm-release', {
+        feature_flags: parsedFeatureFlags,
+      });
+      if (res.data?.settings) setPlatformSettings(res.data.settings);
+      setDevVerificationResult(res.data);
+      await refreshPlatformConfig();
+      showFlash(res.data.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const handleFlushServerCache = async () => {
+    if (busyAction) return;
+    setError('');
+    setBusyAction('flush-cache');
+    try {
+      const res = await api.post('/admin/system-cache/flush');
+      showFlash(res.data.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const handleSavePlatformSettings = async (e) => {
     e.preventDefault();
     if (busyAction) return;
@@ -774,6 +862,18 @@ export default function SuperAdminPage() {
     return matchesSearch && matchesCat;
   });
 
+  const activitiesBox = useExpandableList(filteredActivities, { initialLimit: 8, sortNewest: true });
+  const loginAttemptsBox = useExpandableList(data.loginAttempts || [], { initialLimit: 6, sortNewest: true });
+  const businessesBox = useExpandableList(filteredBusinesses, { initialLimit: 6, sortNewest: true });
+  const usersBox = useExpandableList(filteredUsers, { initialLimit: 8, sortNewest: true });
+  const plansBox = useExpandableList(data.plans || [], { initialLimit: 4, sortNewest: true });
+  const ticketsBox = useExpandableList(data.tickets || [], { initialLimit: 5, sortNewest: true });
+  const inquiriesBox = useExpandableList(data.inquiries || [], { initialLimit: 5, sortNewest: true });
+  const requirementsBox = useExpandableList(monitoring?.requirements || [], { initialLimit: 6, sortNewest: true });
+  const runsBox = useExpandableList(monitoring?.recentRuns || [], { initialLimit: 5, sortNewest: true });
+  const eventsBox = useExpandableList(monitoring?.recentEvents || [], { initialLimit: 5, sortNewest: true });
+  const adminsBox = useExpandableList(data.admins || [], { initialLimit: 5, sortNewest: true });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -896,67 +996,85 @@ export default function SuperAdminPage() {
       {/* TAB 1: System Activities */}
       {tab === 'activities' && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+          <div className="xl:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-900 dark:text-slate-100">
               {t('superAdmin.activityStreamTitle')}
             </div>
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                <tr>
-                  <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colTimestamp')}</th>
-                  <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colAction')}</th>
-                  <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colActor')}</th>
-                  <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colTenant')}</th>
-                  <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colEntity')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredActivities.length === 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                   <tr>
-                    <td colSpan={5} className="py-6 px-4 text-center text-slate-500 dark:text-slate-400">{t('superAdmin.noActivities')}</td>
+                    <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colTimestamp')}</th>
+                    <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colAction')}</th>
+                    <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colActor')}</th>
+                    <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colTenant')}</th>
+                    <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colEntity')}</th>
                   </tr>
-                ) : (
-                  filteredActivities.map((log) => (
-                    <tr key={log.id}>
-                      <td className="py-2.5 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">{formatDate(log.created_at)}</td>
-                      <td className="py-2.5 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{log.action}</td>
-                      <td className="py-2.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <UserAvatar src={log.user_avatar} name={log.user_name || t('superAdmin.systemActor')} size="xs" />
-                          <div>
-                            <div className="text-slate-900 dark:text-slate-100">{log.user_name || t('superAdmin.systemActor')}</div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{log.user_email || log.ip_address || ''}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-700 dark:text-slate-300">{log.business_name || t('superAdmin.platformTenant')}</td>
-                      <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">
-                        {log.entity_type} {log.entity_id ? `#${log.entity_id}` : ''}
-                      </td>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {activitiesBox.totalCount === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 px-4 text-center text-slate-500 dark:text-slate-400">{t('superAdmin.noActivities')}</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    activitiesBox.visibleItems.map((log) => (
+                      <tr key={log.id}>
+                        <td className="py-2.5 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">{formatDate(log.created_at)}</td>
+                        <td className="py-2.5 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{log.action}</td>
+                        <td className="py-2.5 px-4">
+                          <div className="flex items-center gap-2">
+                            <UserAvatar src={log.user_avatar} name={log.user_name || t('superAdmin.systemActor')} size="xs" />
+                            <div>
+                              <div className="text-slate-900 dark:text-slate-100">{log.user_name || t('superAdmin.systemActor')}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">{log.user_email || log.ip_address || ''}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4 text-slate-700 dark:text-slate-300">{log.business_name || t('superAdmin.platformTenant')}</td>
+                        <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">
+                          {log.entity_type} {log.entity_id ? `#${log.entity_id}` : ''}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              totalCount={activitiesBox.totalCount}
+              visibleCount={activitiesBox.visibleCount}
+              initialLimit={8}
+              expanded={activitiesBox.expanded}
+              onToggle={activitiesBox.toggleExpanded}
+            />
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {t('superAdmin.recentAuthTitle')}
-            </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[540px] overflow-y-auto text-xs">
-              {(data.loginAttempts || []).map((la) => (
-                <div key={la.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{la.email}</div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                      {la.ip_address || t('superAdmin.unknownIp')} · {formatDate(la.created_at)}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col justify-between">
+            <div>
+              <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {t('superAdmin.recentAuthTitle')}
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[540px] overflow-y-auto text-xs">
+                {loginAttemptsBox.visibleItems.map((la) => (
+                  <div key={la.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{la.email}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                        {la.ip_address || t('superAdmin.unknownIp')} · {formatDate(la.created_at)}
+                      </div>
                     </div>
+                    <StatusBadge status={la.was_successful ? 'active' : 'rejected'} />
                   </div>
-                  <StatusBadge status={la.was_successful ? 'active' : 'rejected'} />
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
+            <ViewMoreFooter
+              totalCount={loginAttemptsBox.totalCount}
+              visibleCount={loginAttemptsBox.visibleCount}
+              initialLimit={6}
+              expanded={loginAttemptsBox.expanded}
+              onToggle={loginAttemptsBox.toggleExpanded}
+            />
           </div>
         </div>
       )}
@@ -1053,144 +1171,153 @@ export default function SuperAdminPage() {
             </form>
           )}
 
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                <tr>
-                  <th className="py-3 px-4 font-semibold">{t('superAdmin.colBusiness')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('superAdmin.colBizAdmin')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('superAdmin.colSubscription')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colBranchesStaff')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('common.status')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colGovernance')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredBusinesses.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                   <tr>
-                    <td colSpan={6} className="py-10 px-4 text-center text-slate-500 dark:text-slate-400">
-                      {t('superAdmin.emptyBusinesses')}
-                    </td>
+                    <th className="py-3 px-4 font-semibold">{t('superAdmin.colBusiness')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('superAdmin.colBizAdmin')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('superAdmin.colSubscription')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colBranchesStaff')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('common.status')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colGovernance')}</th>
                   </tr>
-                ) : (
-                  filteredBusinesses.map((b) => (
-                    <tr key={b.id}>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{b.name}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                          <span className="font-mono">{b.business_code || `ID-${b.id}`}</span> · {b.category} · {b.district || b.province}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <UserAvatar src={b.owner_avatar} name={b.owner_name} size="sm" />
-                          <div>
-                            <div className="font-medium text-slate-900 dark:text-slate-100">{b.owner_name}</div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{b.owner_email}</div>
-                          </div>
-                        </div>
-                        {b.admin_activation_status === 'pending_activation' && b.admin_activation_token && (
-                          <div className="text-[11px] font-mono text-amber-700 dark:text-amber-400 mt-0.5">
-                            {t('status.pending')}: /activate-account?token={b.admin_activation_token}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-slate-900 dark:text-slate-100">{b.plan_name || t('superAdmin.unassigned')}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{b.subscription_status || t('common.none').toLowerCase()} · {b.billing_cycle || 'monthly'}</div>
-                      </td>
-                      <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">
-                        {b.branch_count} / {b.employee_count}
-                      </td>
-                      <td className="py-3 px-4"><StatusBadge status={b.status} /></td>
-                      <td className="py-3 px-4 text-right whitespace-nowrap space-x-2.5">
-                        {b.status !== 'deleted' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenWorkspace(b)}
-                              className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
-                            >
-                              {t('superAdmin.openWorkspace')}
-                            </button>
-                            <button type="button" onClick={() => { setModalError(''); setEditLogo(null); setEditLogoPreview(b.logo_url || ''); setEditBiz({ ...b }); }} className="font-medium text-slate-700 dark:text-slate-300 hover:underline">
-                              {t('common.edit')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setModalError('');
-                                setAssignAdminBiz(b);
-                                setAssignForm({ full_name: '', email: '', phone: '+250', replace_previous: true });
-                              }}
-                              className="font-medium text-sky-700 dark:text-sky-400 hover:underline"
-                            >
-                              {t('superAdmin.assignAdmin')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleResetAdminAccess(b)}
-                              className="font-medium text-amber-700 dark:text-amber-400 hover:underline"
-                            >
-                              {t('superAdmin.resetAccess')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSubDraft({
-                                  businessId: b.id,
-                                  businessName: b.name,
-                                  plan_id: b.plan_id || data.plans[0]?.id || 1,
-                                  billing_cycle: b.billing_cycle || 'monthly',
-                                  status: b.subscription_status || 'active',
-                                  days: 30,
-                                })
-                              }
-                              className="font-medium text-sky-700 dark:text-sky-400 hover:underline"
-                            >
-                              {t('superAdmin.planBtn')}
-                            </button>
-                            {b.status === 'active' ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleBusinessStatus(b.id, 'suspended')}
-                                  className="font-medium text-amber-700 dark:text-amber-400 hover:underline"
-                                >
-                                  {t('superAdmin.suspend')}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleBusinessStatus(b.id, 'deactivated')}
-                                  className="font-medium text-rose-600 dark:text-rose-400 hover:underline"
-                                >
-                                  {t('superAdmin.deactivate')}
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleBusinessStatus(b.id, 'active')}
-                                className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
-                              >
-                                {b.status === 'suspended' ? t('superAdmin.reactivate') : t('superAdmin.activate')}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => { setModalError(''); setDeleteReason(''); setDeleteBiz(b); }}
-                              className="font-medium text-rose-700 dark:text-rose-400 hover:underline"
-                            >
-                              {t('common.delete')}
-                            </button>
-                          </>
-                        )}
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {businessesBox.totalCount === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-10 px-4 text-center text-slate-500 dark:text-slate-400">
+                        {t('superAdmin.emptyBusinesses')}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    businessesBox.visibleItems.map((b) => (
+                      <tr key={b.id}>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">{b.name}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            <span className="font-mono">{b.business_code || `ID-${b.id}`}</span> · {b.category} · {b.district || b.province}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <UserAvatar src={b.owner_avatar} name={b.owner_name} size="sm" />
+                            <div>
+                              <div className="font-medium text-slate-900 dark:text-slate-100">{b.owner_name}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">{b.owner_email}</div>
+                            </div>
+                          </div>
+                          {b.admin_activation_status === 'pending_activation' && b.admin_activation_token && (
+                            <div className="text-[11px] font-mono text-amber-700 dark:text-amber-400 mt-0.5">
+                              {t('status.pending')}: /activate-account?token={b.admin_activation_token}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-slate-900 dark:text-slate-100">{b.plan_name || t('superAdmin.unassigned')}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">{b.subscription_status || t('common.none').toLowerCase()} · {b.billing_cycle || 'monthly'}</div>
+                        </td>
+                        <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                          {b.branch_count} / {b.employee_count}
+                        </td>
+                        <td className="py-3 px-4"><StatusBadge status={b.status} /></td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap space-x-2.5">
+                          {b.status !== 'deleted' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWorkspace(b)}
+                                className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+                              >
+                                {t('superAdmin.openWorkspace')}
+                              </button>
+                              <button type="button" onClick={() => { setModalError(''); setEditLogo(null); setEditLogoPreview(b.logo_url || ''); setEditBiz({ ...b }); }} className="font-medium text-slate-700 dark:text-slate-300 hover:underline">
+                                {t('common.edit')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setModalError('');
+                                  setAssignAdminBiz(b);
+                                  setAssignForm({ full_name: '', email: '', phone: '+250', replace_previous: true });
+                                }}
+                                className="font-medium text-sky-700 dark:text-sky-400 hover:underline"
+                              >
+                                {t('superAdmin.assignAdmin')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResetAdminAccess(b)}
+                                className="font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                              >
+                                {t('superAdmin.resetAccess')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSubDraft({
+                                    businessId: b.id,
+                                    businessName: b.name,
+                                    plan_id: b.plan_id || data.plans[0]?.id || 1,
+                                    billing_cycle: b.billing_cycle || 'monthly',
+                                    status: b.subscription_status || 'active',
+                                    days: 30,
+                                  })
+                                }
+                                className="font-medium text-sky-700 dark:text-sky-400 hover:underline"
+                              >
+                                {t('superAdmin.planBtn')}
+                              </button>
+                              {b.status === 'active' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleBusinessStatus(b.id, 'suspended')}
+                                    className="font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                                  >
+                                    {t('superAdmin.suspend')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleBusinessStatus(b.id, 'deactivated')}
+                                    className="font-medium text-rose-600 dark:text-rose-400 hover:underline"
+                                  >
+                                    {t('superAdmin.deactivate')}
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleBusinessStatus(b.id, 'active')}
+                                  className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+                                >
+                                  {b.status === 'suspended' ? t('superAdmin.reactivate') : t('superAdmin.activate')}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => { setModalError(''); setDeleteReason(''); setDeleteBiz(b); }}
+                                className="font-medium text-rose-700 dark:text-rose-400 hover:underline"
+                              >
+                                {t('common.delete')}
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              totalCount={businessesBox.totalCount}
+              visibleCount={businessesBox.visibleCount}
+              initialLimit={6}
+              expanded={businessesBox.expanded}
+              onToggle={businessesBox.toggleExpanded}
+            />
           </div>
         </div>
       )}
@@ -1221,79 +1348,88 @@ export default function SuperAdminPage() {
             ))}
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                <tr>
-                  <th className="py-3 px-4 font-semibold">{t('superAdmin.colUser')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('common.phone')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('superAdmin.colAccountCategory')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colWorkspaces')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colActiveSessions')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('superAdmin.colAccountStatus')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colControls')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredUsers.map((u) => (
-                  <tr key={u.id}>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <UserAvatar src={u.avatar_url} name={u.full_name} size="sm" />
-                        <div>
-                          <div className="font-semibold text-slate-900 dark:text-slate-100">{u.full_name}</div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400">{u.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400 tabular-nums">{u.phone}</td>
-                    <td className="py-3 px-4 text-slate-700 dark:text-slate-300">
-                      <span className="font-medium">{t(USER_CATEGORY_KEYS[u.account_category] || 'superAdmin.catCustomer')}</span>
-                      {!u.is_email_verified && <span className="text-amber-700 dark:text-amber-400"> · {t('superAdmin.unverifiedTag')}</span>}
-                    </td>
-                    <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">{u.business_count}</td>
-                    <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">{u.active_sessions}</td>
-                    <td className="py-3 px-4"><StatusBadge status={u.is_active ? 'active' : 'suspended'} /></td>
-                    <td className="py-3 px-4 text-right space-x-3 whitespace-nowrap">
-                      {!u.is_email_verified && (
-                        <button
-                          type="button"
-                          onClick={() => handleVerifyUserEmail(u)}
-                          className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
-                        >
-                          {t('superAdmin.verifyEmail')}
-                        </button>
-                      )}
-                      {u.id !== user?.id && (
-                        <button
-                          type="button"
-                          onClick={() => handleResetUserPassword(u)}
-                          className="font-medium text-amber-700 dark:text-amber-400 hover:underline"
-                        >
-                          {t('superAdmin.resetPassword')}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleRevokeSessions(u)}
-                        className="font-medium text-sky-700 dark:text-sky-400 hover:underline"
-                      >
-                        {t('superAdmin.revokeSessions')}
-                      </button>
-                      {u.id !== user?.id && (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleUserStatus(u)}
-                          className={`font-medium hover:underline ${u.is_active ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}
-                        >
-                          {u.is_active ? t('superAdmin.deactivate') : t('superAdmin.activate')}
-                        </button>
-                      )}
-                    </td>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                  <tr>
+                    <th className="py-3 px-4 font-semibold">{t('superAdmin.colUser')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('common.phone')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('superAdmin.colAccountCategory')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colWorkspaces')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colActiveSessions')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('superAdmin.colAccountStatus')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('superAdmin.colControls')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {usersBox.visibleItems.map((u) => (
+                    <tr key={u.id}>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <UserAvatar src={u.avatar_url} name={u.full_name} size="sm" />
+                          <div>
+                            <div className="font-semibold text-slate-900 dark:text-slate-100">{u.full_name}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400 tabular-nums">{u.phone}</td>
+                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">
+                        <span className="font-medium">{t(USER_CATEGORY_KEYS[u.account_category] || 'superAdmin.catCustomer')}</span>
+                        {!u.is_email_verified && <span className="text-amber-700 dark:text-amber-400"> · {t('superAdmin.unverifiedTag')}</span>}
+                      </td>
+                      <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">{u.business_count}</td>
+                      <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">{u.active_sessions}</td>
+                      <td className="py-3 px-4"><StatusBadge status={u.is_active ? 'active' : 'suspended'} /></td>
+                      <td className="py-3 px-4 text-right space-x-3 whitespace-nowrap">
+                        {!u.is_email_verified && (
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyUserEmail(u)}
+                            className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+                          >
+                            {t('superAdmin.verifyEmail')}
+                          </button>
+                        )}
+                        {u.id !== user?.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleResetUserPassword(u)}
+                            className="font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                          >
+                            {t('superAdmin.resetPassword')}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeSessions(u)}
+                          className="font-medium text-sky-700 dark:text-sky-400 hover:underline"
+                        >
+                          {t('superAdmin.revokeSessions')}
+                        </button>
+                        {u.id !== user?.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleUserStatus(u)}
+                            className={`font-medium hover:underline ${u.is_active ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}
+                          >
+                            {u.is_active ? t('superAdmin.deactivate') : t('superAdmin.activate')}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              totalCount={usersBox.totalCount}
+              visibleCount={usersBox.visibleCount}
+              initialLimit={8}
+              expanded={usersBox.expanded}
+              onToggle={usersBox.toggleExpanded}
+            />
           </div>
         </div>
       )}
@@ -1342,7 +1478,7 @@ export default function SuperAdminPage() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {data.plans.map((p) => (
+            {plansBox.visibleItems.map((p) => (
               <div key={p.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -1368,84 +1504,112 @@ export default function SuperAdminPage() {
               </div>
             ))}
           </div>
+          <ViewMoreFooter
+            totalCount={plansBox.totalCount}
+            visibleCount={plansBox.visibleCount}
+            initialLimit={4}
+            expanded={plansBox.expanded}
+            onToggle={plansBox.toggleExpanded}
+            className="rounded-xl border border-slate-200 dark:border-slate-800"
+          />
         </div>
       )}
 
       {/* TAB 5: Support Tickets & Public Contact Inquiries */}
       {tab === 'support' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.supportTicketsTitle', { count: data.tickets.length })}</h2>
-            {data.tickets.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 overflow-hidden">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.supportTicketsTitle', { count: ticketsBox.totalCount })}</h2>
+            {ticketsBox.totalCount === 0 ? (
               <div className="text-xs text-slate-500 dark:text-slate-400">{t('superAdmin.noTickets')}</div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-3 text-xs">
-                {data.tickets.map((ticket) => (
-                  <div key={ticket.id} className="pt-3 first:pt-0 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{ticket.subject}</div>
-                        <div className="text-slate-500 dark:text-slate-400">{ticket.user_name} ({ticket.user_email}) · {ticket.business_name || t('superAdmin.generalTag')}</div>
-                        <div className="text-slate-700 dark:text-slate-300 mt-1">{ticket.message}</div>
+              <>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-3 text-xs">
+                  {ticketsBox.visibleItems.map((ticket) => (
+                    <div key={ticket.id} className="pt-3 first:pt-0 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">{ticket.subject}</div>
+                          <div className="text-slate-500 dark:text-slate-400">{ticket.user_name} ({ticket.user_email}) · {ticket.business_name || t('superAdmin.generalTag')}</div>
+                          <div className="text-slate-700 dark:text-slate-300 mt-1">{ticket.message}</div>
+                        </div>
+                        <StatusBadge status={ticket.status} />
                       </div>
-                      <StatusBadge status={ticket.status} />
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        value={ticketNotes[ticket.id] ?? ticket.admin_notes ?? ''}
-                        onChange={(e) => setTicketNotes({ ...ticketNotes, [ticket.id]: e.target.value })}
-                        placeholder={t('superAdmin.adminNotePlaceholder')}
-                        className="flex-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateTicket(ticket.id, 'in_progress')}
-                        className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                      >
-                        {t('superAdmin.inProgressBtn')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateTicket(ticket.id, 'resolved')}
-                        className="px-2.5 py-1.5 bg-[#0B192C] dark:bg-sky-600 text-white rounded-lg font-medium hover:bg-slate-800 dark:hover:bg-sky-500"
-                      >
-                        {t('superAdmin.resolveBtn')}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.inquiriesTitle', { count: (data.inquiries || []).length })}</h2>
-            {!data.inquiries?.length ? (
-              <div className="text-xs text-slate-500 dark:text-slate-400">{t('superAdmin.noInquiries')}</div>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                {data.inquiries.map((inq) => (
-                  <div key={inq.id} className="py-3 first:pt-0 space-y-1">
-                    <div className="flex justify-between items-start gap-2">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100">
-                        {inq.full_name} {inq.target_business_name || inq.business_name ? `(${inq.target_business_name || inq.business_name})` : ''}
-                      </span>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-slate-400 dark:text-slate-500 tabular-nums">{formatDate(inq.created_at)}</span>
+                      <div className="flex gap-2">
+                        <input
+                          value={ticketNotes[ticket.id] ?? ticket.admin_notes ?? ''}
+                          onChange={(e) => setTicketNotes({ ...ticketNotes, [ticket.id]: e.target.value })}
+                          placeholder={t('superAdmin.adminNotePlaceholder')}
+                          className="flex-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                        />
                         <button
                           type="button"
-                          onClick={() => handleDeleteInquiry(inq.id)}
-                          className="text-rose-600 dark:text-rose-400 hover:underline font-medium"
+                          onClick={() => handleUpdateTicket(ticket.id, 'in_progress')}
+                          className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                         >
-                          {t('common.delete')}
+                          {t('superAdmin.inProgressBtn')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateTicket(ticket.id, 'resolved')}
+                          className="px-2.5 py-1.5 bg-[#0B192C] dark:bg-sky-600 text-white rounded-lg font-medium hover:bg-slate-800 dark:hover:bg-sky-500"
+                        >
+                          {t('superAdmin.resolveBtn')}
                         </button>
                       </div>
                     </div>
-                    <div className="text-slate-500 dark:text-slate-400">{inq.email} {inq.phone ? `· ${inq.phone}` : ''}</div>
-                    <div className="text-slate-700 dark:text-slate-300">{inq.message}</div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <ViewMoreFooter
+                  totalCount={ticketsBox.totalCount}
+                  visibleCount={ticketsBox.visibleCount}
+                  initialLimit={5}
+                  expanded={ticketsBox.expanded}
+                  onToggle={ticketsBox.toggleExpanded}
+                  className="-mx-5 -mb-5"
+                />
+              </>
+            )}
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 overflow-hidden">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.inquiriesTitle', { count: inquiriesBox.totalCount })}</h2>
+            {inquiriesBox.totalCount === 0 ? (
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('superAdmin.noInquiries')}</div>
+            ) : (
+              <>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {inquiriesBox.visibleItems.map((inq) => (
+                    <div key={inq.id} className="py-3 first:pt-0 space-y-1">
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {inq.full_name} {inq.target_business_name || inq.business_name ? `(${inq.target_business_name || inq.business_name})` : ''}
+                        </span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-slate-400 dark:text-slate-500 tabular-nums">{formatDate(inq.created_at)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInquiry(inq.id)}
+                            className="text-rose-600 dark:text-rose-400 hover:underline font-medium"
+                          >
+                            {t('common.delete')}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400">{inq.email} {inq.phone ? `· ${inq.phone}` : ''}</div>
+                      <div className="text-slate-700 dark:text-slate-300">{inq.message}</div>
+                    </div>
+                  ))}
+                </div>
+                <ViewMoreFooter
+                  totalCount={inquiriesBox.totalCount}
+                  visibleCount={inquiriesBox.visibleCount}
+                  initialLimit={5}
+                  expanded={inquiriesBox.expanded}
+                  onToggle={inquiriesBox.toggleExpanded}
+                  className="-mx-5 -mb-5"
+                />
+              </>
             )}
           </div>
         </div>
@@ -1514,92 +1678,121 @@ export default function SuperAdminPage() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {t('superAdmin.requirementsRegisterTitle')}
                 </div>
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                    <tr>
-                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqId')}</th>
-                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqCategory')}</th>
-                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqTitle')}</th>
-                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqStatus')}</th>
-                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqVerifiedAt')}</th>
-                      <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqEvidence')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {(monitoring.requirements || []).map((req) => (
-                      <tr key={req.requirement_id}>
-                        <td className="py-2.5 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{req.requirement_id}</td>
-                        <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">{req.module}</td>
-                        <td className="py-2.5 px-4 font-medium text-slate-900 dark:text-slate-100">{req.title}</td>
-                        <td className="py-2.5 px-4"><StatusBadge status={req.status} /></td>
-                        <td className="py-2.5 px-4 tabular-nums text-slate-500 dark:text-slate-400">
-                          {req.last_verified_at ? formatDateTime(req.last_verified_at) : '—'}
-                        </td>
-                        <td className="py-2.5 px-4 text-slate-600 dark:text-slate-300 max-w-md">{req.evidence || '—'}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                      <tr>
+                        <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqId')}</th>
+                        <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqCategory')}</th>
+                        <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqTitle')}</th>
+                        <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqStatus')}</th>
+                        <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqVerifiedAt')}</th>
+                        <th className="py-2.5 px-4 font-semibold">{t('superAdmin.colReqEvidence')}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {requirementsBox.visibleItems.map((req) => (
+                        <tr key={req.requirement_id}>
+                          <td className="py-2.5 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{req.requirement_id}</td>
+                          <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">{req.module}</td>
+                          <td className="py-2.5 px-4 font-medium text-slate-900 dark:text-slate-100">{req.title}</td>
+                          <td className="py-2.5 px-4"><StatusBadge status={req.status} /></td>
+                          <td className="py-2.5 px-4 tabular-nums text-slate-500 dark:text-slate-400">
+                            {req.last_verified_at ? formatDateTime(req.last_verified_at) : '—'}
+                          </td>
+                          <td className="py-2.5 px-4 text-slate-600 dark:text-slate-300 max-w-md">{req.evidence || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ViewMoreFooter
+                  totalCount={requirementsBox.totalCount}
+                  visibleCount={requirementsBox.visibleCount}
+                  initialLimit={6}
+                  expanded={requirementsBox.expanded}
+                  onToggle={requirementsBox.toggleExpanded}
+                />
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-hidden">
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.recentRunsTitle')}</h3>
-                  {(monitoring.recentRuns || []).length === 0 ? (
+                  {runsBox.totalCount === 0 ? (
                     <p className="text-xs text-slate-500 dark:text-slate-400">{t('superAdmin.noRunsYet')}</p>
                   ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-80 overflow-y-auto">
-                      {monitoring.recentRuns.map((run) => (
-                        <div key={run.id} className="py-2.5 flex items-center justify-between gap-3">
-                          <div>
-                            <div className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
-                              {run.passed_count}/{run.total_count} {t('superAdmin.checksPassedLabel')} · {run.avg_response_ms}ms
+                    <>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-80 overflow-y-auto">
+                        {runsBox.visibleItems.map((run) => (
+                          <div key={run.id} className="py-2.5 flex items-center justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+                                {run.passed_count}/{run.total_count} {t('superAdmin.checksPassedLabel')} · {run.avg_response_ms}ms
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                                {run.trigger_type} · {formatDateTime(run.created_at)}
+                              </div>
                             </div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                              {run.trigger_type} · {formatDateTime(run.created_at)}
-                            </div>
+                            <StatusBadge status={run.overall_status} />
                           </div>
-                          <StatusBadge status={run.overall_status} />
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      <ViewMoreFooter
+                        totalCount={runsBox.totalCount}
+                        visibleCount={runsBox.visibleCount}
+                        initialLimit={5}
+                        expanded={runsBox.expanded}
+                        onToggle={runsBox.toggleExpanded}
+                        className="-mx-5 -mb-5"
+                      />
+                    </>
                   )}
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-hidden">
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.monitoringEventsTitle')}</h3>
-                  {(monitoring.recentEvents || []).length === 0 ? (
+                  {eventsBox.totalCount === 0 ? (
                     <p className="text-xs text-slate-500 dark:text-slate-400">{t('superAdmin.noMonitoringEvents')}</p>
                   ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-80 overflow-y-auto">
-                      {monitoring.recentEvents.map((ev) => (
-                        <div key={ev.id} className="py-2.5 flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-semibold text-slate-900 dark:text-slate-100">
-                              [{ev.severity.toUpperCase()}] {ev.module}
+                    <>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-80 overflow-y-auto">
+                        {eventsBox.visibleItems.map((ev) => (
+                          <div key={ev.id} className="py-2.5 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                [{ev.severity.toUpperCase()}] {ev.module}
+                              </div>
+                              <div className="text-slate-600 dark:text-slate-300 mt-0.5">{ev.message}</div>
+                              <div className="text-[11px] text-slate-400 tabular-nums mt-0.5">{formatDateTime(ev.created_at)}</div>
                             </div>
-                            <div className="text-slate-600 dark:text-slate-300 mt-0.5">{ev.message}</div>
-                            <div className="text-[11px] text-slate-400 tabular-nums mt-0.5">{formatDateTime(ev.created_at)}</div>
+                            {ev.resolved ? (
+                              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold shrink-0">{t('superAdmin.resolvedLabel')}</span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={Boolean(busyAction)}
+                                onClick={() => handleResolveMonitoringEvent(ev.id)}
+                                className="px-2.5 py-1 text-[11px] font-semibold border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
+                              >
+                                {t('superAdmin.resolveBtn')}
+                              </button>
+                            )}
                           </div>
-                          {ev.resolved ? (
-                            <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold shrink-0">{t('superAdmin.resolvedLabel')}</span>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={Boolean(busyAction)}
-                              onClick={() => handleResolveMonitoringEvent(ev.id)}
-                              className="px-2.5 py-1 text-[11px] font-semibold border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
-                            >
-                              {t('superAdmin.resolveBtn')}
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      <ViewMoreFooter
+                        totalCount={eventsBox.totalCount}
+                        visibleCount={eventsBox.visibleCount}
+                        initialLimit={5}
+                        expanded={eventsBox.expanded}
+                        onToggle={eventsBox.toggleExpanded}
+                        className="-mx-5 -mb-5"
+                      />
+                    </>
                   )}
                 </div>
               </div>
@@ -1608,9 +1801,148 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* TAB 7: Platform Settings */}
+      {/* TAB 6B: Real-Time Scalability & Latency Diagnostics */}
+      {tab === 'diagnostics' && (
+        <Suspense
+          fallback={
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-pulse" aria-busy="true">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="h-28 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800" />
+              ))}
+            </div>
+          }
+        >
+          <DiagnosticsPanel onNotify={showFlash} onError={setError} />
+        </Suspense>
+      )}
+
+      {/* TAB 7: Full System Settings & Development Mode */}
       {tab === 'settings' && (
         <div className="space-y-6 max-w-4xl">
+          {/* Super Admin Development & Release Staging Mode */}
+          <div
+            className={`p-6 rounded-xl border text-xs space-y-4 transition-colors ${
+              platformSettings.development_mode === '1'
+                ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Wrench className={`w-4 h-4 ${platformSettings.development_mode === '1' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`} />
+                  <h2 className="text-sm font-bold text-[#0B192C] dark:text-slate-100">
+                    {t('superAdmin.devModeTitle')}
+                  </h2>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400">
+                  {t('superAdmin.devModeDesc')}
+                </p>
+                {platformSettings.development_last_confirmed_at && (
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium tabular-nums">
+                    {t('superAdmin.devLastConfirmed', {
+                      date: formatDateTime(platformSettings.development_last_confirmed_at),
+                      user: platformSettings.development_last_confirmed_by || 'Super Admin',
+                    })}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {platformSettings.development_mode === '1' ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={Boolean(busyAction)}
+                      onClick={handleConfirmDevelopmentRelease}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {busyAction === 'confirm-release' ? t('common.saving') : t('superAdmin.confirmTurnOffDevBtn')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(busyAction)}
+                      onClick={() => handleToggleDevelopmentMode(false)}
+                      className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      {t('superAdmin.turnOffDevBtn')}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={Boolean(busyAction)}
+                    onClick={() => handleToggleDevelopmentMode(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                    {busyAction === 'dev-mode' ? t('common.saving') : t('superAdmin.turnOnDevBtn')}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {platformSettings.development_mode === '1' && (
+              <div className="pt-4 border-t border-amber-200 dark:border-amber-800/70 space-y-4">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    {t('superAdmin.devBannerMsgLabel')}
+                  </label>
+                  <input
+                    value={platformSettings.development_banner_message || ''}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, development_banner_message: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                    {t('superAdmin.stagedFlagsTitle')}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {[
+                      ['pos_enabled', t('nav.pos')],
+                      ['marketplace_orders_enabled', t('nav.orders')],
+                      ['jobs_portal_enabled', t('nav.jobs')],
+                      ['ai_assistant_enabled', t('nav.ai')],
+                      ['video_ads_enabled', t('nav.ads')],
+                      ['customer_registration_enabled', t('footer.customerRegistration')],
+                      ['beta_analytics_enabled', t('superAdmin.betaAnalyticsFlag')],
+                    ].map(([flagKey, flagLabel]) => (
+                      <label
+                        key={flagKey}
+                        className="flex items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(parsedFeatureFlags[flagKey])}
+                          onChange={() => handleToggleFeatureFlag(flagKey)}
+                        />
+                        <span className="font-medium text-slate-800 dark:text-slate-200">{flagLabel}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {devVerificationResult?.checks && (
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  {t('superAdmin.releaseChecksTitle')}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {devVerificationResult.checks.map((chk) => (
+                    <div key={chk.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
+                      <span className="text-slate-700 dark:text-slate-200">{chk.label}</span>
+                      <StatusBadge status={chk.passed ? 'passed' : 'failed'} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Official Platform Logo Management (Super Admin Exclusively) */}
           <form onSubmit={handleUploadPlatformLogo} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 text-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1855,26 +2187,133 @@ export default function SuperAdminPage() {
               </div>
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={platformSettings.allow_customer_reviews !== '0'}
-                  onChange={(e) => setPlatformSettings({ ...platformSettings, allow_customer_reviews: e.target.checked ? '1' : '0' })}
-                />
-                <span>{t('superAdmin.enableReviewsLabel')}</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={platformSettings.require_email_verification !== '0'}
-                  onChange={(e) => setPlatformSettings({ ...platformSettings, require_email_verification: e.target.checked ? '1' : '0' })}
-                />
-                <span>{t('superAdmin.requireEmailVerifLabel')}</span>
-              </label>
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.systemReliabilityTitle')}</div>
+                  <p className="text-slate-500 dark:text-slate-400">{t('superAdmin.systemReliabilityDesc')}</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={Boolean(busyAction)}
+                  onClick={handleFlushServerCache}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {t('superAdmin.flushCacheBtn')}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.sessionTimeoutLabel')}</label>
+                  <input
+                    type="number"
+                    min={15}
+                    max={10080}
+                    value={platformSettings.session_timeout_minutes || '480'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, session_timeout_minutes: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.maxUploadMbLabel')}</label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={250}
+                    value={platformSettings.max_upload_size_mb || '25'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, max_upload_size_mb: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.apiRateLimitLabel')}</label>
+                  <input
+                    type="number"
+                    min={60}
+                    max={20000}
+                    value={platformSettings.api_rate_limit_rpm || '1200'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, api_rate_limit_rpm: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.auditRetentionLabel')}</label>
+                  <input
+                    type="number"
+                    min={30}
+                    max={3650}
+                    value={platformSettings.audit_log_retention_days || '365'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, audit_log_retention_days: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 tabular-nums"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 text-slate-700 dark:text-slate-300">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={platformSettings.allow_customer_reviews !== '0'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, allow_customer_reviews: e.target.checked ? '1' : '0' })}
+                  />
+                  <span>{t('superAdmin.enableReviewsLabel')}</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={platformSettings.require_email_verification !== '0'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, require_email_verification: e.target.checked ? '1' : '0' })}
+                  />
+                  <span>{t('superAdmin.requireEmailVerifLabel')}</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={platformSettings.allow_customer_registration !== '0'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, allow_customer_registration: e.target.checked ? '1' : '0' })}
+                  />
+                  <span>{t('superAdmin.allowCustomerRegLabel')}</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={platformSettings.allow_business_onboarding !== '0'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, allow_business_onboarding: e.target.checked ? '1' : '0' })}
+                  />
+                  <span>{t('superAdmin.allowBizOnboardingLabel')}</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={platformSettings.auto_backup_enabled !== '0'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, auto_backup_enabled: e.target.checked ? '1' : '0' })}
+                  />
+                  <span>{t('superAdmin.autoBackupLabel')}</span>
+                </label>
+                <label className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={platformSettings.maintenance_mode === '1'}
+                    onChange={(e) => setPlatformSettings({ ...platformSettings, maintenance_mode: e.target.checked ? '1' : '0' })}
+                  />
+                  <span>{t('superAdmin.maintenanceModeLabel')}</span>
+                </label>
+                {platformSettings.maintenance_mode === '1' && (
+                  <div className="pt-1">
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      {t('superAdmin.maintenanceMsgLabel')}
+                    </label>
+                    <input
+                      value={platformSettings.maintenance_message || ''}
+                      onChange={(e) => setPlatformSettings({ ...platformSettings, maintenance_message: e.target.value })}
+                      className="w-full px-3 py-2 border border-rose-300 dark:border-rose-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-            <button type="submit" className="px-5 py-2.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
-              {t('superAdmin.savePlatformSettingsBtn')}
+            <button type="submit" disabled={Boolean(busyAction)} className="px-5 py-2.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors disabled:opacity-50">
+              {busyAction === 'save-settings' ? t('common.saving') : t('superAdmin.savePlatformSettingsBtn')}
             </button>
           </form>
         </div>
@@ -1912,11 +2351,11 @@ export default function SuperAdminPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.currentPwLabel')}</label>
-                    <input type="password" value={myCreds.current_password} onChange={(e) => setMyCreds({ ...myCreds, current_password: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+                    <PasswordInput value={myCreds.current_password} onChange={(e) => setMyCreds({ ...myCreds, current_password: e.target.value })} autoComplete="current-password" className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.newPwLabel')}</label>
-                    <input minLength={8} type="password" value={myCreds.new_password} onChange={(e) => setMyCreds({ ...myCreds, new_password: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+                    <PasswordInput minLength={8} value={myCreds.new_password} onChange={(e) => setMyCreds({ ...myCreds, new_password: e.target.value })} autoComplete="new-password" className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
                   </div>
                 </div>
               </div>
@@ -1944,7 +2383,7 @@ export default function SuperAdminPage() {
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">{t('superAdmin.passwordMinLabel')}</label>
-                  <input required minLength={8} type="password" value={newAdmin.password} onChange={(e) => setNewAdmin({ ...newAdmin, password: e.target.value })} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+                  <PasswordInput required minLength={8} value={newAdmin.password} onChange={(e) => setNewAdmin({ ...newAdmin, password: e.target.value })} autoComplete="new-password" className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
                 </div>
               </div>
               <button type="submit" className="px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500">
@@ -1952,10 +2391,10 @@ export default function SuperAdminPage() {
               </button>
             </form>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-hidden">
               <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('superAdmin.activeAdminsTitle')}</h2>
               <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                {(data.admins || []).map((a) => (
+                {adminsBox.visibleItems.map((a) => (
                   <div key={a.id} className="py-2.5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
                       <UserAvatar src={a.avatar_url} name={a.full_name} size="sm" />
@@ -1968,6 +2407,14 @@ export default function SuperAdminPage() {
                   </div>
                 ))}
               </div>
+              <ViewMoreFooter
+                totalCount={adminsBox.totalCount}
+                visibleCount={adminsBox.visibleCount}
+                initialLimit={5}
+                expanded={adminsBox.expanded}
+                onToggle={adminsBox.toggleExpanded}
+                className="-mx-5 -mb-5"
+              />
             </div>
           </div>
         </div>

@@ -15,7 +15,9 @@ import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { formatDateTime, formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -115,6 +117,10 @@ export default function DashboardPage() {
   const charts = data?.charts || {};
   const cardPad = isCompact ? 'p-3.5' : 'p-5';
   const gridGap = isCompact ? 'gap-3' : 'gap-4';
+
+  const topProductsBox = useExpandableList(charts.top_products || [], { initialLimit: 5, sortNewest: false });
+  const branchSalesBox = useExpandableList(charts.sales_by_branch || [], { initialLimit: 5, sortNewest: false });
+  const activitiesBox = useExpandableList(data?.recentActivities || [], { initialLimit: 5, sortNewest: true });
 
   const quickWidgetControls = [
     ['sales_kpis', t('dashboard.widgetSales')],
@@ -380,24 +386,34 @@ export default function DashboardPage() {
               )}
 
               {widgets.top_products !== false && (
-                <div className={`${widgets.daily_chart !== false ? 'lg:col-span-4' : 'lg:col-span-12'} bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-4`}>
+                <div className={`${widgets.daily_chart !== false ? 'lg:col-span-4' : 'lg:col-span-12'} bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 overflow-hidden`}>
                   <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('dashboard.bestSellingProducts')}</h2>
-                  {(charts.top_products || []).length === 0 ? (
+                  {topProductsBox.totalCount === 0 ? (
                     <div className="text-xs text-slate-500 dark:text-slate-400 py-8 text-center">{t('dashboard.noSalesRecorded')}</div>
                   ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {charts.top_products.map((p, idx) => (
-                        <div key={idx} className="py-2.5 flex items-center justify-between gap-2 text-xs">
-                          <div className="min-w-0">
-                            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{p.product_name}</div>
-                            <div className="text-slate-500 dark:text-slate-400 tabular-nums">{t('dashboard.unitsSold', { count: p.qty })}</div>
+                    <>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {topProductsBox.visibleItems.map((p, idx) => (
+                          <div key={idx} className="py-2.5 flex items-center justify-between gap-2 text-xs">
+                            <div className="min-w-0">
+                              <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{p.product_name}</div>
+                              <div className="text-slate-500 dark:text-slate-400 tabular-nums">{t('dashboard.unitsSold', { count: p.qty })}</div>
+                            </div>
+                            <div className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums shrink-0">
+                              {formatMoney(p.revenue, currency)}
+                            </div>
                           </div>
-                          <div className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums shrink-0">
-                            {formatMoney(p.revenue, currency)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      <ViewMoreFooter
+                        totalCount={topProductsBox.totalCount}
+                        visibleCount={topProductsBox.visibleCount}
+                        initialLimit={5}
+                        expanded={topProductsBox.expanded}
+                        onToggle={topProductsBox.toggleExpanded}
+                        className="-mx-5 -mb-5 mt-2"
+                      />
+                    </>
                   )}
                 </div>
               )}
@@ -408,24 +424,32 @@ export default function DashboardPage() {
           {(widgets.branch_performance !== false || widgets.audit_activity !== false) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {widgets.branch_performance !== false && (
-                <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-3`}>
+                <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-hidden`}>
                   <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('dashboard.salesByBranch')}</h2>
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {(charts.sales_by_branch || []).map((b, idx) => (
+                    {branchSalesBox.visibleItems.map((b, idx) => (
                       <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
                         <span className="font-medium text-slate-800 dark:text-slate-200">{b.branch_name}</span>
                         <span className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{formatMoney(b.revenue, currency)}</span>
                       </div>
                     ))}
                   </div>
+                  <ViewMoreFooter
+                    totalCount={branchSalesBox.totalCount}
+                    visibleCount={branchSalesBox.visibleCount}
+                    initialLimit={5}
+                    expanded={branchSalesBox.expanded}
+                    onToggle={branchSalesBox.toggleExpanded}
+                    className="-mx-5 -mb-5"
+                  />
                 </div>
               )}
 
               {widgets.audit_activity !== false && (
-                <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-3`}>
+                <div className={`bg-white dark:bg-slate-900 ${cardPad} rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-hidden`}>
                   <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('dashboard.recentAuditActivity')}</h2>
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {(data?.recentActivities || []).slice(0, 6).map((act) => (
+                    {activitiesBox.visibleItems.map((act) => (
                       <div key={act.id} className="py-2 flex items-center justify-between gap-2 text-xs">
                         <div className="min-w-0 flex items-center gap-2">
                           <UserAvatar src={act.user_avatar} name={act.user_name || t('dashboard.systemUser')} size="xs" />
@@ -438,6 +462,14 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
+                  <ViewMoreFooter
+                    totalCount={activitiesBox.totalCount}
+                    visibleCount={activitiesBox.visibleCount}
+                    initialLimit={5}
+                    expanded={activitiesBox.expanded}
+                    onToggle={activitiesBox.toggleExpanded}
+                    className="-mx-5 -mb-5"
+                  />
                 </div>
               )}
             </div>

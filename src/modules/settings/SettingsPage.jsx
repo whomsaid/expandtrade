@@ -4,6 +4,7 @@ import { Languages, LayoutGrid, Mail, MonitorSmartphone, Shield, Upload } from '
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import LanguageSelector from '../../components/LanguageSelector.jsx';
+import PasswordInput from '../../components/PasswordInput.jsx';
 import ProfilePhotoUploader from '../../components/ProfilePhotoUploader.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import ThemeSelector from '../../components/ThemeSelector.jsx';
@@ -453,9 +454,9 @@ export default function SettingsPage() {
                           onChange={(e) => setEmailChange({ ...emailChange, new_email: e.target.value })}
                           className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
                         />
-                        <input
+                        <PasswordInput
                           required
-                          type="password"
+                          autoComplete="current-password"
                           placeholder={t('settings.currentPasswordPlaceholder')}
                           value={emailChange.current_password}
                           onChange={(e) => setEmailChange({ ...emailChange, current_password: e.target.value })}
@@ -595,27 +596,27 @@ export default function SettingsPage() {
             <p className="text-slate-500 dark:text-slate-400">
               {t('settings.changePasswordDesc')}
             </p>
-            <input
+            <PasswordInput
               required
-              type="password"
+              autoComplete="current-password"
               placeholder={t('settings.currentPw')}
               value={pwForm.current_password}
               onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })}
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             />
-            <input
+            <PasswordInput
               required
               minLength={8}
-              type="password"
+              autoComplete="new-password"
               placeholder={t('settings.newPw')}
               value={pwForm.new_password}
               onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })}
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg"
             />
-            <input
+            <PasswordInput
               required
               minLength={8}
-              type="password"
+              autoComplete="new-password"
               placeholder={t('settings.confirmNewPw')}
               value={pwForm.confirm_password}
               onChange={(e) => setPwForm({ ...pwForm, confirm_password: e.target.value })}

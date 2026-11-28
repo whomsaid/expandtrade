@@ -299,7 +299,7 @@ router.get('/payroll/overview', authenticate, requireBusiness, requirePermission
          JOIN roles r ON r.id = bm.role_id
          LEFT JOIN branches b ON b.id = bm.assigned_branch_id
          WHERE bm.business_id = ? AND bm.status = 'active'
-         ORDER BY bm.id ASC`,
+         ORDER BY bm.id DESC`,
         [req.businessId]
       ),
       query(
@@ -311,7 +311,7 @@ router.get('/payroll/overview', authenticate, requireBusiness, requirePermission
          JOIN roles r ON r.id = bm.role_id
          LEFT JOIN branches b ON b.id = bm.assigned_branch_id
          WHERE epc.business_id = ?
-         ORDER BY epc.payroll_status ASC, epc.next_payment_date ASC`,
+         ORDER BY epc.id DESC`,
         [req.businessId]
       ),
       query(

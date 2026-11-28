@@ -485,7 +485,7 @@ router.get('/public/orders/track', async (req, res, next) => {
       `SELECT h.new_status, h.note, h.created_at
        FROM order_status_history h
        JOIN orders o ON o.id = h.order_id
-       WHERE o.order_number = ? ORDER BY h.id ASC`,
+       WHERE o.order_number = ? ORDER BY h.id DESC`,
       [order_number.trim()]
     );
     res.json({ order, history });

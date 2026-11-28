@@ -280,6 +280,16 @@ router.post(
   validateRequest,
   async (req, res, next) => {
     try {
+      const regSetting = await queryOne(
+        `SELECT setting_value FROM platform_settings WHERE setting_key = 'allow_customer_registration'`
+      );
+      if (regSetting && regSetting.setting_value === '0') {
+        if (req.file?.path) removeUploadedFile(req.file.path);
+        return res.status(403).json({
+          error: 'New customer self-registration is temporarily paused by Platform Administration.',
+          code: 'REGISTRATION_PAUSED',
+        });
+      }
       const {
         full_name,
         email,

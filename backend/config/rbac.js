@@ -228,6 +228,37 @@ export async function seedCoreRbacAndPlans() {
     ['allow_customer_reviews', '1'],
     ['business_retention_days', '365'],
     ['require_email_verification', '1'],
+    ['development_mode', '0'],
+    [
+      'development_banner_message',
+      'Development & Feature Staging Mode is active. New features can be previewed and verified before confirming production release.',
+    ],
+    [
+      'feature_flags_json',
+      JSON.stringify({
+        pos_enabled: true,
+        marketplace_orders_enabled: true,
+        jobs_portal_enabled: true,
+        ai_assistant_enabled: true,
+        video_ads_enabled: true,
+        customer_registration_enabled: true,
+        beta_analytics_enabled: false,
+      }),
+    ],
+    ['development_last_confirmed_at', ''],
+    ['development_last_confirmed_by', ''],
+    ['maintenance_mode', '0'],
+    [
+      'maintenance_message',
+      'BizTrade Africa is undergoing scheduled maintenance to improve reliability and speed. Please check back shortly.',
+    ],
+    ['allow_business_onboarding', '1'],
+    ['allow_customer_registration', '1'],
+    ['session_timeout_minutes', '480'],
+    ['max_upload_size_mb', '25'],
+    ['api_rate_limit_rpm', '1200'],
+    ['audit_log_retention_days', '365'],
+    ['auto_backup_enabled', '1'],
   ];
   const existingSettingRows = await query('SELECT setting_key FROM platform_settings');
   const existingSettings = new Set(existingSettingRows.map((r) => r.setting_key));

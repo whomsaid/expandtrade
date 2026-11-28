@@ -11,6 +11,9 @@
     font-family: var(--font-sans);
     scroll-behavior: smooth;
     color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: hidden;
     overflow-x: clip;
   }
 
@@ -19,6 +22,7 @@
   }
 
   body {
+    overflow-x: hidden;
     overflow-x: clip;
   }
 
@@ -32,6 +36,17 @@
 
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes biztradePageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -68,27 +83,107 @@
   }
 }
 
+.animate-page-enter {
+  animation: biztradePageEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .animate-fade-up {
-  animation: biztradeFadeUp 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: biztradeFadeUp 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-scale-in {
-  animation: biztradeScaleIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: biztradeScaleIn 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-slide-down {
-  animation: biztradeSlideDown 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: biztradeSlideDown 170ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .reveal-section {
   opacity: 0;
   transform: translateY(14px);
-  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1), transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .reveal-section.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+@keyframes authButtonSheen {
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+  }
+  45%, 100% {
+    transform: translateX(240%) skewX(-18deg);
+  }
+}
+
+@keyframes authLoginPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.36);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0);
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes authLogoutPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.30);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(225, 29, 72, 0);
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes authIconNudge {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(2.5px);
+  }
+}
+
+.btn-auth-login-live,
+.btn-auth-logout-live {
+  position: relative;
+  overflow: hidden;
+  will-change: transform, box-shadow;
+}
+
+.btn-auth-login-live {
+  animation: authLoginPulse 2.6s ease-in-out infinite;
+}
+
+.btn-auth-logout-live {
+  animation: authLogoutPulse 2.6s ease-in-out infinite;
+}
+
+.btn-auth-login-live::after,
+.btn-auth-logout-live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 42%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.24) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: authButtonSheen 3.2s ease-in-out infinite;
+}
+
+.btn-auth-login-live .auth-btn-icon,
+.btn-auth-logout-live .auth-btn-icon {
+  animation: authIconNudge 2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

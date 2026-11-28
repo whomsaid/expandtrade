@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Banknote, Bell, Calendar, Lock, Phone, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api.js';
+import PasswordInput from '../../components/PasswordInput.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
 
@@ -207,9 +208,9 @@ export default function MyPayrollPage() {
             <label className="block font-semibold text-slate-700 dark:text-slate-200 mb-1">
               {t('myPayroll.passwordLabel')}
             </label>
-            <input
+            <PasswordInput
               required
-              type="password"
+              autoComplete="current-password"
               value={momoForm.current_password}
               onChange={(e) => setMomoForm({ ...momoForm, current_password: e.target.value })}
               placeholder={t('myPayroll.passwordPlaceholder')}

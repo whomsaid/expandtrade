@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
 import { env } from './config/env.js';
 import { getDialect, query, queryOne } from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -22,6 +23,7 @@ import jobRoutes from './routes/jobRoutes.js';
 import monitoringRoutes from './routes/monitoringRoutes.js';
 import searchRoutes from './routes/searchRoutes.js';
 import { recordMonitoringEvent } from './services/monitoringService.js';
+import { recordApiMetric } from './services/metricsService.js';
 
 function escapeXml(value) {
   return String(value || '')
@@ -191,14 +193,80 @@ export function createBackendApp() {
     }
   });
 
-  app.use('/api', (req, res, next) => {
+  async function getRuntimeSystemFlags() {
+    const cached = getCached('system:runtime-flags');
+    if (cached) return cached;
+    try {
+      const rows = await query(
+        `SELECT setting_key, setting_value FROM platform_settings
+         WHERE setting_key IN ('development_mode', 'maintenance_mode', 'maintenance_message', 'api_rate_limit_rpm')`
+      );
+      const flags = {
+        development_mode: '0',
+        maintenance_mode: '0',
+        maintenance_message: 'BizTrade Africa is undergoing scheduled maintenance. Please try again shortly.',
+        api_rate_limit_rpm: '1200',
+      };
+      for (const r of rows) {
+        flags[r.setting_key] = r.setting_value ?? flags[r.setting_key];
+      }
+      setCached('system:runtime-flags', flags, 10_000);
+      return flags;
+    } catch {
+      return { development_mode: '0', maintenance_mode: '0', maintenance_message: '', api_rate_limit_rpm: '1200' };
+    }
+  }
+
+  app.use('/api', async (req, res, next) => {
     const start = performance.now();
     if (req.path.startsWith('/auth') || req.headers.authorization || req.headers['x-business-id']) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.setHeader('Pragma', 'no-cache');
     }
+    try {
+      const flags = await getRuntimeSystemFlags();
+      res.setHeader('X-Platform-Mode', flags.development_mode === '1' ? 'development' : 'production');
+
+      if (flags.maintenance_mode === '1') {
+        const bypass =
+          req.path === '/health' ||
+          req.path === '/public/platform-config' ||
+          req.path === '/auth/login' ||
+          req.path === '/auth/me' ||
+          req.path === '/auth/logout' ||
+          req.path.startsWith('/admin');
+        if (!bypass) {
+          let isSuperAdmin = false;
+          const authHeader = req.headers.authorization || '';
+          const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+          if (token) {
+            try {
+              const decoded = jwt.verify(token, env.jwtSecret);
+              isSuperAdmin = Boolean(decoded?.isPlatformAdmin);
+            } catch {
+              isSuperAdmin = false;
+            }
+          }
+          if (!isSuperAdmin) {
+            return res.status(503).json({
+              error: flags.maintenance_message || 'System is temporarily in maintenance mode. Please try again shortly.',
+              code: 'MAINTENANCE_MODE',
+              maintenance: true,
+            });
+          }
+        }
+      }
+    } catch {
+      // Do not fail normal traffic if runtime flag lookup has a transient error
+    }
     res.on('finish', () => {
       const durationMs = Math.round((performance.now() - start) * 100) / 100;
+      recordApiMetric({
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        durationMs,
+      });
       if (durationMs > 2500 && !req.path.startsWith('/ads/videos/uploads')) {
         void recordMonitoringEvent({
           severity: 'warning',
