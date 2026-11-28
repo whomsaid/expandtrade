@@ -369,7 +369,7 @@ export default function AppLayout() {
             type="button"
             onClick={() => setLogoutConfirmOpen(true)}
             aria-label={t('nav.signOut')}
-            className="btn-auth-logout-live flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-semibold text-white bg-rose-600/90 hover:bg-rose-600 border border-rose-500/60 rounded-lg transition-colors cursor-pointer"
+            className="btn-auth-logout-live flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 border border-amber-600/60 rounded-lg transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 auth-btn-icon shrink-0" aria-hidden="true" />
             <span>{t('nav.signOut')}</span>
@@ -523,7 +523,7 @@ export default function AppLayout() {
               type="button"
               onClick={() => setLogoutConfirmOpen(true)}
               aria-label={t('nav.signOut')}
-              className="btn-auth-logout-live inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg border border-rose-500/60 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="btn-auth-logout-live inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded-lg border border-amber-600/60 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 auth-btn-icon shrink-0" aria-hidden="true" />
               <span>{t('nav.signOut')}</span>

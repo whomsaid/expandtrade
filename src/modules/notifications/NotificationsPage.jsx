@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDateTime } from '../../utils/format.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function NotificationsPage() {
   const { t } = useTranslation();
@@ -18,6 +20,8 @@ export default function NotificationsPage() {
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
+
+  const notificationsBox = useExpandableList(notifications, { initialLimit: 6, sortNewest: true });
 
   useEffect(() => {
     api.get('/notifications').then((res) => {
@@ -67,19 +71,28 @@ export default function NotificationsPage() {
 
         {error && <div className="p-2.5 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded">{error}</div>}
 
-        {notifications.length === 0 ? (
+        {notificationsBox.totalCount === 0 ? (
           <div className="py-10 text-center text-xs text-slate-500 dark:text-slate-400">{t('notifications.empty')}</div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {notifications.map((n) => (
-              <div key={n.id} className={`py-3 px-3 rounded-lg ${n.is_read ? '' : 'bg-sky-50/60 dark:bg-sky-950/30'}`}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">{n.title}</span>
-                  <span className="text-slate-400 dark:text-slate-500 tabular-nums">{formatDateTime(n.created_at)}</span>
+          <div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {notificationsBox.visibleItems.map((n) => (
+                <div key={n.id} className={`py-3 px-3 rounded-lg ${n.is_read ? '' : 'bg-sky-50/60 dark:bg-sky-950/30'}`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{n.title}</span>
+                    <span className="text-slate-400 dark:text-slate-500 tabular-nums">{formatDateTime(n.created_at)}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{n.message}</p>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{n.message}</p>
-              </div>
-            ))}
+              ))}
+            </div>
+            <ViewMoreFooter
+              shownCount={notificationsBox.visibleItems.length}
+              totalCount={notificationsBox.totalCount}
+              hasMore={notificationsBox.hasMore}
+              expanded={notificationsBox.expanded}
+              onToggle={notificationsBox.toggle}
+            />
           </div>
         )}
       </div>

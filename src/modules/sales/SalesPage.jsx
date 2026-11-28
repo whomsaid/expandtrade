@@ -6,7 +6,9 @@ import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import ReceiptModal from '../../components/ReceiptModal.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { formatDateTime, formatMoney, getPaymentMethodLabel, PAYMENT_METHOD_LABELS } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function SalesPage() {
   const { t } = useTranslation();
@@ -26,6 +28,7 @@ export default function SalesPage() {
   const [message, setMessage] = useState('');
 
   const currency = workspace?.business?.currency_code || 'RWF';
+  const salesBox = useExpandableList(sales, { initialLimit: 6, sortNewest: true });
 
   const loadSales = useCallback(async () => {
     if (!activeBusinessId) return;
@@ -124,29 +127,30 @@ export default function SalesPage() {
         </select>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-            <tr>
-              <th className="py-3 px-4 font-semibold">{t('sales.colReference')}</th>
-              <th className="py-3 px-4 font-semibold">{t('sales.colDate')}</th>
-              <th className="py-3 px-4 font-semibold">{t('sales.colBranch')}</th>
-              <th className="py-3 px-4 font-semibold">{t('sales.colCustomer')}</th>
-              <th className="py-3 px-4 font-semibold text-right">{t('sales.colTotal')}</th>
-              <th className="py-3 px-4 font-semibold text-right">{t('sales.colPaid')}</th>
-              <th className="py-3 px-4 font-semibold text-right">{t('sales.colBalance')}</th>
-              <th className="py-3 px-4 font-semibold">{t('sales.colPayment')}</th>
-              <th className="py-3 px-4 font-semibold">{t('sales.colStatus')}</th>
-              <th className="py-3 px-4 font-semibold text-right">{t('sales.colActions')}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {sales.length === 0 ? (
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
-                <td colSpan={10} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('sales.empty')}</td>
+                <th className="py-3 px-4 font-semibold">{t('sales.colReference')}</th>
+                <th className="py-3 px-4 font-semibold">{t('sales.colDate')}</th>
+                <th className="py-3 px-4 font-semibold">{t('sales.colBranch')}</th>
+                <th className="py-3 px-4 font-semibold">{t('sales.colCustomer')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('sales.colTotal')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('sales.colPaid')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('sales.colBalance')}</th>
+                <th className="py-3 px-4 font-semibold">{t('sales.colPayment')}</th>
+                <th className="py-3 px-4 font-semibold">{t('sales.colStatus')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('sales.colActions')}</th>
               </tr>
-            ) : (
-              sales.map((s) => (
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {salesBox.totalCount === 0 ? (
+                <tr>
+                  <td colSpan={10} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('sales.empty')}</td>
+                </tr>
+              ) : (
+                salesBox.visibleItems.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
                   <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{s.reference_number}</td>
                   <td className="py-3 px-4 tabular-nums text-slate-500 dark:text-slate-400">{formatDateTime(s.created_at)}</td>
@@ -184,7 +188,7 @@ export default function SalesPage() {
                       <button
                         type="button"
                         onClick={() => { setModalError(''); setRefundSale(s); }}
-                        className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:underline font-medium"
+                        className="inline-flex items-center gap-1 text-amber-800 dark:text-amber-300 hover:underline font-medium"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         {t('sales.refundBtn')}
@@ -196,6 +200,14 @@ export default function SalesPage() {
             )}
           </tbody>
         </table>
+        </div>
+        <ViewMoreFooter
+          totalCount={salesBox.totalCount}
+          visibleCount={salesBox.visibleCount}
+          initialLimit={6}
+          expanded={salesBox.expanded}
+          onToggle={salesBox.toggleExpanded}
+        />
       </div>
 
       {/* Record Follow-up Payment Modal */}
@@ -244,7 +256,7 @@ export default function SalesPage() {
               <textarea required rows={3} value={refundReason} onChange={(e) => setRefundReason(e.target.value)} placeholder={t('sales.refundReasonPlaceholder')} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
               <div className="flex justify-end gap-2">
                 <button type="button" disabled={saving} onClick={() => setRefundSale(null)} className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">{t('common.cancel')}</button>
-                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg disabled:opacity-50">{saving ? t('common.saving') : t('sales.confirmRefund')}</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded-lg disabled:opacity-50">{saving ? t('common.saving') : t('sales.confirmRefund')}</button>
               </div>
             </form>
           </div>

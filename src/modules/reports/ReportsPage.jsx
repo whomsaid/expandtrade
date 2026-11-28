@@ -4,6 +4,8 @@ import { Download, Loader2, Printer } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney, getPaymentMethodLabel } from '../../utils/format.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function ReportsPage() {
   const { t } = useTranslation();
@@ -25,6 +27,10 @@ export default function ReportsPage() {
       setError(err.message);
     }
   }, [activeBusinessId]);
+
+  const salesByEmployeeBox = useExpandableList(analytics?.salesByEmployee || [], { initialLimit: 6, sortNewest: false });
+  const paymentBreakdownBox = useExpandableList(analytics?.paymentBreakdown || [], { initialLimit: 6, sortNewest: false });
+  const topCustomersBox = useExpandableList(analytics?.topCustomers || [], { initialLimit: 6, sortNewest: false });
 
   useEffect(() => {
     loadReports();
@@ -126,7 +132,7 @@ export default function ReportsPage() {
           <button
             type="button"
             onClick={loadReports}
-            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100 shrink-0"
+            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0"
           >
             {t('common.retry')}
           </button>
@@ -135,76 +141,103 @@ export default function ReportsPage() {
 
       {analytics && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-x-auto">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.salesByEmployee')}</h2>
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                <tr>
-                  <th className="py-2">{t('reports.colEmployee')}</th>
-                  <th className="py-2 text-right">{t('reports.colTransactions')}</th>
-                  <th className="py-2 text-right">{t('reports.colRevenue')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {analytics.salesByEmployee.map((e, i) => (
-                  <tr key={i}>
-                    <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{e.employee_name}</td>
-                    <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{e.sales_count}</td>
-                    <td className="py-2.5 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(e.revenue, currency)}</td>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-5 space-y-3 overflow-x-auto">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.salesByEmployee')}</h2>
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2">{t('reports.colEmployee')}</th>
+                    <th className="py-2 text-right">{t('reports.colTransactions')}</th>
+                    <th className="py-2 text-right">{t('reports.colRevenue')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {salesByEmployeeBox.visibleItems.map((e, i) => (
+                    <tr key={i}>
+                      <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{e.employee_name}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{e.sales_count}</td>
+                      <td className="py-2.5 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(e.revenue, currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              shownCount={salesByEmployeeBox.visibleItems.length}
+              totalCount={salesByEmployeeBox.totalCount}
+              hasMore={salesByEmployeeBox.hasMore}
+              expanded={salesByEmployeeBox.expanded}
+              onToggle={salesByEmployeeBox.toggle}
+            />
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-x-auto">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.collectionsByChannel')}</h2>
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                <tr>
-                  <th className="py-2">{t('reports.colMethod')}</th>
-                  <th className="py-2 text-right">{t('reports.colPayments')}</th>
-                  <th className="py-2 text-right">{t('reports.colCollected')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {analytics.paymentBreakdown.map((p, i) => (
-                  <tr key={i}>
-                    <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{getPaymentMethodLabel(p.payment_method)}</td>
-                    <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{p.tx_count}</td>
-                    <td className="py-2.5 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(p.total, currency)}</td>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-5 space-y-3 overflow-x-auto">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.collectionsByChannel')}</h2>
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2">{t('reports.colMethod')}</th>
+                    <th className="py-2 text-right">{t('reports.colPayments')}</th>
+                    <th className="py-2 text-right">{t('reports.colCollected')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {paymentBreakdownBox.visibleItems.map((p, i) => (
+                    <tr key={i}>
+                      <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{getPaymentMethodLabel(p.payment_method)}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{p.tx_count}</td>
+                      <td className="py-2.5 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(p.total, currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              shownCount={paymentBreakdownBox.visibleItems.length}
+              totalCount={paymentBreakdownBox.totalCount}
+              hasMore={paymentBreakdownBox.hasMore}
+              expanded={paymentBreakdownBox.expanded}
+              onToggle={paymentBreakdownBox.toggle}
+            />
           </div>
 
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 overflow-x-auto">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.topCustomers')}</h2>
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                <tr>
-                  <th className="py-2">{t('reports.colCustomer')}</th>
-                  <th className="py-2">{t('reports.colPhone')}</th>
-                  <th className="py-2 text-right">{t('reports.colOrders')}</th>
-                  <th className="py-2 text-right">{t('reports.colLoyaltyPts')}</th>
-                  <th className="py-2 text-right">{t('reports.colOutstanding')}</th>
-                  <th className="py-2 text-right">{t('reports.colTotalSpent')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {analytics.topCustomers.map((c, i) => (
-                  <tr key={i}>
-                    <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{c.full_name}</td>
-                    <td className="py-2.5 text-slate-600 dark:text-slate-400">{c.phone}</td>
-                    <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{c.orders_count}</td>
-                    <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{c.loyalty_points}</td>
-                    <td className="py-2.5 text-right tabular-nums text-rose-700 dark:text-rose-400">{formatMoney(c.outstanding_balance, currency)}</td>
-                    <td className="py-2.5 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(c.total_spent, currency)}</td>
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-5 space-y-3 overflow-x-auto">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('reports.topCustomers')}</h2>
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2">{t('reports.colCustomer')}</th>
+                    <th className="py-2">{t('reports.colPhone')}</th>
+                    <th className="py-2 text-right">{t('reports.colOrders')}</th>
+                    <th className="py-2 text-right">{t('reports.colLoyaltyPts')}</th>
+                    <th className="py-2 text-right">{t('reports.colOutstanding')}</th>
+                    <th className="py-2 text-right">{t('reports.colTotalSpent')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {topCustomersBox.visibleItems.map((c, i) => (
+                    <tr key={i}>
+                      <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">{c.full_name}</td>
+                      <td className="py-2.5 text-slate-600 dark:text-slate-400">{c.phone}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{c.orders_count}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{c.loyalty_points}</td>
+                      <td className="py-2.5 text-right tabular-nums text-rose-700 dark:text-rose-400">{formatMoney(c.outstanding_balance, currency)}</td>
+                      <td className="py-2.5 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">{formatMoney(c.total_spent, currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              shownCount={topCustomersBox.visibleItems.length}
+              totalCount={topCustomersBox.totalCount}
+              hasMore={topCustomersBox.hasMore}
+              expanded={topCustomersBox.expanded}
+              onToggle={topCustomersBox.toggle}
+            />
           </div>
         </div>
       )}

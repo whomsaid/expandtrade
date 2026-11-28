@@ -2492,5 +2492,23 @@
     "clientAvgRtt": "Aller-retour moyen API client",
     "clientCacheHits": "Cache & Déduplication client",
     "activeSessions": "Sessions actives / Limite"
+  },
+  "shortcuts": {
+    "modalTitle": "Raccourcis clavier",
+    "modalSubtitle": "Appuyez sur une touche de raccourci hors des champs texte ou cliquez ci-dessous.",
+    "newItemTitle": "Créer un nouvel élément",
+    "newItemWorkspaceDesc": "Ouvrir la fenêtre de création sur la page active ou ajouter un produit.",
+    "newItemPublicDesc": "Accéder directement à la création d’un espace ou explorer les entreprises.",
+    "searchTitle": "Recherche globale",
+    "searchDesc": "Activer la barre de recherche BizTrade pour accéder aux pages, produits ou commandes.",
+    "dashboardTitle": "Aller au tableau de bord",
+    "homeTitle": "Aller à l’accueil",
+    "dashboardDesc": "Revenir immédiatement à la vue d’ensemble de votre entreprise.",
+    "homeDesc": "Revenir à la page d’accueil de BizTrade Africa.",
+    "helpTitle": "Raccourcis clavier",
+    "helpDesc": "Ouvrir ou fermer cette fenêtre d’aide aux raccourcis clavier.",
+    "closeTitle": "Fermer la fenêtre active",
+    "closeDesc": "Fermer les fenêtres modales, menus de recherche et panneaux.",
+    "footerTip": "Astuce : Appuyez sur / à tout moment pour ouvrir ce guide."
   }
 }

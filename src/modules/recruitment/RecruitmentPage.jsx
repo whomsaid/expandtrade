@@ -19,6 +19,8 @@ import UserAvatar from '../../components/UserAvatar.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { api } from '../../services/api.js';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 
 const EDUCATION_LEVELS = [
   'Primary',
@@ -122,6 +124,15 @@ export default function RecruitmentPage() {
   const [newQuestionLabel, setNewQuestionLabel] = useState('');
   const [newQuestionReq, setNewQuestionReq] = useState(true);
   const [savingVacancy, setSavingVacancy] = useState(false);
+
+  const applicationsBox = useExpandableList(applications, { initialLimit: 6, sortNewest: true });
+  const vacanciesBox = useExpandableList(vacancies, { initialLimit: 6, sortNewest: true });
+  const detailDocsBox = useExpandableList(selectedDetail?.documents || [], { initialLimit: 5, sortNewest: true });
+  const detailEduBox = useExpandableList(selectedDetail?.education || [], { initialLimit: 4, sortNewest: true });
+  const detailExpBox = useExpandableList(selectedDetail?.experiences || [], { initialLimit: 4, sortNewest: true });
+  const detailInterviewsBox = useExpandableList(selectedDetail?.interviews || [], { initialLimit: 4, sortNewest: true });
+  const detailNotesBox = useExpandableList(selectedDetail?.notes || [], { initialLimit: 5, sortNewest: true });
+  const detailHistoryBox = useExpandableList(selectedDetail?.status_history || [], { initialLimit: 6, sortNewest: true });
 
   const loadOverview = useCallback(async () => {
     if (!activeBusinessId) return;
@@ -394,6 +405,7 @@ export default function RecruitmentPage() {
         {canManage && (
           <button
             type="button"
+            data-shortcut-new="true"
             onClick={openCreateVacancy}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 shrink-0"
           >
@@ -511,152 +523,171 @@ export default function RecruitmentPage() {
             </select>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                <tr>
-                  <th className="py-3 px-4 font-semibold">{t('recruitment.colRef')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('recruitment.colApplicant')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('recruitment.colVacancy')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('recruitment.colEducation')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('recruitment.colExperience')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('recruitment.colStatus')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('recruitment.colSubmitted')}</th>
-                  <th className="py-3 px-4 font-semibold text-right">{t('recruitment.colAction')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {loading ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                   <tr>
-                    <td colSpan={8} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">{t('recruitment.loadingApps')}</td>
+                    <th className="py-3 px-4 font-semibold">{t('recruitment.colRef')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('recruitment.colApplicant')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('recruitment.colVacancy')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('recruitment.colEducation')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('recruitment.colExperience')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('recruitment.colStatus')}</th>
+                    <th className="py-3 px-4 font-semibold">{t('recruitment.colSubmitted')}</th>
+                    <th className="py-3 px-4 font-semibold text-right">{t('recruitment.colAction')}</th>
                   </tr>
-                ) : applications.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">
-                      {t('recruitment.emptyApps')}
-                    </td>
-                  </tr>
-                ) : (
-                  applications.map((app) => (
-                    <tr key={app.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-white whitespace-nowrap">
-                        {app.reference_number || `#${app.id}`}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <UserAvatar src={app.profile_photo_url} name={app.full_name} size="sm" />
-                          <div>
-                            <div className="font-semibold text-slate-900 dark:text-white">{app.full_name}</div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{app.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{app.vacancy_title}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{app.highest_education || t('recruitment.eduRecorded')}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
-                        {app.has_work_experience ? t('recruitment.expYears', { count: app.years_of_experience || 0 }) : t('recruitment.expNone')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <StatusBadge status={app.status} />
-                        {app.next_interview_date && (
-                          <div className="text-[10px] text-sky-700 dark:text-sky-400 mt-1 tabular-nums">
-                            {app.next_interview_date} {app.next_interview_time}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
-                        {formatDateTime(app.submitted_at || app.created_at)}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => openApplicationDetail(app.id)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          {t('recruitment.inspectBtn')}
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">{t('recruitment.loadingApps')}</td>
+                    </tr>
+                  ) : applications.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 px-4 text-center text-slate-500 dark:text-slate-400">
+                        {t('recruitment.emptyApps')}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    applicationsBox.visibleItems.map((app) => (
+                      <tr key={app.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-white whitespace-nowrap">
+                          {app.reference_number || `#${app.id}`}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <UserAvatar src={app.profile_photo_url} name={app.full_name} size="sm" />
+                            <div>
+                              <div className="font-semibold text-slate-900 dark:text-white">{app.full_name}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">{app.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{app.vacancy_title}</td>
+                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{app.highest_education || t('recruitment.eduRecorded')}</td>
+                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
+                          {app.has_work_experience ? t('recruitment.expYears', { count: app.years_of_experience || 0 }) : t('recruitment.expNone')}
+                        </td>
+                        <td className="py-3 px-4">
+                          <StatusBadge status={app.status} />
+                          {app.next_interview_date && (
+                            <div className="text-[10px] text-sky-700 dark:text-sky-400 mt-1 tabular-nums">
+                              {app.next_interview_date} {app.next_interview_time}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
+                          {formatDateTime(app.submitted_at || app.created_at)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openApplicationDetail(app.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            {t('recruitment.inspectBtn')}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <ViewMoreFooter
+              totalCount={applicationsBox.totalCount}
+              visibleCount={applicationsBox.visibleCount}
+              initialLimit={6}
+              expanded={applicationsBox.expanded}
+              onToggle={applicationsBox.toggleExpanded}
+            />
           </div>
         </div>
       )}
 
       {/* TAB 2: VACANCIES */}
       {subTab === 'vacancies' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {vacancies.length === 0 ? (
-            <div className="md:col-span-2 bg-white dark:bg-slate-900 p-10 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
-              {t('recruitment.emptyVacancies')}
-            </div>
-          ) : (
-            vacancies.map((v) => (
-              <div key={v.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4 text-xs">
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{v.title}</h3>
-                      <div className="text-slate-500 dark:text-slate-400">
-                        {v.department || t('recruitment.generalDept')} · {v.location} {v.branch_name ? `(${v.branch_name})` : ''}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {vacancies.length === 0 ? (
+              <div className="md:col-span-2 bg-white dark:bg-slate-900 p-10 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
+                {t('recruitment.emptyVacancies')}
+              </div>
+            ) : (
+              vacanciesBox.visibleItems.map((v) => (
+                <div key={v.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4 text-xs">
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">{v.title}</h3>
+                        <div className="text-slate-500 dark:text-slate-400">
+                          {v.department || t('recruitment.generalDept')} · {v.location} {v.branch_name ? `(${v.branch_name})` : ''}
+                        </div>
+                      </div>
+                      <StatusBadge status={v.status} />
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-300 line-clamp-2">{v.summary || v.description}</p>
+                    <div className="flex flex-wrap gap-3 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      <span>{t('recruitment.applicantsCount')} <strong className="text-slate-900 dark:text-white">{v.applicant_count || 0}</strong></span>
+                      <span>{t('recruitment.positionsCount')} <strong className="text-slate-900 dark:text-white">{v.positions_count || 1}</strong></span>
+                      <span>{t('recruitment.deadlineLabel')} <strong className="text-slate-900 dark:text-white">{v.application_deadline ? formatDate(v.application_deadline) : t('recruitment.openStatus')}</strong></span>
+                      <span>{t('recruitment.customQsCount')} <strong className="text-slate-900 dark:text-white">{v.custom_questions?.length || 0}</strong></span>
+                    </div>
+                  </div>
+                  {canManage && (
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditVacancy(v)}
+                        className="px-3 py-1.5 font-semibold border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        {t('recruitment.editVacancyQs')}
+                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {v.status !== 'published' && (
+                          <button
+                            type="button"
+                            onClick={() => handleVacancyStatus(v.id, 'published')}
+                            className="px-2.5 py-1.5 font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500"
+                          >
+                            {t('recruitment.publishBtn')}
+                          </button>
+                        )}
+                        {v.status === 'published' && (
+                          <button
+                            type="button"
+                            onClick={() => handleVacancyStatus(v.id, 'closed')}
+                            className="px-2.5 py-1.5 font-semibold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-lg"
+                          >
+                            {t('recruitment.closeBtn')}
+                          </button>
+                        )}
+                        {v.status !== 'archived' && (
+                          <button
+                            type="button"
+                            onClick={() => handleVacancyStatus(v.id, 'archived')}
+                            className="px-2.5 py-1.5 font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg"
+                          >
+                            {t('recruitment.archiveBtn')}
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <StatusBadge status={v.status} />
-                  </div>
-                  <p className="text-slate-600 dark:text-slate-300 line-clamp-2">{v.summary || v.description}</p>
-                  <div className="flex flex-wrap gap-3 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                    <span>{t('recruitment.applicantsCount')} <strong className="text-slate-900 dark:text-white">{v.applicant_count || 0}</strong></span>
-                    <span>{t('recruitment.positionsCount')} <strong className="text-slate-900 dark:text-white">{v.positions_count || 1}</strong></span>
-                    <span>{t('recruitment.deadlineLabel')} <strong className="text-slate-900 dark:text-white">{v.application_deadline ? formatDate(v.application_deadline) : t('recruitment.openStatus')}</strong></span>
-                    <span>{t('recruitment.customQsCount')} <strong className="text-slate-900 dark:text-white">{v.custom_questions?.length || 0}</strong></span>
-                  </div>
+                  )}
                 </div>
-                {canManage && (
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openEditVacancy(v)}
-                      className="px-3 py-1.5 font-semibold border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      {t('recruitment.editVacancyQs')}
-                    </button>
-                    <div className="flex items-center gap-1.5">
-                      {v.status !== 'published' && (
-                        <button
-                          type="button"
-                          onClick={() => handleVacancyStatus(v.id, 'published')}
-                          className="px-2.5 py-1.5 font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500"
-                        >
-                          {t('recruitment.publishBtn')}
-                        </button>
-                      )}
-                      {v.status === 'published' && (
-                        <button
-                          type="button"
-                          onClick={() => handleVacancyStatus(v.id, 'closed')}
-                          className="px-2.5 py-1.5 font-semibold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-lg"
-                        >
-                          {t('recruitment.closeBtn')}
-                        </button>
-                      )}
-                      {v.status !== 'archived' && (
-                        <button
-                          type="button"
-                          onClick={() => handleVacancyStatus(v.id, 'archived')}
-                          className="px-2.5 py-1.5 font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg"
-                        >
-                          {t('recruitment.archiveBtn')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
+          <ViewMoreFooter
+            totalCount={vacanciesBox.totalCount}
+            visibleCount={vacanciesBox.visibleCount}
+            initialLimit={6}
+            expanded={vacanciesBox.expanded}
+            onToggle={vacanciesBox.toggleExpanded}
+            className="rounded-xl border border-slate-200 dark:border-slate-800"
+          />
         </div>
       )}
 
@@ -722,7 +753,7 @@ export default function RecruitmentPage() {
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2.5">
                       <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.docsTitle', { count: selectedDetail.documents.length })}</h3>
                       <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                        {selectedDetail.documents.map((doc) => (
+                        {detailDocsBox.visibleItems.map((doc) => (
                           <div key={doc.id} className="py-2 flex flex-wrap items-center justify-between gap-2">
                             <div className="min-w-0">
                               <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -754,12 +785,20 @@ export default function RecruitmentPage() {
                           </div>
                         ))}
                       </div>
+                      <ViewMoreFooter
+                        totalCount={detailDocsBox.totalCount}
+                        visibleCount={detailDocsBox.visibleCount}
+                        initialLimit={5}
+                        expanded={detailDocsBox.expanded}
+                        onToggle={detailDocsBox.toggleExpanded}
+                        className="-mx-4 -mb-4 rounded-b-xl"
+                      />
                     </div>
 
                     {/* Education */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
                       <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.eduBgTitle')}</h3>
-                      {selectedDetail.education.map((edu) => (
+                      {detailEduBox.visibleItems.map((edu) => (
                         <div key={edu.id} className="py-1.5 border-b last:border-0 border-slate-200 dark:border-slate-800">
                           <div className="font-semibold text-slate-900 dark:text-white">
                             {edu.education_level} — {edu.institution_name}
@@ -770,6 +809,14 @@ export default function RecruitmentPage() {
                           </div>
                         </div>
                       ))}
+                      <ViewMoreFooter
+                        totalCount={detailEduBox.totalCount}
+                        visibleCount={detailEduBox.visibleCount}
+                        initialLimit={4}
+                        expanded={detailEduBox.expanded}
+                        onToggle={detailEduBox.toggleExpanded}
+                        className="-mx-4 -mb-4 rounded-b-xl"
+                      />
                     </div>
 
                     {/* Work Experience */}
@@ -778,17 +825,27 @@ export default function RecruitmentPage() {
                       {!selectedDetail.application.has_work_experience ? (
                         <div className="text-slate-600 dark:text-slate-300 italic">{t('recruitment.noExpIndicated')}</div>
                       ) : (
-                        selectedDetail.experiences.map((ex) => (
-                          <div key={ex.id} className="py-1.5 border-b last:border-0 border-slate-200 dark:border-slate-800 space-y-0.5">
-                            <div className="font-semibold text-slate-900 dark:text-white">
-                              {t('recruitment.atCompany', { title: ex.job_title, company: ex.company_name })}
+                        <>
+                          {detailExpBox.visibleItems.map((ex) => (
+                            <div key={ex.id} className="py-1.5 border-b last:border-0 border-slate-200 dark:border-slate-800 space-y-0.5">
+                              <div className="font-semibold text-slate-900 dark:text-white">
+                                {t('recruitment.atCompany', { title: ex.job_title, company: ex.company_name })}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                {ex.start_date} – {ex.is_current ? t('recruitment.present') : ex.end_date || 'N/A'} {ex.work_location ? `· ${ex.work_location}` : ''}
+                              </div>
+                              {ex.responsibilities && <div className="text-slate-600 dark:text-slate-300">{ex.responsibilities}</div>}
                             </div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                              {ex.start_date} – {ex.is_current ? t('recruitment.present') : ex.end_date || 'N/A'} {ex.work_location ? `· ${ex.work_location}` : ''}
-                            </div>
-                            {ex.responsibilities && <div className="text-slate-600 dark:text-slate-300">{ex.responsibilities}</div>}
-                          </div>
-                        ))
+                          ))}
+                          <ViewMoreFooter
+                            totalCount={detailExpBox.totalCount}
+                            visibleCount={detailExpBox.visibleCount}
+                            initialLimit={4}
+                            expanded={detailExpBox.expanded}
+                            onToggle={detailExpBox.toggleExpanded}
+                            className="-mx-4 -mb-4 rounded-b-xl"
+                          />
+                        </>
                       )}
                     </div>
 
@@ -864,7 +921,7 @@ export default function RecruitmentPage() {
                         <span>{t('recruitment.interviewsTitle', { count: selectedDetail.interviews.length })}</span>
                       </div>
 
-                      {selectedDetail.interviews.map((iv) => (
+                      {detailInterviewsBox.visibleItems.map((iv) => (
                         <div key={iv.id} className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-slate-900 dark:text-white tabular-nums">
@@ -895,7 +952,7 @@ export default function RecruitmentPage() {
                               <button
                                 type="button"
                                 onClick={() => handleUpdateInterview(iv.id, { status: 'cancelled' })}
-                                className="px-2 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200 rounded"
+                                className="px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded"
                               >
                                 {t('common.cancel')}
                               </button>
@@ -903,6 +960,14 @@ export default function RecruitmentPage() {
                           )}
                         </div>
                       ))}
+                      <ViewMoreFooter
+                        totalCount={detailInterviewsBox.totalCount}
+                        visibleCount={detailInterviewsBox.visibleCount}
+                        initialLimit={4}
+                        expanded={detailInterviewsBox.expanded}
+                        onToggle={detailInterviewsBox.toggleExpanded}
+                        className="-mx-4 rounded-b-lg"
+                      />
 
                       {canManage && selectedDetail.application.status !== 'withdrawn' && (
                         <form onSubmit={handleScheduleInterview} className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
@@ -970,11 +1035,11 @@ export default function RecruitmentPage() {
                           </button>
                         </form>
                       )}
-                      <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      <div className="space-y-1.5">
                         {selectedDetail.notes.length === 0 ? (
                           <div className="text-[11px] text-amber-800/70 dark:text-amber-300/70">{t('recruitment.noNotes')}</div>
                         ) : (
-                          selectedDetail.notes.map((n) => (
+                          detailNotesBox.visibleItems.map((n) => (
                             <div key={n.id} className="p-2 rounded bg-white dark:bg-slate-900 border border-amber-200/70 dark:border-amber-900">
                               <div className="text-slate-800 dark:text-slate-200">{n.note}</div>
                               <div className="text-[10px] text-slate-400 mt-0.5">{n.author_name} · {formatDateTime(n.created_at)}</div>
@@ -982,13 +1047,21 @@ export default function RecruitmentPage() {
                           ))
                         )}
                       </div>
+                      <ViewMoreFooter
+                        totalCount={detailNotesBox.totalCount}
+                        visibleCount={detailNotesBox.visibleCount}
+                        initialLimit={5}
+                        expanded={detailNotesBox.expanded}
+                        onToggle={detailNotesBox.toggleExpanded}
+                        className="-mx-4 -mb-4 rounded-b-xl"
+                      />
                     </div>
 
                     {/* Status History */}
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
                       <h3 className="font-bold text-slate-900 dark:text-white">{t('recruitment.auditHistoryTitle')}</h3>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                        {selectedDetail.status_history.map((h) => (
+                      <div className="space-y-1.5">
+                        {detailHistoryBox.visibleItems.map((h) => (
                           <div key={h.id} className="flex justify-between gap-2 text-[11px] border-b last:border-0 border-slate-200 dark:border-slate-800 pb-1">
                             <div>
                               <span className="font-semibold text-slate-800 dark:text-slate-200">{t(`status.${h.new_status}`, { defaultValue: h.new_status.replace(/_/g, ' ') })}</span>
@@ -998,6 +1071,14 @@ export default function RecruitmentPage() {
                           </div>
                         ))}
                       </div>
+                      <ViewMoreFooter
+                        totalCount={detailHistoryBox.totalCount}
+                        visibleCount={detailHistoryBox.visibleCount}
+                        initialLimit={6}
+                        expanded={detailHistoryBox.expanded}
+                        onToggle={detailHistoryBox.toggleExpanded}
+                        className="-mx-4 -mb-4 rounded-b-xl"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1234,7 +1315,7 @@ export default function RecruitmentPage() {
                               custom_questions: prev.custom_questions.filter((_, i) => i !== idx),
                             }))
                           }
-                          className="text-rose-600 hover:underline"
+                          className="font-semibold text-amber-700 dark:text-amber-400 hover:underline"
                         >
                           {t('common.remove')}
                         </button>

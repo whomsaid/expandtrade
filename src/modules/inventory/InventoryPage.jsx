@@ -4,6 +4,8 @@ import { ArrowLeftRight, SlidersHorizontal } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDateTime, formatMoney } from '../../utils/format.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function InventoryPage() {
   const { t } = useTranslation();
@@ -42,6 +44,9 @@ export default function InventoryPage() {
       setError(err.message);
     }
   }, [activeBusinessId, activeBranchId]);
+
+  const itemsBox = useExpandableList(items, { initialLimit: 6, sortNewest: true });
+  const movementsBox = useExpandableList(movements, { initialLimit: 6, sortNewest: true });
 
   useEffect(() => {
     loadInventory();
@@ -95,6 +100,7 @@ export default function InventoryPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              data-shortcut-new="true"
               onClick={() => {
                 setModalError('');
                 setAdjForm({ product_id: items[0]?.product_id || '', adjustment_type: 'add', quantity: '1', reason: '' });
@@ -177,7 +183,8 @@ export default function InventoryPage() {
       </div>
 
       {tab === 'stock' ? (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
@@ -191,7 +198,7 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {items.map((item) => {
+              {itemsBox.visibleItems.map((item) => {
                 const health = item.quantity <= 0 ? t('inventory.healthOut') : item.quantity <= item.min_stock ? t('inventory.healthLow') : t('inventory.healthHealthy');
                 const healthCls =
                   item.quantity <= 0
@@ -213,9 +220,18 @@ export default function InventoryPage() {
               })}
             </tbody>
           </table>
+          </div>
+          <ViewMoreFooter
+            shownCount={itemsBox.visibleItems.length}
+            totalCount={itemsBox.totalCount}
+            hasMore={itemsBox.hasMore}
+            expanded={itemsBox.expanded}
+            onToggle={itemsBox.toggle}
+          />
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
@@ -230,7 +246,7 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {movements.map((m) => (
+              {movementsBox.visibleItems.map((m) => (
                 <tr key={m.id}>
                   <td className="py-2.5 px-4 tabular-nums text-slate-500 dark:text-slate-400">{formatDateTime(m.created_at)}</td>
                   <td className="py-2.5 px-4 font-medium text-slate-900 dark:text-slate-100">{m.product_name}</td>
@@ -248,6 +264,14 @@ export default function InventoryPage() {
               ))}
             </tbody>
           </table>
+          </div>
+          <ViewMoreFooter
+            shownCount={movementsBox.visibleItems.length}
+            totalCount={movementsBox.totalCount}
+            hasMore={movementsBox.hasMore}
+            expanded={movementsBox.expanded}
+            onToggle={movementsBox.toggle}
+          />
         </div>
       )}
 

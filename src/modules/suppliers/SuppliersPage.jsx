@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney, getPaymentMethodLabel } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 
 export default function SuppliersPage() {
   const { t } = useTranslation();
@@ -53,6 +55,8 @@ export default function SuppliersPage() {
     );
   }, [suppliers, search]);
 
+  const suppliersBox = useExpandableList(filteredSuppliers, { initialLimit: 6, sortNewest: true });
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (saving) return;
@@ -94,7 +98,7 @@ export default function SuppliersPage() {
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('suppliers.subtitle')}</p>
         </div>
         {hasPermission('suppliers.manage') && (
-          <button type="button" onClick={() => { setModalError(''); setShowCreate(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
+          <button type="button" data-shortcut-new="true" onClick={() => { setModalError(''); setShowCreate(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" />
             {t('suppliers.addSupplier')}
           </button>
@@ -124,20 +128,21 @@ export default function SuppliersPage() {
         )}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-            <tr>
-              <th className="py-3 px-4 font-semibold">{t('suppliers.colSupplier')}</th>
-              <th className="py-3 px-4 font-semibold">{t('suppliers.colContact')}</th>
-              <th className="py-3 px-4 font-semibold">{t('suppliers.colPhoneEmail')}</th>
-              <th className="py-3 px-4 font-semibold">{t('suppliers.colAddress')}</th>
-              <th className="py-3 px-4 font-semibold text-right">{t('suppliers.colBalanceOwed')}</th>
-              {hasPermission('suppliers.manage') && <th className="py-3 px-4 font-semibold text-right">{t('suppliers.colAction')}</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredSuppliers.map((s) => (
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+              <tr>
+                <th className="py-3 px-4 font-semibold">{t('suppliers.colSupplier')}</th>
+                <th className="py-3 px-4 font-semibold">{t('suppliers.colContact')}</th>
+                <th className="py-3 px-4 font-semibold">{t('suppliers.colPhoneEmail')}</th>
+                <th className="py-3 px-4 font-semibold">{t('suppliers.colAddress')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('suppliers.colBalanceOwed')}</th>
+                {hasPermission('suppliers.manage') && <th className="py-3 px-4 font-semibold text-right">{t('suppliers.colAction')}</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {suppliersBox.visibleItems.map((s) => (
               <tr key={s.id}>
                 <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">{s.name}</td>
                 <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{s.contact_person || '—'}</td>
@@ -169,6 +174,14 @@ export default function SuppliersPage() {
             ))}
           </tbody>
         </table>
+        </div>
+        <ViewMoreFooter
+          totalCount={suppliersBox.totalCount}
+          visibleCount={suppliersBox.visibleCount}
+          initialLimit={6}
+          expanded={suppliersBox.expanded}
+          onToggle={suppliersBox.toggleExpanded}
+        />
       </div>
 
       {showCreate && (

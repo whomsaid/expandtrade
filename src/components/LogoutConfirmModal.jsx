@@ -79,7 +79,7 @@ export default function LogoutConfirmModal({ open, onConfirm, onCancel }) {
             type="button"
             disabled={submitting}
             onClick={handleConfirm}
-            className="btn-auth-logout-live inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-rose-600 dark:bg-rose-600 rounded-lg hover:bg-rose-700 dark:hover:bg-rose-500 disabled:opacity-60 transition-colors"
+            className="btn-auth-logout-live inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-700 dark:bg-amber-700 rounded-lg hover:bg-amber-800 dark:hover:bg-amber-600 disabled:opacity-60 transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5 auth-btn-icon shrink-0" aria-hidden="true" />
             <span>{submitting ? t('components.loggingOut') : t('nav.signOut')}</span>

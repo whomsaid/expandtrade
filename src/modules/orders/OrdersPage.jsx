@@ -7,7 +7,9 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
 import WhatsAppContactButton from '../../components/WhatsAppContactButton.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { formatDateTime, formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 const ORDER_STATUSES = [
   'pending',
@@ -66,6 +68,8 @@ export default function OrdersPage() {
     );
   }, [orders, search]);
 
+  const ordersBox = useExpandableList(filteredOrders, { initialLimit: 6, sortNewest: true });
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (saving) return;
@@ -107,6 +111,7 @@ export default function OrdersPage() {
         {hasPermission('orders.manage') && (
           <button
             type="button"
+            data-shortcut-new="true"
             onClick={() => {
               setModalError('');
               setForm({ customer_name: '', customer_phone: '+250', delivery_address: '', product_id: products[0]?.id || '', quantity: '1', notes: '' });
@@ -126,7 +131,7 @@ export default function OrdersPage() {
           <button
             type="button"
             onClick={() => { setError(''); loadOrders(); }}
-            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100 shrink-0"
+            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0"
           >
             {t('common.retry')}
           </button>
@@ -154,24 +159,25 @@ export default function OrdersPage() {
         )}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-            <tr>
-              <th className="py-3 px-4 font-semibold">{t('orders.colOrderNum')}</th>
-              <th className="py-3 px-4 font-semibold">{t('orders.colDate')}</th>
-              <th className="py-3 px-4 font-semibold">{t('orders.colCustomer')}</th>
-              <th className="py-3 px-4 font-semibold">{t('orders.colAddress')}</th>
-              <th className="py-3 px-4 font-semibold text-right">{t('orders.colTotal')}</th>
-              <th className="py-3 px-4 font-semibold">{t('orders.colStatus')}</th>
-              {hasPermission('orders.manage') && <th className="py-3 px-4 font-semibold">{t('orders.colUpdateStage')}</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredOrders.length === 0 ? (
-              <tr><td colSpan={7} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('orders.empty')}</td></tr>
-            ) : (
-              filteredOrders.map((o) => (
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+              <tr>
+                <th className="py-3 px-4 font-semibold">{t('orders.colOrderNum')}</th>
+                <th className="py-3 px-4 font-semibold">{t('orders.colDate')}</th>
+                <th className="py-3 px-4 font-semibold">{t('orders.colCustomer')}</th>
+                <th className="py-3 px-4 font-semibold">{t('orders.colAddress')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('orders.colTotal')}</th>
+                <th className="py-3 px-4 font-semibold">{t('orders.colStatus')}</th>
+                {hasPermission('orders.manage') && <th className="py-3 px-4 font-semibold">{t('orders.colUpdateStage')}</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {ordersBox.totalCount === 0 ? (
+                <tr><td colSpan={7} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('orders.empty')}</td></tr>
+              ) : (
+                ordersBox.visibleItems.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
                   <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{o.order_number}</td>
                   <td className="py-3 px-4 tabular-nums text-slate-500 dark:text-slate-400">{formatDateTime(o.created_at)}</td>
@@ -212,6 +218,14 @@ export default function OrdersPage() {
             )}
           </tbody>
         </table>
+        </div>
+        <ViewMoreFooter
+          totalCount={ordersBox.totalCount}
+          visibleCount={ordersBox.visibleCount}
+          initialLimit={6}
+          expanded={ordersBox.expanded}
+          onToggle={ordersBox.toggleExpanded}
+        />
       </div>
 
       {showCreate && (

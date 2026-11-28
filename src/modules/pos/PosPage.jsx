@@ -5,6 +5,8 @@ import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ReceiptModal from '../../components/ReceiptModal.jsx';
 import { formatMoney, getPaymentMethodLabel } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 
 export default function PosPage() {
   const { t } = useTranslation();
@@ -59,6 +61,7 @@ export default function PosPage() {
       (p.barcode && p.barcode.toLowerCase().includes(q))
     );
   });
+  const productsBox = useExpandableList(filteredProducts, { initialLimit: 12, sortNewest: true });
 
   const addToCart = (product) => {
     setError('');
@@ -164,7 +167,7 @@ export default function PosPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {filteredProducts.map((p) => (
+          {productsBox.visibleItems.map((p) => (
             <button
               key={p.id}
               type="button"
@@ -185,6 +188,14 @@ export default function PosPage() {
             </button>
           ))}
         </div>
+        <ViewMoreFooter
+          totalCount={productsBox.totalCount}
+          visibleCount={productsBox.visibleCount}
+          initialLimit={12}
+          expanded={productsBox.expanded}
+          onToggle={productsBox.toggleExpanded}
+          className="rounded-xl border border-slate-200 dark:border-slate-800"
+        />
       </div>
 
       {/* Checkout Cart */}
@@ -196,7 +207,7 @@ export default function PosPage() {
               {t('pos.cartTitle', { count: cart.length })}
             </h2>
             {cart.length > 0 && (
-              <button type="button" onClick={() => setCart([])} className="text-xs text-rose-600 dark:text-rose-400 hover:underline">
+              <button type="button" onClick={() => setCart([])} className="text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline">
                 {t('pos.clearCart')}
               </button>
             )}
@@ -251,7 +262,7 @@ export default function PosPage() {
                     <button
                       type="button"
                       onClick={() => setCart((prev) => prev.filter((i) => i.product_id !== item.product_id))}
-                      className="p-1 text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
+                      className="p-1 text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

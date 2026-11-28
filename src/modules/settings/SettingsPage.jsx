@@ -8,7 +8,9 @@ import PasswordInput from '../../components/PasswordInput.jsx';
 import ProfilePhotoUploader from '../../components/ProfilePhotoUploader.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import ThemeSelector from '../../components/ThemeSelector.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { AFRICAN_COUNTRIES, formatDate, formatDateTime, formatMoney, getPaymentMethodLabel, PAYMENT_METHOD_LABELS } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 import { validatePasswordStrength } from '../../utils/passwordPolicy.js';
 
 const DEFAULT_DASHBOARD_PREFS = {
@@ -124,6 +126,11 @@ export default function SettingsPage() {
       // ignore non-critical tabs
     }
   }, [activeBusinessId, workspace, canManageBusiness]);
+
+  const plansBox = useExpandableList(plans, { initialLimit: 4, sortNewest: true });
+  const sessionsBox = useExpandableList(security.sessions, { initialLimit: 6, sortNewest: true });
+  const loginHistoryBox = useExpandableList(security.loginHistory, { initialLimit: 6, sortNewest: true });
+  const auditLogsBox = useExpandableList(auditLogs, { initialLimit: 6, sortNewest: true });
 
   useEffect(() => {
     loadSettingsData();
@@ -850,96 +857,128 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {plans.map((p) => (
-              <div key={p.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="text-sm font-bold text-slate-900 dark:text-white">{p.name}</div>
-                  <div className="text-lg font-bold text-[#0B192C] dark:text-sky-400 tabular-nums mt-1">
-                    {formatMoney(p.monthly_price_rwf, 'RWF')}{t('settings.perMonth')}
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {plansBox.visibleItems.map((p) => (
+                <div key={p.id} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">{p.name}</div>
+                    <div className="text-lg font-bold text-[#0B192C] dark:text-sky-400 tabular-nums mt-1">
+                      {formatMoney(p.monthly_price_rwf, 'RWF')}{t('settings.perMonth')}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                      {t('settings.planLimits', { staff: p.max_employees, branches: p.max_branches, products: p.max_products })}
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                    {t('settings.planLimits', { staff: p.max_employees, branches: p.max_branches, products: p.max_products })}
-                  </div>
+                  <button
+                    type="button"
+                    disabled={Boolean(savingAction)}
+                    onClick={() => handleSubscribe(p.id)}
+                    className="w-full py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
+                  >
+                    {savingAction === `subscribe-${p.id}` ? t('common.saving') : t('settings.selectPlan')}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  disabled={Boolean(savingAction)}
-                  onClick={() => handleSubscribe(p.id)}
-                  className="w-full py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-60"
-                >
-                  {savingAction === `subscribe-${p.id}` ? t('common.saving') : t('settings.selectPlan')}
-                </button>
+              ))}
+            </div>
+            {(plansBox.hasMore || plansBox.expanded) && (
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <ViewMoreFooter
+                  shownCount={plansBox.visibleItems.length}
+                  totalCount={plansBox.totalCount}
+                  hasMore={plansBox.hasMore}
+                  expanded={plansBox.expanded}
+                  onToggle={plansBox.toggle}
+                />
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}
 
       {tab === 'security' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 font-bold text-sm text-[#0B192C] dark:text-white">
-                <MonitorSmartphone className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-                {t('settings.activeSessions')}
-              </div>
-              <button
-                type="button"
-                onClick={handleRevokeOtherSessions}
-                className="px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
-              >
-                {t('settings.signOutOthers')}
-              </button>
-            </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
-              {security.sessions.map((s) => (
-                <div key={s.id} className="py-2.5 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                      {s.device_info || t('settings.browserSession')} {s.is_current ? t('settings.currentTag') : ''}
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                      IP: {s.ip_address || t('settings.ipUnknown')} · {formatDateTime(s.created_at)}
-                    </div>
-                  </div>
-                  {s.is_revoked ? (
-                    <StatusBadge status="inactive" />
-                  ) : s.is_current ? (
-                    <StatusBadge status="active" />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleRevokeSession(s.id)}
-                      className="px-2.5 py-1 text-[11px] font-medium border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
-                    >
-                      {t('settings.revoke')}
-                    </button>
-                  )}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden text-xs">
+            <div className="p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 font-bold text-sm text-[#0B192C] dark:text-white">
+                  <MonitorSmartphone className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                  {t('settings.activeSessions')}
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={handleRevokeOtherSessions}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                >
+                  {t('settings.signOutOthers')}
+                </button>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+                {sessionsBox.visibleItems.map((s) => (
+                  <div key={s.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                        {s.device_info || t('settings.browserSession')} {s.is_current ? t('settings.currentTag') : ''}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                        IP: {s.ip_address || t('settings.ipUnknown')} · {formatDateTime(s.created_at)}
+                      </div>
+                    </div>
+                    {s.is_revoked ? (
+                      <StatusBadge status="inactive" />
+                    ) : s.is_current ? (
+                      <StatusBadge status="active" />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleRevokeSession(s.id)}
+                        className="px-2.5 py-1 text-[11px] font-medium border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0"
+                      >
+                        {t('settings.revoke')}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
+            <ViewMoreFooter
+              shownCount={sessionsBox.visibleItems.length}
+              totalCount={sessionsBox.totalCount}
+              hasMore={sessionsBox.hasMore}
+              expanded={sessionsBox.expanded}
+              onToggle={sessionsBox.toggle}
+            />
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
-            <div className="flex items-center gap-1.5 font-bold text-sm text-[#0B192C] dark:text-white">
-              <Shield className="w-4 h-4 text-slate-500" />
-              {t('settings.recentLogins')}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden text-xs">
+            <div className="p-5 space-y-3">
+              <div className="flex items-center gap-1.5 font-bold text-sm text-[#0B192C] dark:text-white">
+                <Shield className="w-4 h-4 text-slate-500" />
+                {t('settings.recentLogins')}
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+                {loginHistoryBox.visibleItems.map((h, i) => (
+                  <div key={i} className="py-2 flex justify-between text-slate-700 dark:text-slate-300">
+                    <span>{h.was_successful ? t('settings.loginSuccess') : t('settings.loginFailed')} · {h.ip_address}</span>
+                    <span className="text-slate-400 tabular-nums">{formatDateTime(h.created_at)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
-              {security.loginHistory.map((h, i) => (
-                <div key={i} className="py-2 flex justify-between text-slate-700 dark:text-slate-300">
-                  <span>{h.was_successful ? t('settings.loginSuccess') : t('settings.loginFailed')} · {h.ip_address}</span>
-                  <span className="text-slate-400 tabular-nums">{formatDateTime(h.created_at)}</span>
-                </div>
-              ))}
-            </div>
+            <ViewMoreFooter
+              shownCount={loginHistoryBox.visibleItems.length}
+              totalCount={loginHistoryBox.totalCount}
+              hasMore={loginHistoryBox.hasMore}
+              expanded={loginHistoryBox.expanded}
+              onToggle={loginHistoryBox.toggle}
+            />
           </div>
         </div>
       )}
 
       {tab === 'audit' && canManageBusiness && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
@@ -951,7 +990,7 @@ export default function SettingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {auditLogs.map((log) => (
+              {auditLogsBox.visibleItems.map((log) => (
                 <tr key={log.id}>
                   <td className="py-2.5 px-4 tabular-nums text-slate-500 dark:text-slate-400">{formatDateTime(log.created_at)}</td>
                   <td className="py-2.5 px-4 font-medium text-slate-900 dark:text-slate-100">{log.user_name || t('settings.systemUser')}</td>
@@ -962,6 +1001,14 @@ export default function SettingsPage() {
               ))}
             </tbody>
           </table>
+          </div>
+          <ViewMoreFooter
+            shownCount={auditLogsBox.visibleItems.length}
+            totalCount={auditLogsBox.totalCount}
+            hasMore={auditLogsBox.hasMore}
+            expanded={auditLogsBox.expanded}
+            onToggle={auditLogsBox.toggle}
+          />
         </div>
       )}
     </div>

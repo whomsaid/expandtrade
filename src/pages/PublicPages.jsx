@@ -827,7 +827,7 @@ export function PublicBusinessesPage() {
             <button
               type="button"
               onClick={() => loadDirectory()}
-              className="px-3 py-1 rounded bg-rose-700 text-white font-semibold hover:bg-rose-600 shrink-0"
+              className="px-3 py-1 rounded bg-[#0B192C] dark:bg-sky-600 text-white font-semibold hover:bg-slate-800 dark:hover:bg-sky-500 shrink-0"
             >
               {t('common.retry')}
             </button>

@@ -22,7 +22,9 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import PasswordInput from '../../components/PasswordInput.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function PayrollPage() {
   const { t } = useTranslation();
@@ -149,6 +151,12 @@ export default function PayrollPage() {
         tx.payment_period?.toLowerCase().includes(q)
     );
   }, [overview, txSearch]);
+
+  const dueAlertsBox = useExpandableList(dueActiveConfigs, { initialLimit: 6, sortNewest: true });
+  const employeesBox = useExpandableList(overview?.employees || [], { initialLimit: 6, sortNewest: true });
+  const txBox = useExpandableList(filteredTransactions, { initialLimit: 6, sortNewest: true });
+  const batchesBox = useExpandableList(overview?.batches || [], { initialLimit: 6, sortNewest: true });
+  const ledgerBox = useExpandableList(overview?.ledger || [], { initialLimit: 6, sortNewest: true });
 
   const openConfigureEmployee = (emp, existingConfig = null) => {
     setError('');
@@ -582,7 +590,7 @@ export default function PayrollPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {dueActiveConfigs.map((cfg) => (
+            {dueAlertsBox.visibleItems.map((cfg) => (
               <div
                 key={cfg.id}
                 className="bg-white dark:bg-slate-900 p-3.5 rounded-lg border border-amber-200 dark:border-amber-900 flex items-center justify-between gap-3 text-xs"
@@ -608,6 +616,17 @@ export default function PayrollPage() {
               </div>
             ))}
           </div>
+          {(dueAlertsBox.hasMore || dueAlertsBox.expanded) && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-white dark:bg-slate-900 overflow-hidden">
+              <ViewMoreFooter
+                shownCount={dueAlertsBox.visibleItems.length}
+                totalCount={dueAlertsBox.totalCount}
+                hasMore={dueAlertsBox.hasMore}
+                expanded={dueAlertsBox.expanded}
+                onToggle={dueAlertsBox.toggle}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -637,7 +656,8 @@ export default function PayrollPage() {
 
       {/* Tab 1: Roster & Payroll Configuration */}
       {tab === 'roster' && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
@@ -667,14 +687,14 @@ export default function PayrollPage() {
                     {t('payroll.loadingRoster')}
                   </td>
                 </tr>
-              ) : (overview?.employees || []).length === 0 ? (
+              ) : employeesBox.totalCount === 0 ? (
                 <tr>
                   <td colSpan={canPay ? 8 : 7} className="py-8 px-4 text-center text-slate-500">
                     {t('payroll.emptyRoster')}
                   </td>
                 </tr>
               ) : (
-                (overview?.employees || []).map((emp) => {
+                employeesBox.visibleItems.map((emp) => {
                   const cfg = configByMemberId.get(emp.business_member_id);
                   return (
                     <tr key={emp.business_member_id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
@@ -786,6 +806,14 @@ export default function PayrollPage() {
               )}
             </tbody>
           </table>
+          </div>
+          <ViewMoreFooter
+            shownCount={employeesBox.visibleItems.length}
+            totalCount={employeesBox.totalCount}
+            hasMore={employeesBox.hasMore}
+            expanded={employeesBox.expanded}
+            onToggle={employeesBox.toggle}
+          />
         </div>
       )}
 
@@ -824,7 +852,8 @@ export default function PayrollPage() {
             </button>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                 <tr>
@@ -839,14 +868,14 @@ export default function PayrollPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredTransactions.length === 0 ? (
+                {txBox.totalCount === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 px-4 text-center text-slate-500">
                       {t('payroll.emptyTransactions')}
                     </td>
                   </tr>
                 ) : (
-                  filteredTransactions.map((tx) => (
+                  txBox.visibleItems.map((tx) => (
                     <tr key={tx.id}>
                       <td className="py-3 px-4">
                         <div className="font-mono font-semibold text-slate-900 dark:text-white">{tx.payment_reference}</div>
@@ -910,6 +939,14 @@ export default function PayrollPage() {
                 )}
               </tbody>
             </table>
+            </div>
+            <ViewMoreFooter
+              shownCount={txBox.visibleItems.length}
+              totalCount={txBox.totalCount}
+              hasMore={txBox.hasMore}
+              expanded={txBox.expanded}
+              onToggle={txBox.toggle}
+            />
           </div>
         </div>
       )}
@@ -922,10 +959,10 @@ export default function PayrollPage() {
               {t('payroll.bulkRunsTitle')}
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-              {(overview?.batches || []).length === 0 ? (
+              {batchesBox.totalCount === 0 ? (
                 <div className="p-6 text-center text-slate-500">{t('payroll.emptyBatches')}</div>
               ) : (
-                overview.batches.map((b) => (
+                batchesBox.visibleItems.map((b) => (
                   <div key={b.id} className="p-4 flex items-center justify-between gap-3">
                     <div>
                       <div className="font-mono font-semibold text-slate-900 dark:text-white">{b.batch_reference}</div>
@@ -951,6 +988,13 @@ export default function PayrollPage() {
                 ))
               )}
             </div>
+            <ViewMoreFooter
+              shownCount={batchesBox.visibleItems.length}
+              totalCount={batchesBox.totalCount}
+              hasMore={batchesBox.hasMore}
+              expanded={batchesBox.expanded}
+              onToggle={batchesBox.toggle}
+            />
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -958,10 +1002,10 @@ export default function PayrollPage() {
               {t('payroll.ledgerTitle')}
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-              {(overview?.ledger || []).length === 0 ? (
+              {ledgerBox.totalCount === 0 ? (
                 <div className="p-6 text-center text-slate-500">{t('payroll.emptyLedger')}</div>
               ) : (
-                overview.ledger.map((l) => (
+                ledgerBox.visibleItems.map((l) => (
                   <div key={l.id} className="p-4 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-semibold text-slate-900 dark:text-white capitalize">
@@ -983,6 +1027,13 @@ export default function PayrollPage() {
                 ))
               )}
             </div>
+            <ViewMoreFooter
+              shownCount={ledgerBox.visibleItems.length}
+              totalCount={ledgerBox.totalCount}
+              hasMore={ledgerBox.hasMore}
+              expanded={ledgerBox.expanded}
+              onToggle={ledgerBox.toggle}
+            />
           </div>
         </div>
       )}

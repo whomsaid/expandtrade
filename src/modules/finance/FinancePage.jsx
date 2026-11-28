@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { formatDate, formatMoney, getPaymentMethodLabel, PAYMENT_METHOD_LABELS } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function FinancePage() {
   const { t } = useTranslation();
@@ -43,6 +45,9 @@ export default function FinancePage() {
       setError(err.message);
     }
   }, [activeBusinessId]);
+
+  const expensesBox = useExpandableList(expenses, { initialLimit: 6, sortNewest: true });
+  const incomeBox = useExpandableList(income, { initialLimit: 6, sortNewest: true });
 
   useEffect(() => {
     loadFinance();
@@ -161,7 +166,7 @@ export default function FinancePage() {
               <Plus className="w-3.5 h-3.5" />
               {t('finance.recordIncome')}
             </button>
-            <button type="button" onClick={() => { setModalError(''); setUploadProgress(0); setReceiptPreview(''); setShowExpenseModal(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
+            <button type="button" data-shortcut-new="true" onClick={() => { setModalError(''); setUploadProgress(0); setReceiptPreview(''); setShowExpenseModal(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
               <Plus className="w-3.5 h-3.5" />
               {t('finance.recordExpense')}
             </button>
@@ -212,7 +217,8 @@ export default function FinancePage() {
       )}
 
       {tab === 'expenses' && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
@@ -227,7 +233,7 @@ export default function FinancePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {expenses.map((ex) => (
+              {expensesBox.visibleItems.map((ex) => (
                 <tr key={ex.id}>
                   <td className="py-3 px-4 tabular-nums text-slate-500 dark:text-slate-400">{formatDate(ex.expense_date)}</td>
                   <td className="py-3 px-4">
@@ -250,7 +256,7 @@ export default function FinancePage() {
                           <button type="button" disabled={approvingId === ex.id} onClick={() => handleApproveExpense(ex.id, 'approved')} className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 hover:underline font-medium disabled:opacity-40">
                             <Check className="w-3.5 h-3.5" /> {t('finance.approve')}
                           </button>
-                          <button type="button" disabled={approvingId === ex.id} onClick={() => handleApproveExpense(ex.id, 'rejected')} className="inline-flex items-center gap-0.5 text-rose-600 dark:text-rose-400 hover:underline font-medium disabled:opacity-40">
+                          <button type="button" disabled={approvingId === ex.id} onClick={() => handleApproveExpense(ex.id, 'rejected')} className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-400 hover:underline font-medium disabled:opacity-40">
                             <X className="w-3.5 h-3.5" /> {t('finance.reject')}
                           </button>
                         </>
@@ -261,11 +267,20 @@ export default function FinancePage() {
               ))}
             </tbody>
           </table>
+          </div>
+          <ViewMoreFooter
+            shownCount={expensesBox.visibleItems.length}
+            totalCount={expensesBox.totalCount}
+            hasMore={expensesBox.hasMore}
+            expanded={expensesBox.expanded}
+            onToggle={expensesBox.toggle}
+          />
         </div>
       )}
 
       {tab === 'income' && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
@@ -278,10 +293,10 @@ export default function FinancePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {income.length === 0 ? (
+              {incomeBox.totalCount === 0 ? (
                 <tr><td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('finance.emptyIncome')}</td></tr>
               ) : (
-                income.map((i) => (
+                incomeBox.visibleItems.map((i) => (
                   <tr key={i.id}>
                     <td className="py-3 px-4 tabular-nums text-slate-500 dark:text-slate-400">{formatDate(i.income_date)}</td>
                     <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">{i.category}</td>
@@ -294,6 +309,14 @@ export default function FinancePage() {
               )}
             </tbody>
           </table>
+          </div>
+          <ViewMoreFooter
+            shownCount={incomeBox.visibleItems.length}
+            totalCount={incomeBox.totalCount}
+            hasMore={incomeBox.hasMore}
+            expanded={incomeBox.expanded}
+            onToggle={incomeBox.toggle}
+          />
         </div>
       )}
 

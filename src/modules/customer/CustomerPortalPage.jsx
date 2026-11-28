@@ -437,7 +437,7 @@ export default function CustomerPortalPage() {
             <button
               type="button"
               onClick={() => setLogoutConfirmOpen(true)}
-              className="btn-auth-logout-live inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 border border-rose-500/60 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="btn-auth-logout-live inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 border border-amber-600/60 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 auth-btn-icon shrink-0" />
               <span>{t('customerPortal.signOut')}</span>
@@ -551,7 +551,7 @@ export default function CustomerPortalPage() {
             <button
               type="button"
               onClick={() => { setError(''); loadAccountPortalData(); }}
-              className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100 dark:hover:bg-rose-900/40 shrink-0"
+              className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0"
             >
               {t('common.retry')}
             </button>
@@ -604,7 +604,7 @@ export default function CustomerPortalPage() {
                 <button
                   type="button"
                   onClick={loadPublicDirectory}
-                  className="px-3 py-1.5 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/40 shrink-0"
+                  className="px-3 py-1.5 font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0"
                 >
                   {t('common.retry')}
                 </button>
@@ -814,7 +814,7 @@ export default function CustomerPortalPage() {
                             <button
                               type="button"
                               onClick={() => handleDiscardDraft(app.id)}
-                              className="px-3 py-2 font-semibold text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                              className="px-3 py-2 font-semibold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40"
                             >
                               {t('customerPortal.discardDraft')}
                             </button>
@@ -833,7 +833,7 @@ export default function CustomerPortalPage() {
                               <button
                                 type="button"
                                 onClick={() => setWithdrawTarget(app)}
-                                className="px-3 py-2 font-semibold text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                className="px-3 py-2 font-semibold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40"
                               >
                                 {t('customerPortal.withdraw')}
                               </button>
@@ -1059,7 +1059,7 @@ export default function CustomerPortalPage() {
                   <button
                     type="button"
                     onClick={handleRevokeOtherSessions}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg"
+                    className="px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40"
                   >
                     {t('customerPortal.signOutOtherDevices')}
                   </button>
@@ -1413,7 +1413,7 @@ export default function CustomerPortalPage() {
               <button
                 type="submit"
                 disabled={Boolean(savingAction)}
-                className="px-4 py-2 font-semibold text-white bg-rose-600 rounded-lg hover:bg-rose-500 disabled:opacity-60"
+                className="px-4 py-2 font-semibold text-white bg-amber-700 rounded-lg hover:bg-amber-800 disabled:opacity-60"
               >
                 {savingAction === 'withdraw' ? t('common.saving') : t('customerPortal.confirmWithdrawal')}
               </button>

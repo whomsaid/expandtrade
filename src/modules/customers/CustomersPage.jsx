@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDate, formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 import UserAvatar from '../../components/UserAvatar.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import WhatsAppContactButton from '../../components/WhatsAppContactButton.jsx';
 
 export default function CustomersPage() {
@@ -24,6 +26,9 @@ export default function CustomersPage() {
   const [saving, setSaving] = useState(false);
 
   const currency = workspace?.business?.currency_code || 'RWF';
+  const customersBox = useExpandableList(customers, { initialLimit: 6, sortNewest: true });
+  const customerSalesBox = useExpandableList(history?.sales, { initialLimit: 5, sortNewest: true });
+  const customerNotesBox = useExpandableList(history?.notes, { initialLimit: 5, sortNewest: true });
 
   const getCustomerTypeLabel = (type) => {
     const map = {
@@ -111,7 +116,7 @@ export default function CustomersPage() {
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('customers.subtitle')}</p>
         </div>
         {hasPermission('customers.manage') && (
-          <button type="button" onClick={() => { setModalError(''); setShowCreate(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
+          <button type="button" data-shortcut-new="true" onClick={() => { setModalError(''); setShowCreate(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" />
             {t('customers.addCustomer')}
           </button>
@@ -128,39 +133,48 @@ export default function CustomersPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-              <tr>
-                <th className="py-3 px-4 font-semibold">{t('customers.colCustomer')}</th>
-                <th className="py-3 px-4 font-semibold">{t('customers.colType')}</th>
-                <th className="py-3 px-4 font-semibold text-right">{t('customers.colLoyaltyPts')}</th>
-                <th className="py-3 px-4 font-semibold text-right">{t('customers.colOutstanding')}</th>
-                <th className="py-3 px-4 font-semibold text-right">{t('customers.colProfile')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {customers.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2.5">
-                      <UserAvatar src={c.avatar_url} name={c.full_name} size="sm" />
-                      <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">{c.full_name}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{c.phone}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{getCustomerTypeLabel(c.customer_type)}</td>
-                  <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">{c.loyalty_points}</td>
-                  <td className="py-3 px-4 text-right tabular-nums font-semibold text-rose-700 dark:text-rose-400">{formatMoney(c.outstanding_balance, currency)}</td>
-                  <td className="py-3 px-4 text-right">
-                    <button type="button" onClick={() => openProfile(c)} className="text-sky-700 dark:text-sky-400 hover:underline font-medium">{t('customers.view')}</button>
-                  </td>
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th className="py-3 px-4 font-semibold">{t('customers.colCustomer')}</th>
+                  <th className="py-3 px-4 font-semibold">{t('customers.colType')}</th>
+                  <th className="py-3 px-4 font-semibold text-right">{t('customers.colLoyaltyPts')}</th>
+                  <th className="py-3 px-4 font-semibold text-right">{t('customers.colOutstanding')}</th>
+                  <th className="py-3 px-4 font-semibold text-right">{t('customers.colProfile')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {customersBox.visibleItems.map((c) => (
+                  <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <UserAvatar src={c.avatar_url} name={c.full_name} size="sm" />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">{c.full_name}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{c.phone}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{getCustomerTypeLabel(c.customer_type)}</td>
+                    <td className="py-3 px-4 text-right tabular-nums text-slate-700 dark:text-slate-300">{c.loyalty_points}</td>
+                    <td className="py-3 px-4 text-right tabular-nums font-semibold text-rose-700 dark:text-rose-400">{formatMoney(c.outstanding_balance, currency)}</td>
+                    <td className="py-3 px-4 text-right">
+                      <button type="button" onClick={() => openProfile(c)} className="text-sky-700 dark:text-sky-400 hover:underline font-medium">{t('customers.view')}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ViewMoreFooter
+            totalCount={customersBox.totalCount}
+            visibleCount={customersBox.visibleCount}
+            initialLimit={6}
+            expanded={customersBox.expanded}
+            onToggle={customersBox.toggleExpanded}
+          />
         </div>
 
         <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
@@ -183,20 +197,28 @@ export default function CustomersPage() {
                 />
               </div>
               <div>
-                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('customers.recentPurchases', { count: history.sales.length })}</h3>
-                <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                  {history.sales.map((s) => (
+                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('customers.recentPurchases', { count: customerSalesBox.totalCount })}</h3>
+                <div className="space-y-1.5">
+                  {customerSalesBox.visibleItems.map((s) => (
                     <div key={s.id} className="flex justify-between text-xs py-1 border-b border-slate-50 dark:border-slate-800">
                       <span className="font-mono text-slate-700 dark:text-slate-300">{s.reference_number} · {formatDate(s.created_at)}</span>
                       <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">{formatMoney(s.total_amount, currency)}</span>
                     </div>
                   ))}
                 </div>
+                <ViewMoreFooter
+                  totalCount={customerSalesBox.totalCount}
+                  visibleCount={customerSalesBox.visibleCount}
+                  initialLimit={5}
+                  expanded={customerSalesBox.expanded}
+                  onToggle={customerSalesBox.toggleExpanded}
+                  className="mt-2 rounded-lg"
+                />
               </div>
               <div>
                 <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('customers.feedbackNotes')}</h3>
-                <div className="space-y-2 max-h-36 overflow-y-auto mb-3">
-                  {history.notes.map((n) => (
+                <div className="space-y-2 mb-3">
+                  {customerNotesBox.visibleItems.map((n) => (
                     <div key={n.id} className="p-2.5 bg-slate-50 dark:bg-slate-800/70 rounded-lg text-xs border border-slate-100 dark:border-slate-800">
                       <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-200">
                         <UserAvatar src={n.author_avatar} name={n.author_name} size="xs" />
@@ -205,6 +227,14 @@ export default function CustomersPage() {
                       <div className="text-slate-600 dark:text-slate-300 mt-1">{n.content}</div>
                     </div>
                   ))}
+                  <ViewMoreFooter
+                    totalCount={customerNotesBox.totalCount}
+                    visibleCount={customerNotesBox.visibleCount}
+                    initialLimit={5}
+                    expanded={customerNotesBox.expanded}
+                    onToggle={customerNotesBox.toggleExpanded}
+                    className="rounded-lg"
+                  />
                 </div>
                 {hasPermission('customers.manage') && (
                   <form onSubmit={handleAddNote} className="space-y-2 text-xs">

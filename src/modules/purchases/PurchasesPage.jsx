@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { formatDate, formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 export default function PurchasesPage() {
   const { t } = useTranslation();
@@ -36,6 +38,8 @@ export default function PurchasesPage() {
       setError(err.message);
     }
   }, [activeBusinessId]);
+
+  const purchasesBox = useExpandableList(purchases, { initialLimit: 6, sortNewest: true });
 
   useEffect(() => {
     loadAll();
@@ -88,6 +92,7 @@ export default function PurchasesPage() {
         {hasPermission('purchases.manage') && (
           <button
             type="button"
+            data-shortcut-new="true"
             onClick={() => {
               const firstProd = products[0];
               setModalError('');
@@ -111,7 +116,8 @@ export default function PurchasesPage() {
       {error && <div className="p-3 text-xs text-rose-800 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg">{error}</div>}
       {message && <div className="p-3 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg">{message}</div>}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
             <tr>
@@ -126,10 +132,10 @@ export default function PurchasesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {purchases.length === 0 ? (
+            {purchasesBox.totalCount === 0 ? (
               <tr><td colSpan={8} className="py-8 text-center text-slate-500 dark:text-slate-400">{t('purchases.empty')}</td></tr>
             ) : (
-              purchases.map((po) => (
+              purchasesBox.visibleItems.map((po) => (
                 <tr key={po.id}>
                   <td className="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-slate-100">{po.po_number}</td>
                   <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{po.supplier_name}</td>
@@ -163,6 +169,14 @@ export default function PurchasesPage() {
             )}
           </tbody>
         </table>
+        </div>
+        <ViewMoreFooter
+          shownCount={purchasesBox.visibleItems.length}
+          totalCount={purchasesBox.totalCount}
+          hasMore={purchasesBox.hasMore}
+          expanded={purchasesBox.expanded}
+          onToggle={purchasesBox.toggle}
+        />
       </div>
 
       {showCreate && (

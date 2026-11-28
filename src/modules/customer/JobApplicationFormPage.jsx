@@ -613,7 +613,7 @@ export default function JobApplicationFormPage() {
                 <button
                   type="button"
                   onClick={() => setCancelConfirmOpen(true)}
-                  className="px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                  className="px-3 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40"
                 >
                   {t('jobApply.discardDraftBtn')}
                 </button>
@@ -807,7 +807,7 @@ export default function JobApplicationFormPage() {
                           <button
                             type="button"
                             onClick={() => setEducationList((prev) => prev.filter((_, i) => i !== idx))}
-                            className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:underline"
+                            className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400 hover:underline"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             {t('common.remove')}
@@ -1030,7 +1030,7 @@ export default function JobApplicationFormPage() {
                             <button
                               type="button"
                               onClick={() => handleRemoveDocument(doc.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               {t('common.remove')}
@@ -1112,7 +1112,7 @@ export default function JobApplicationFormPage() {
                               <button
                                 type="button"
                                 onClick={() => setExperienceList((prev) => prev.filter((_, i) => i !== idx))}
-                                className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:underline"
+                                className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400 hover:underline"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 {t('common.remove')}
@@ -1306,7 +1306,7 @@ export default function JobApplicationFormPage() {
                         <button
                           type="button"
                           onClick={() => handleRemoveDocument(activeCv.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-lg"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-amber-800 dark:text-amber-300 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           {t('common.remove')}
@@ -1468,7 +1468,7 @@ export default function JobApplicationFormPage() {
                           <button
                             type="button"
                             onClick={() => setSkillsList((prev) => prev.filter((_, i) => i !== idx))}
-                            className="text-rose-500 hover:text-rose-700"
+                            className="text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 font-bold"
                             aria-label={`${t('common.remove')} ${s.skill_name}`}
                           >
                             ×
@@ -1704,7 +1704,7 @@ export default function JobApplicationFormPage() {
               <button
                 type="button"
                 onClick={handleDiscardDraft}
-                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 rounded-lg hover:bg-rose-500"
+                className="px-4 py-2 text-xs font-semibold text-white bg-amber-700 rounded-lg hover:bg-amber-800"
               >
                 {t('jobApply.confirmDiscardBtn')}
               </button>

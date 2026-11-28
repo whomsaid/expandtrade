@@ -2492,5 +2492,23 @@
     "clientAvgRtt": "Impuzandengo yo gusubiza API",
     "clientCacheHits": "Cache & Gukumira ibisubirwamo",
     "activeSessions": "Session zikora / Urugero"
+  },
+  "shortcuts": {
+    "modalTitle": "Impinanzira za Mwandikisho",
+    "modalSubtitle": "Kanda inyuguti y’impinanzira aho ari ho hose utari kwandika cyangwa ukande igikorwa hasi.",
+    "newItemTitle": "Hangaho ikintu gishya",
+    "newItemWorkspaceDesc": "Fungura ifishi yo kongeraho ku ipaji iriho cyangwa ongeraho igicuruzwa gishya.",
+    "newItemPublicDesc": "Jya guhanga ubucuruzi bushya cyangwa urebe ubucuruzi buhari.",
+    "searchTitle": "Ishakisha rusange",
+    "searchDesc": "Fungura umwanya wo gushakisha muri BizTrade kugira ngo ubone amapaji, ibicuruzwa cyangwa komande.",
+    "dashboardTitle": "Jya kuri Dashibodi",
+    "homeTitle": "Jya Ahabanza",
+    "dashboardDesc": "Subira ako kanya ku incamake y’ubucuruzi bwawe.",
+    "homeDesc": "Subira ku ipaji ibanza ya BizTrade Africa.",
+    "helpTitle": "Impinanzira za mwandikisho",
+    "helpDesc": "Fungura cyangwa ufunge iri dirishya ry’ubufasha bw’impinanzira.",
+    "closeTitle": "Funga idirishya rifunguye",
+    "closeDesc": "Funga amadirishya y’inama, urutonde rw’ishakisha n’ibindi.",
+    "footerTip": "Inama: Kanda / igihe icyo ari cyo cyose kugira ngo ufungure iri buyobozi."
   }
 }

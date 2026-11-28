@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
 import { formatDate, formatDateTime } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 
 export default function TasksPage() {
   const { t } = useTranslation();
@@ -150,6 +152,9 @@ export default function TasksPage() {
   };
 
   const otherMembers = members.filter((m) => m.user_id !== user?.id && m.status === 'active');
+  const tasksBox = useExpandableList(tasks, { initialLimit: 6, sortNewest: true });
+  const announcementsBox = useExpandableList(announcements, { initialLimit: 4, sortNewest: true });
+  const messagesBox = useExpandableList(messages, { initialLimit: 8, sortNewest: true });
 
   return (
     <div className="space-y-6">
@@ -164,7 +169,7 @@ export default function TasksPage() {
               <Megaphone className="w-3.5 h-3.5" />
               {t('tasks.postAnnouncement')}
             </button>
-            <button type="button" onClick={() => { setModalError(''); setShowTaskModal(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
+            <button type="button" data-shortcut-new="true" onClick={() => { setModalError(''); setShowTaskModal(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 rounded-lg transition-colors">
               <Plus className="w-3.5 h-3.5" />
               {t('tasks.assignTask')}
             </button>
@@ -183,7 +188,7 @@ export default function TasksPage() {
               {tasks.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">{t('tasks.noTasks')}</div>
               ) : (
-                tasks.map((task) => {
+                tasksBox.visibleItems.map((task) => {
                   const priorityLabel = {
                     low: t('tasks.priorityLow'),
                     medium: t('tasks.priorityMedium'),
@@ -225,6 +230,14 @@ export default function TasksPage() {
                 })
               )}
             </div>
+            <ViewMoreFooter
+              totalCount={tasksBox.totalCount}
+              visibleCount={tasksBox.visibleCount}
+              initialLimit={6}
+              expanded={tasksBox.expanded}
+              onToggle={tasksBox.toggleExpanded}
+              className="-mx-5 -mb-5 rounded-b-xl"
+            />
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
@@ -232,18 +245,28 @@ export default function TasksPage() {
             {announcements.length === 0 ? (
               <div className="text-xs text-slate-400 dark:text-slate-500">{t('tasks.noAnnouncements')}</div>
             ) : (
-              <div className="space-y-3">
-                {announcements.map((a) => (
-                  <div key={a.id} className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
-                    <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100">
-                      <span>{a.title}</span>
-                      <span className="text-slate-400 dark:text-slate-500 font-normal">{formatDate(a.created_at)}</span>
+              <>
+                <div className="space-y-3">
+                  {announcementsBox.visibleItems.map((a) => (
+                    <div key={a.id} className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                      <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100">
+                        <span>{a.title}</span>
+                        <span className="text-slate-400 dark:text-slate-500 font-normal">{formatDate(a.created_at)}</span>
+                      </div>
+                      <p className="text-slate-700 dark:text-slate-300 mt-1">{a.body}</p>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{t('tasks.postedBy', { name: a.author_name })}</div>
                     </div>
-                    <p className="text-slate-700 dark:text-slate-300 mt-1">{a.body}</p>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{t('tasks.postedBy', { name: a.author_name })}</div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <ViewMoreFooter
+                  totalCount={announcementsBox.totalCount}
+                  visibleCount={announcementsBox.visibleCount}
+                  initialLimit={4}
+                  expanded={announcementsBox.expanded}
+                  onToggle={announcementsBox.toggleExpanded}
+                  className="-mx-5 -mb-5 rounded-b-xl"
+                />
+              </>
             )}
           </div>
         </div>
@@ -258,7 +281,7 @@ export default function TasksPage() {
             {messages.length === 0 ? (
               <div className="text-center text-xs text-slate-400 dark:text-slate-500 py-10">{t('tasks.noMessages')}</div>
             ) : (
-              messages.map((m) => {
+              messagesBox.visibleItems.map((m) => {
                 const isMine = m.sender_user_id === user?.id;
                 return (
                   <div key={m.id} className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-lg border border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
@@ -295,6 +318,13 @@ export default function TasksPage() {
               })
             )}
           </div>
+          <ViewMoreFooter
+            totalCount={messagesBox.totalCount}
+            visibleCount={messagesBox.visibleCount}
+            initialLimit={8}
+            expanded={messagesBox.expanded}
+            onToggle={messagesBox.toggleExpanded}
+          />
           <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
             {otherMembers.length > 0 && (
               <select

@@ -1,10 +1,11 @@
-import { Component, Suspense, lazy, useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Component, Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { PlatformConfigProvider, usePlatformConfig } from './context/PlatformConfigContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import GlobalWatermark from './components/GlobalWatermark.jsx';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.jsx';
 import RouteSeoManager from './components/RouteSeoManager.jsx';
 import QuickSearchModal from './components/QuickSearchModal.jsx';
 import AppLayout from './layouts/AppLayout.jsx';
@@ -182,9 +183,110 @@ function CustomerProtectedRoute({ children }) {
 
 function AppShell({ searchOpen, setSearchOpen }) {
   const { t } = useTranslation();
-  const { user, loading } = useAuth();
+  const { user, memberships, loading } = useAuth();
   const { config, isDevelopmentMode, isMaintenanceMode } = usePlatformConfig();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  const inWorkspace = location.pathname.startsWith('/app') && Boolean(user);
+
+  const triggerGlobalSearch = useCallback(() => {
+    setShortcutsOpen(false);
+    const hasInlineBar = Boolean(document.querySelector('[data-global-search-input="true"]'));
+    if (hasInlineBar) {
+      window.dispatchEvent(new CustomEvent('biztrade:focus-global-search'));
+    } else {
+      setSearchOpen((prev) => !prev);
+    }
+  }, [setSearchOpen]);
+
+  const triggerNewItem = useCallback(() => {
+    setShortcutsOpen(false);
+    setSearchOpen(false);
+    const ev = new CustomEvent('biztrade:new-item', { cancelable: true });
+    const notCanceled = window.dispatchEvent(ev);
+    if (!notCanceled) return;
+
+    const newBtn = document.querySelector('[data-shortcut-new="true"]');
+    if (newBtn instanceof HTMLElement) {
+      newBtn.click();
+      return;
+    }
+
+    if (user && (user.is_platform_admin || memberships?.length > 0)) {
+      navigate('/app/products?new=1');
+    } else if (user) {
+      navigate('/customer?tab=businesses');
+    } else {
+      navigate('/register');
+    }
+  }, [user, memberships, navigate, setSearchOpen]);
+
+  const triggerHome = useCallback(() => {
+    setShortcutsOpen(false);
+    setSearchOpen(false);
+    if (user?.is_platform_admin) {
+      navigate('/app/admin');
+    } else if (inWorkspace || (user && memberships?.length > 0)) {
+      navigate('/app/dashboard');
+    } else if (user) {
+      navigate('/customer');
+    } else {
+      navigate('/');
+    }
+  }, [user, memberships, inWorkspace, navigate, setSearchOpen]);
+
+  useEffect(() => {
+    const isTypingTarget = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || Boolean(el.isContentEditable);
+    };
+
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        triggerGlobalSearch();
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(document.activeElement)) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (e.key === '/' || e.key === '?') {
+        e.preventDefault();
+        setSearchOpen(false);
+        setShortcutsOpen((prev) => !prev);
+      } else if (key === 's') {
+        e.preventDefault();
+        triggerGlobalSearch();
+      } else if (key === 'n') {
+        e.preventDefault();
+        triggerNewItem();
+      } else if (key === 'h') {
+        e.preventDefault();
+        triggerHome();
+      }
+    };
+
+    const onOpenSearch = () => triggerGlobalSearch();
+    const onOpenShortcuts = () => {
+      setSearchOpen(false);
+      setShortcutsOpen(true);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('biztrade:open-search', onOpenSearch);
+    window.addEventListener('biztrade:open-shortcuts', onOpenShortcuts);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('biztrade:open-search', onOpenSearch);
+      window.removeEventListener('biztrade:open-shortcuts', onOpenShortcuts);
+    };
+  }, [triggerGlobalSearch, triggerNewItem, triggerHome, setSearchOpen]);
 
   useEffect(() => {
     if (loading) return undefined;
@@ -237,6 +339,14 @@ function AppShell({ searchOpen, setSearchOpen }) {
     <>
       <RouteSeoManager />
       <QuickSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <KeyboardShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        onTriggerNewItem={triggerNewItem}
+        onTriggerSearch={triggerGlobalSearch}
+        onTriggerHome={triggerHome}
+        inWorkspace={inWorkspace}
+      />
       <GlobalWatermark />
       {user?.is_platform_admin && isDevelopmentMode && (
         <div className="bg-amber-500 text-slate-950 text-xs font-semibold px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 no-print">
@@ -361,47 +471,6 @@ function AppShell({ searchOpen, setSearchOpen }) {
 
 export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
-
-  useEffect(() => {
-    const triggerGlobalSearch = () => {
-      const hasInlineBar = Boolean(document.querySelector('[data-global-search-input="true"]'));
-      if (hasInlineBar) {
-        window.dispatchEvent(new CustomEvent('biztrade:focus-global-search'));
-      } else {
-        setSearchOpen((prev) => !prev);
-      }
-    };
-    const onKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        triggerGlobalSearch();
-        return;
-      }
-      if (
-        e.key === '/' &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) &&
-        !document.activeElement?.isContentEditable
-      ) {
-        e.preventDefault();
-        const hasInlineBar = Boolean(document.querySelector('[data-global-search-input="true"]'));
-        if (hasInlineBar) {
-          window.dispatchEvent(new CustomEvent('biztrade:focus-global-search'));
-        } else {
-          setSearchOpen(true);
-        }
-      }
-    };
-    const onOpenEvent = () => triggerGlobalSearch();
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('biztrade:open-search', onOpenEvent);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('biztrade:open-search', onOpenEvent);
-    };
-  }, []);
 
   return (
     <AuthProvider>

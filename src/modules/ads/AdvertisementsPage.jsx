@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import VideoAdPlayer from '../../components/VideoAdPlayer.jsx';
 import { formatDate } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 
 const MAX_VIDEO_BYTES = 250 * 1024 * 1024; // 250MB storage/file-size cap (NO time limit)
 const MAX_THUMB_BYTES = 5 * 1024 * 1024;
@@ -661,6 +663,7 @@ export default function AdvertisementsPage() {
     if (filter === 'draft') return !v.is_published;
     return true;
   });
+  const videosBox = useExpandableList(filteredVideos, { initialLimit: 6, sortNewest: true });
 
   const getAdminStreamUrl = (vid) =>
     `/api/ads/videos/${vid.id}/stream?token=${encodeURIComponent(token)}&businessId=${activeBusinessId}`;
@@ -687,6 +690,7 @@ export default function AdvertisementsPage() {
         {canManage && (
           <button
             type="button"
+            data-shortcut-new="true"
             onClick={openCreateModal}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B192C] dark:bg-sky-600 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-500 whitespace-nowrap transition-colors"
           >
@@ -729,7 +733,7 @@ export default function AdvertisementsPage() {
           <button
             type="button"
             onClick={loadData}
-            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100 shrink-0"
+            className="px-2.5 py-1 font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0"
           >
             {t('common.retry')}
           </button>
@@ -783,66 +787,76 @@ export default function AdvertisementsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredVideos.map((vid) => (
-            <div key={vid.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col justify-between">
-              <div>
-                <VideoAdPlayer video={vid} streamSrc={getAdminStreamUrl(vid)} compact />
-                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/70 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                  <StatusBadge status={vid.is_published ? 'active' : 'pending'} />
-                  <span className="tabular-nums">
-                    {formatBytes(vid.file_size_bytes)} · {formatDate(vid.created_at)}
-                  </span>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {videosBox.visibleItems.map((vid) => (
+              <div key={vid.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col justify-between">
+                <div>
+                  <VideoAdPlayer video={vid} streamSrc={getAdminStreamUrl(vid)} compact />
+                  <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/70 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                    <StatusBadge status={vid.is_published ? 'active' : 'pending'} />
+                    <span className="tabular-nums">
+                      {formatBytes(vid.file_size_bytes)} · {formatDate(vid.created_at)}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {canManage && (
-                <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(vid)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                      {t('ads.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewTarget(vid)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      <Eye className="w-3 h-3" />
-                      {t('ads.preview')}
-                    </button>
+                {canManage && (
+                  <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(vid)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                        {t('ads.edit')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewTarget(vid)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <Eye className="w-3 h-3" />
+                        {t('ads.preview')}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={togglingId === vid.id}
+                        onClick={() => handleTogglePublish(vid)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold disabled:opacity-60 ${
+                          vid.is_published
+                            ? 'border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-950'
+                            : 'bg-[#0B192C] dark:bg-sky-600 text-white hover:bg-slate-800 dark:hover:bg-sky-500'
+                        }`}
+                      >
+                        {vid.is_published ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        {vid.is_published ? t('ads.unpublish') : t('ads.publish')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(vid)}
+                        className="p-1.5 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/50"
+                        aria-label={t('ads.deleteAria')}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={togglingId === vid.id}
-                      onClick={() => handleTogglePublish(vid)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold disabled:opacity-60 ${
-                        vid.is_published
-                          ? 'border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-950'
-                          : 'bg-[#0B192C] dark:bg-sky-600 text-white hover:bg-slate-800 dark:hover:bg-sky-500'
-                      }`}
-                    >
-                      {vid.is_published ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                      {vid.is_published ? t('ads.unpublish') : t('ads.publish')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(vid)}
-                      className="p-1.5 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                      aria-label={t('ads.deleteAria')}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            ))}
+          </div>
+          <ViewMoreFooter
+            totalCount={videosBox.totalCount}
+            visibleCount={videosBox.visibleCount}
+            initialLimit={6}
+            expanded={videosBox.expanded}
+            onToggle={videosBox.toggleExpanded}
+            className="rounded-xl border border-slate-200 dark:border-slate-800"
+          />
         </div>
       )}
 
@@ -871,7 +885,7 @@ export default function AdvertisementsPage() {
                   type="submit"
                   form="ad-video-form"
                   disabled={saving}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-700 text-white font-semibold hover:bg-rose-600 shrink-0"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#0B192C] dark:bg-sky-600 text-white font-semibold hover:bg-slate-800 dark:hover:bg-sky-500 shrink-0"
                 >
                   <RefreshCw className="w-3 h-3" />
                   {t('common.retry')}
@@ -1023,7 +1037,7 @@ export default function AdvertisementsPage() {
                     type="button"
                     disabled={cancelling}
                     onClick={handleCancelActiveUpload}
-                    className="px-4 py-2 font-semibold text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50 disabled:opacity-60"
+                    className="px-4 py-2 font-semibold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/50 disabled:opacity-60"
                   >
                     {cancelling ? t('common.loadingData') : t('ads.cancelUploadBtn')}
                   </button>
@@ -1082,7 +1096,7 @@ export default function AdvertisementsPage() {
               <button type="button" disabled={deleting} onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-xs border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
                 {t('common.cancel')}
               </button>
-              <button type="button" disabled={deleting} onClick={handleConfirmDelete} className="px-4 py-2 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg disabled:opacity-60">
+              <button type="button" disabled={deleting} onClick={handleConfirmDelete} className="px-4 py-2 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded-lg disabled:opacity-60">
                 {deleting ? t('common.loadingData') : t('ads.deleteVideo')}
               </button>
             </div>

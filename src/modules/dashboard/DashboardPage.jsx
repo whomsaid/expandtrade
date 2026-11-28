@@ -225,7 +225,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={loadDashboard}
-            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 rounded hover:bg-rose-100 shrink-0"
+            className="px-2.5 py-1 font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0"
           >
             {t('common.retry')}
           </button>

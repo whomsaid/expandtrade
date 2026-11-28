@@ -2492,5 +2492,23 @@
     "clientAvgRtt": "Client API Avg Round-Trip",
     "clientCacheHits": "Client Cache & Dedup",
     "activeSessions": "Active Sessions / Limit"
+  },
+  "shortcuts": {
+    "modalTitle": "Keyboard Shortcuts",
+    "modalSubtitle": "Press a shortcut key anywhere outside text inputs or click an action below.",
+    "newItemTitle": "Create new item",
+    "newItemWorkspaceDesc": "Open the create modal on the active page or add a new product.",
+    "newItemPublicDesc": "Jump straight to creating a workspace record or exploring businesses.",
+    "searchTitle": "Global search",
+    "searchDesc": "Focus the BizTrade search bar to jump to pages, products, or orders.",
+    "dashboardTitle": "Go to Dashboard",
+    "homeTitle": "Go to Home",
+    "dashboardDesc": "Return immediately to your main business dashboard overview.",
+    "homeDesc": "Return to the BizTrade Africa landing page.",
+    "helpTitle": "Keyboard shortcuts",
+    "helpDesc": "Open or toggle this keyboard shortcuts helper modal.",
+    "closeTitle": "Close active dialog",
+    "closeDesc": "Dismiss modals, search dropdowns, and overlays.",
+    "footerTip": "Tip: Press / anytime to open this guide."
   }
 }

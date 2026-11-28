@@ -6,7 +6,9 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import UserAvatar from '../../components/UserAvatar.jsx';
 import WhatsAppContactButton from '../../components/WhatsAppContactButton.jsx';
+import ViewMoreFooter from '../../components/ViewMoreFooter.jsx';
 import { formatMoney } from '../../utils/format.js';
+import { useExpandableList } from '../../utils/listOrder.js';
 
 const ALLOWED_EMPLOYEE_ROLE_CODES = [
   'manager',
@@ -52,6 +54,9 @@ export default function EmployeesPage() {
       setError(err.message);
     }
   }, [activeBusinessId]);
+
+  const membersBox = useExpandableList(members, { initialLimit: 6, sortNewest: true });
+  const invitationsBox = useExpandableList(invitations, { initialLimit: 5, sortNewest: true });
 
   useEffect(() => {
     loadData();
@@ -99,6 +104,7 @@ export default function EmployeesPage() {
         {hasPermission('employees.manage') && (
           <button
             type="button"
+            data-shortcut-new="true"
             onClick={() => {
               const cashierRole = employeeRoles.find((r) => r.code === 'cashier') || employeeRoles[0];
               setModalError('');
@@ -132,7 +138,8 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
             <tr>
@@ -146,7 +153,7 @@ export default function EmployeesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {members.map((m) => {
+            {membersBox.visibleItems.map((m) => {
               const isPrimaryAdmin = m.role_code === 'business_owner' || m.role_code === 'business_admin';
               return (
                 <tr key={m.id}>
@@ -208,13 +215,21 @@ export default function EmployeesPage() {
             })}
           </tbody>
         </table>
+        </div>
+        <ViewMoreFooter
+          shownCount={membersBox.visibleItems.length}
+          totalCount={membersBox.totalCount}
+          hasMore={membersBox.hasMore}
+          expanded={membersBox.expanded}
+          onToggle={membersBox.toggle}
+        />
       </div>
 
-      {invitations.length > 0 && (
+      {invitationsBox.totalCount > 0 && (
         <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('employees.pendingInvitations')}</h2>
           <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-            {invitations.map((inv) => (
+            {invitationsBox.visibleItems.map((inv) => (
               <div key={inv.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="text-slate-700 dark:text-slate-300">
                   <span className="font-medium text-slate-900 dark:text-slate-100">{inv.full_name}</span> ({inv.email}) — {inv.role_name}
@@ -225,6 +240,13 @@ export default function EmployeesPage() {
               </div>
             ))}
           </div>
+          <ViewMoreFooter
+            shownCount={invitationsBox.visibleItems.length}
+            totalCount={invitationsBox.totalCount}
+            hasMore={invitationsBox.hasMore}
+            expanded={invitationsBox.expanded}
+            onToggle={invitationsBox.toggle}
+          />
         </div>
       )}
 
